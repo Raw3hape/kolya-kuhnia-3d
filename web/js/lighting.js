@@ -6,7 +6,7 @@
 //   lighting.invalidate()        — сцена изменилась (материалы, мебель): пересчитать переотражения
 //   SHADER_LAMP_LAYER            — слой «светильник шейдера» (см. п. 7): так помечает свои источники lamps.js
 //   lighting.ready               — Promise: дневная панорама загружена
-//   lighting.lights, .sun, .setQuality(q), .dispose()
+//   lighting.lights, .sun, .setQuality(q) — бюджет и глубина пересчёта по качеству (карты теней — render.js), .dispose()
 //
 // Как устроено (почему так, а не «один свет на всю сцену»):
 // 1. Зоны. Квартира делится на герметичные по свету зоны: открытое пространство (кухня-гостиная, холл, шахта),
@@ -21,7 +21,10 @@
 //    той же панорамы HDRI, что видна в окне (без солнечного диска, с учётом балкона сверху). Светит только в свою комнату.
 // 4. Переотражения — зонды освещённости (SH, как LightProbe) по сетке в каждой зоне. Они снимаются кубическими
 //    рендерами всей квартиры со ВСЕМИ стенами и потолками (слои 0 и 1), поэтому вырез и снятый потолок на свет
-//    не влияют. Четыре прохода = четыре отскока. Это заменяет и сырой IBL внутри (он светил сквозь потолок
+//    не влияют. Четыре прохода = четыре отскока («Эконом» — один). Грани снимаются по одной в бюджет BAKE_MS
+//    на кадр, без мелочи (PROBE_SKIP_R); пока render.js собирает шейдеры фоном (rasterBusy), пересчёт ждёт.
+//    Если видеокарта занята и кадр пересчёта вышел вдвое дольше бюджета, столько же времени пересчёт
+//    отдыхает: камера и панель не замирают, а пересчёт просто доезжает позже. Это заменяет и сырой IBL внутри (он светил сквозь потолок
 //    одинаково везде, даже в ванной без окна), и прежний bounce-прямоугольник над кухней, и hemi.
 //    Отражения панорамы внутри помещений нормируются по зонду (normalized reflections): пол комнаты отражает
 //    комнату по яркости и цвету, а не голубое небо.
@@ -41,6 +44,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { sunFor, sunTimes } from './site.js';
 import { outdoorAreas } from './walk.js';
+import { rasterBusy } from './render.js';
 
 // ---------- настройки ----------
 
@@ -56,13 +60,23 @@ const GLASS_T = 0.8;           // пропускание стеклопакет�
 const SUN_LUX = 3.2;           // солнце при высоте ~43° (масштаб сцены, как раньше)
 const PROBE_Y = 1.2, PROBE_STEP = 1.5, PROBE_MARGIN = 0.55, PROBE_MIN_AREA = 0.9;
 const FACE = 32;               // сторона грани кубического снимка зонда
-const PROBES_PER_FRAME = 3;    // 18 маленьких рендеров за кадр во время пересчёта (больше — риск потери WebGL)
+// Бюджет пересчёта на кадр (мс процессора): грани зондов снимаются по одной, пока не выйдет время (минимум одна).
+// Так пересчёт после смены света не роняет кадр ниже ~60 fps и не грузит GPU пачкой (риск потери WebGL).
+const BAKE_MS = { eco: 3, fast: 5, high: 8, ultra: 10 };
+// Мелочь (радиус меньше PROBE_SKIP_R, без свечения) в кубы зондов не попадает: на рассеянный свет комнаты
+// книги и ручки не влияют, а вызовов отрисовки в каждой грани из-за них вдвое больше.
+const PROBE_SKIP_R = 0.3;
 const BOUNCES = 4;
+const BOUNCES_BY = { eco: 1 };   // «Эконом»: один отскок — вчетверо меньше работы на каждую смену света
 const CELL = 0.2;              // шаг сетки освещённости, м
 const MAX_BOX = 32, MAX_ZONE = 16, MASK_W = 64;
 // Светильники шейдера: слой и предел числа по типам (юниформы фрагментного шейдера: 4 + 3 + 4 vec4 на штуку)
 export const SHADER_LAMP_LAYER = 3;
 const LAMP_MAX = { spot: 48, point: 8, rect: 16 };
+// Массивы юниформ (светильники, зоны, SH панорамы) three шлёт в программу при КАЖДОЙ смене материала: ≈4 КБ на вызов
+// отрисовки, сотни вызовов на кадр и на каждую грань зонда (грань зонда 38 мс вместо 13). Поэтому они «ленивые»
+// (lazyUniform): в программу уходят, только если она ещё не видела текущую версию данных. Не текстура: выборка из
+// текстуры в цикле по светильникам на каждый пиксель заметно дороже чтения юниформы (замер: +9 мс на кадр 1 Мп).
 const OPEN_ROOMS = ['kitchen_living', 'hall', 'shaft'];   // одна зона: между ними нет дверей
 // Баланс белого переотражений: глаз в комнате подстраивается под тёплый отскок от дубового пола и стен,
 // поэтому цвет отражённого света приглушается (1 — физически, 0 — серый). Иначе белый потолок выходит персиковым.
@@ -276,30 +290,35 @@ function windowRadiance(sky, theta, n, occEl) {
 
 // ---------- шейдер: зоны, маски источников, переотражения ----------
 
-const GLSL_PARS = /* glsl */`
-uniform vec4 rlBox[ ${MAX_BOX} ];
-uniform vec4 rlBoxY[ ${MAX_BOX} ];
-uniform int rlBoxCount;
-uniform vec4 rlZoneInfo[ ${MAX_ZONE} ];   // x — зондов нет/есть, y — доля сырого IBL, z — принимаемые зоны (биты), w — ровный подсвет
+// Коробки зон — константы шейдера (план квартиры на странице один и не меняется), остальное — из таблицы данных
+const glslFloat = v => (Math.round(v * 1e5) / 1e5).toFixed(5);
+function glslPars(Z) {
+  const boxes = Z.boxes.length ? Z.boxes : [{ x0: 1, z0: 1, x1: 0, z1: 0, y0: 1, y1: 0, zone: 0 }];   // пустая — не совпадёт
+  const v4 = list => list.map(a => `vec4( ${a.map(glslFloat).join(', ')} )`).join(',\n\t');
+  return /* glsl */`
 uniform sampler2D rlMaskTex;              // строка = тип источника, столбец = номер в массиве three, значение = биты зон
 uniform sampler2D rlGrid;                 // сетка SH: ячейка = 10 текселей (зона, 9 коэффициентов); ниже — средние зон
 uniform vec4 rlGridA;                     // x0, z0, 1/шаг, nx
 uniform vec4 rlGridB;                     // nz, первая строка средних, включено, 0
+uniform vec4 rlZoneInfo[ ${MAX_ZONE} ];   // x — зондов нет/есть, y — доля сырого IBL, z — принимаемые зоны (биты), w — ровный подсвет
 uniform vec3 rlEnvSH[ 9 ];
-uniform float rlGiSat;
 uniform vec4 rlSpot[ ${LAMP_MAX.spot * 4} ];    // мир: позиция + маска зон, к источнику от цели + cos края, цвет + cos полутени, дальность, спад
 uniform vec4 rlPoint[ ${LAMP_MAX.point * 3} ];  // позиция + маска, цвет, дальность и спад
 uniform vec4 rlRect[ ${LAMP_MAX.rect * 4} ];    // центр + маска, полуширина, полувысота, цвет
-uniform ivec3 rlLampCount;                      // споты, точечные, прямоугольные
+uniform ivec3 rlLampCount;                // светильники шейдера: споты, точечные, прямоугольные
 varying vec3 vRlWorld;
 #ifdef RL_LOCAL_ENV
 uniform vec3 rlEnvMin, rlEnvMax, rlEnvPos;   // комната и точка съёмки куб-зонда (мир)
 #endif
+const float rlGiSat = ${glslFloat(GI_SAT)};
+const vec4 RL_BOX[ ${boxes.length} ] = vec4[ ${boxes.length} ](
+	${v4(boxes.map(q => [q.x0, q.z0, q.x1, q.z1]))} );
+const vec4 RL_BOXY[ ${boxes.length} ] = vec4[ ${boxes.length} ](
+	${v4(boxes.map(q => [q.y0, q.y1, q.zone, 0]))} );
 int rlZone = 0;
 int rlZoneAt( const in vec3 p ) {
-	for ( int i = 0; i < ${MAX_BOX}; i ++ ) {
-		if ( i >= rlBoxCount ) break;
-		vec4 b = rlBox[ i ]; vec4 y = rlBoxY[ i ];
+	for ( int i = 0; i < ${boxes.length}; i ++ ) {
+		vec4 b = RL_BOX[ i ]; vec4 y = RL_BOXY[ i ];
 		if ( p.x >= b.x && p.x <= b.z && p.z >= b.y && p.z <= b.w && p.y >= y.x && p.y <= y.y ) return int( y.z );
 	}
 	return 0;
@@ -333,6 +352,7 @@ void rlGatherSH( const in int zone, const in vec3 p, out vec3 sh[ 9 ] ) {
 	}
 }
 `;
+}
 
 // Светильники шейдера: те же формулы, что у three (getSpotLightInfo, getPointLightInfo, RE_Direct_RectArea),
 // только из своих массивов, в мировых координатах, с маской зон и циклом по фактическому числу.
@@ -341,8 +361,9 @@ const GLSL_LAMPS = /* glsl */`
 #if defined( RE_Direct )
 for ( int i = 0; i < ${LAMP_MAX.spot}; i ++ ) {
 	if ( i >= rlLampCount.x ) break;
-	vec4 a = rlSpot[ i * 4 ], b = rlSpot[ i * 4 + 1 ], c = rlSpot[ i * 4 + 2 ], d = rlSpot[ i * 4 + 3 ];
+	vec4 a = rlSpot[ i * 4 ];
 	if ( ( ( int( a.w ) >> rlZone ) & 1 ) == 0 ) continue;
+	vec4 b = rlSpot[ i * 4 + 1 ], c = rlSpot[ i * 4 + 2 ], d = rlSpot[ i * 4 + 3 ];
 	vec3 lv = a.xyz - vRlWorld;
 	float ld = length( lv );
 	vec3 dir = lv / max( ld, 1e-5 );
@@ -355,8 +376,9 @@ for ( int i = 0; i < ${LAMP_MAX.spot}; i ++ ) {
 }
 for ( int i = 0; i < ${LAMP_MAX.point}; i ++ ) {
 	if ( i >= rlLampCount.y ) break;
-	vec4 a = rlPoint[ i * 3 ], b = rlPoint[ i * 3 + 1 ], c = rlPoint[ i * 3 + 2 ];
+	vec4 a = rlPoint[ i * 3 ];
 	if ( ( ( int( a.w ) >> rlZone ) & 1 ) == 0 ) continue;
+	vec4 b = rlPoint[ i * 3 + 1 ], c = rlPoint[ i * 3 + 2 ];
 	vec3 lv = a.xyz - vRlWorld;
 	float ld = length( lv );
 	directLight.color = b.rgb * getDistanceAttenuation( ld, c.x, c.y );
@@ -387,12 +409,13 @@ rlZone = rlZoneAt( vRlWorld + rlNw * 0.04 );
 
 const GLSL_GI = /* glsl */`
 #if defined( RE_IndirectDiffuse )
-if ( rlZone > 0 && rlGridB.z > 0.5 && rlZoneInfo[ rlZone ].x > 0.5 ) {
+vec4 rlZi = rlZone > 0 && rlGridB.z > 0.5 ? rlZoneInfo[ rlZone ] : vec4( 0.0 );
+if ( rlZi.x > 0.5 ) {
 	vec3 rlSH[ 9 ];
 	rlGatherSH( rlZone, vRlWorld + rlNw * 0.04, rlSH );
-	float rlKeep = rlZoneInfo[ rlZone ].y;
+	float rlKeep = rlZi.y;
 	vec3 rlE = max( shGetIrradianceAt( inverseTransformDirection( geometryNormal, viewMatrix ), rlSH ), vec3( 0.0 ) );
-	rlE = mix( vec3( dot( rlE, vec3( 0.2126, 0.7152, 0.0722 ) ) ), rlE, rlGiSat ) + rlZoneInfo[ rlZone ].w;
+	rlE = mix( vec3( dot( rlE, vec3( 0.2126, 0.7152, 0.0722 ) ) ), rlE, rlGiSat ) + rlZi.w;
 	#ifdef STANDARD
 		iblIrradiance = iblIrradiance * rlKeep + rlE * ( 1.0 - rlKeep );
 	#else
@@ -519,6 +542,27 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   const maskData = new Float32Array(MASK_W * 5).fill(0xffff);
   const maskTex = new THREE.DataTexture(maskData, MASK_W, 5, THREE.RedFormat, THREE.FloatType);
   maskTex.needsUpdate = true;
+  let maskChanged = false;
+  // Ленивые массивы юниформ (см. LAMP_MAX): программа, привязанная сейчас, — из обёртки gl.useProgram
+  // (three зовёт её только при смене программы). version растёт, только когда данные правда изменились.
+  const gl = renderer.getContext();
+  let boundProgram = null, version = 0;
+  const useProgram = gl.useProgram;
+  gl.useProgram = function (p) { boundProgram = p; return useProgram.call(this, p); };
+  function lazyUniform(value) {
+    const sent = new WeakMap();   // WebGLProgram -> версия данных, которую она уже получила
+    return {
+      value,
+      get needsUpdate() { if (!boundProgram) return true; if (sent.get(boundProgram) === version) return false; sent.set(boundProgram, version); return true; },
+      set needsUpdate(v) { if (v) version++; },
+    };
+  }
+  const v4s = n => Array.from({ length: n }, () => new THREE.Vector4());
+  const put4 = (arr, i, x, y, z, w) => {
+    const v = arr[i];
+    if (v.x === x && v.y === y && v.z === z && v.w === w) return;
+    v.set(x, y, z, w); version++;
+  };
   // сетка освещённости — по квартире и площадке подъезда
   const gb = { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1 };
   for (const q of Z.landing?.rects ?? []) { gb.x0 = Math.min(gb.x0, q.x0); gb.z0 = Math.min(gb.z0, q.z0); gb.x1 = Math.max(gb.x1, q.x1); gb.z1 = Math.max(gb.z1, q.z1); }
@@ -527,6 +571,8 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   const nZ = Z.zones.length;
   const makeGrid = () => {
     const t = new THREE.DataTexture(new Float32Array(gx * 10 * (gz + nZ) * 4), gx * 10, gz + nZ, THREE.RGBAFormat, THREE.FloatType);
+    // на GPU — половинная точность: 40 выборок сетки на пиксель вдвое легче (−6 мс на кадр 1 Мп), номера зон и SH её хватает
+    t.internalFormat = 'RGBA16F';
     t.needsUpdate = true; disposables.push(t); return t;
   };
   const gridShow = makeGrid(), gridBake = makeGrid();
@@ -536,25 +582,21 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   for (const t of [gridShow, gridBake]) for (let j = 0; j < gz; j++) for (let i = 0; i < gx; i++) t.image.data[((j * gx * 10) + i * 10) * 4] = cellZone[j * gx + i];
 
   const U = {
-    rlBox: { value: Array.from({ length: MAX_BOX }, (_, i) => { const q = Z.boxes[i]; return q ? new THREE.Vector4(q.x0, q.z0, q.x1, q.z1) : new THREE.Vector4(); }) },
-    rlBoxY: { value: Array.from({ length: MAX_BOX }, (_, i) => { const q = Z.boxes[i]; return q ? new THREE.Vector4(q.y0, q.y1, q.zone, 0) : new THREE.Vector4(); }) },
-    rlBoxCount: { value: Z.boxes.length },
-    rlZoneInfo: { value: Array.from({ length: MAX_ZONE }, (_, i) => { const z = Z.zones[i]; return z ? new THREE.Vector4(z.kind === 'outside' ? 0 : 1, z.envKeep, z.accept, 0) : new THREE.Vector4(); }) },
+    rlZoneInfo: lazyUniform(Array.from({ length: MAX_ZONE }, (_, i) => { const z = Z.zones[i]; return z ? new THREE.Vector4(z.kind === 'outside' ? 0 : 1, z.envKeep, z.accept, 0) : new THREE.Vector4(); })),
+    rlEnvSH: lazyUniform(Array.from({ length: 9 }, () => new THREE.Vector3())),
+    rlSpot: lazyUniform(v4s(LAMP_MAX.spot * 4)),
+    rlPoint: lazyUniform(v4s(LAMP_MAX.point * 3)),
+    rlRect: lazyUniform(v4s(LAMP_MAX.rect * 4)),
     rlMaskTex: { value: maskTex },
     rlGrid: { value: gridShow },
     rlGridA: { value: new THREE.Vector4(gridX0, gridZ0, 1 / CELL, gx) },
     rlGridB: { value: new THREE.Vector4(gz, gz, 0, 0) },
-    rlEnvSH: { value: Array.from({ length: 9 }, () => new THREE.Vector3()) },
-    rlGiSat: { value: GI_SAT },
-    rlSpot: { value: Array.from({ length: LAMP_MAX.spot * 4 }, () => new THREE.Vector4()) },
-    rlPoint: { value: Array.from({ length: LAMP_MAX.point * 3 }, () => new THREE.Vector4()) },
-    rlRect: { value: Array.from({ length: LAMP_MAX.rect * 4 }, () => new THREE.Vector4()) },
     rlLampCount: { value: new THREE.Vector3() },
   };
 
   // --- патч материалов (один раз на материал; клоны и новые материалы подхватываются в update)
   const patched = new WeakSet();
-  const lightsBegin = patchedLightsBegin(THREE);
+  const lightsBegin = patchedLightsBegin(THREE), pars = glslPars(Z);
   function inject(shader, mat) {
     Object.assign(shader.uniforms, U);
     if (mat?.userData.rlLocalEnv) Object.assign(shader.uniforms, mat.userData.rlLocalEnv.uniforms);
@@ -570,7 +612,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
 	#endif
 	vRlWorld = ( modelMatrix * rlP ).xyz;`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <lights_pars_begin>', '#include <lights_pars_begin>\n' + GLSL_PARS)
+      .replace('#include <lights_pars_begin>', '#include <lights_pars_begin>\n' + pars)
       .replace('#include <lights_fragment_begin>', lightsBegin)
       .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n' + GLSL_GI);
   }
@@ -656,12 +698,11 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     collect(scene, cam.layers);
     const sorted = collected.map((l, i) => [l, i]).sort((a, c) => key(c[0]) - key(a[0]) || a[1] - c[1]).map(a => a[0]);
     const n = [0, 0, 0, 0, 0];
-    let changed = false;
     const put = (t, l) => {
       const i = n[t]++;
       if (i >= MASK_W) return;
       const v = lightMask(l), k = t * MASK_W + i;
-      if (maskData[k] !== v) { maskData[k] = v; changed = true; }
+      if (maskData[k] !== v) { maskData[k] = v; maskChanged = true; }
     };
     for (const l of sorted) {
       if (l.isPointLight) put(0, l);
@@ -670,7 +711,6 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       else if (l.isRectAreaLight) put(3, l);
       else if (l.isHemisphereLight) put(4, l);
     }
-    if (changed) maskTex.needsUpdate = true;
   }
   // --- светильники шейдера: источники слоя SHADER_LAMP_LAYER (видимые, горящие) — в юниформы, мировые координаты
   const lampLayer = new THREE.Layers(); lampLayer.set(SHADER_LAMP_LAYER);
@@ -693,29 +733,38 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       tmpP.setFromMatrixPosition(l.matrixWorld);
       if (t === 'spot') {
         tmpT.setFromMatrixPosition(l.target.matrixWorld).subVectors(tmpP, tmpT).normalize();   // от цели к источнику
-        S[i * 4].set(tmpP.x, tmpP.y, tmpP.z, mask);
-        S[i * 4 + 1].set(tmpT.x, tmpT.y, tmpT.z, Math.cos(l.angle));
-        S[i * 4 + 2].set(col.r * I, col.g * I, col.b * I, Math.cos(l.angle * (1 - l.penumbra)));
-        S[i * 4 + 3].set(l.distance, l.decay, 0, 0);
+        const c = i * 4;
+        put4(S, c, tmpP.x, tmpP.y, tmpP.z, mask);
+        put4(S, c + 1, tmpT.x, tmpT.y, tmpT.z, Math.cos(l.angle));
+        put4(S, c + 2, col.r * I, col.g * I, col.b * I, Math.cos(l.angle * (1 - l.penumbra)));
+        put4(S, c + 3, l.distance, l.decay, 0, 0);
       } else if (t === 'point') {
-        Pt[i * 3].set(tmpP.x, tmpP.y, tmpP.z, mask);
-        Pt[i * 3 + 1].set(col.r * I, col.g * I, col.b * I, 0);
-        Pt[i * 3 + 2].set(l.distance, l.decay, 0, 0);
+        const c = i * 3;
+        put4(Pt, c, tmpP.x, tmpP.y, tmpP.z, mask);
+        put4(Pt, c + 1, col.r * I, col.g * I, col.b * I, 0);
+        put4(Pt, c + 2, l.distance, l.decay, 0, 0);
       } else {
+        const c = i * 4;
         l.getWorldQuaternion(tmpQ);
-        R[i * 4].set(tmpP.x, tmpP.y, tmpP.z, mask);
-        R[i * 4 + 1].copy(tmpT.set(l.width / 2, 0, 0).applyQuaternion(tmpQ)).setW(0);
-        R[i * 4 + 2].copy(tmpT.set(0, l.height / 2, 0).applyQuaternion(tmpQ)).setW(0);
-        R[i * 4 + 3].set(col.r * I, col.g * I, col.b * I, 0);
+        put4(R, c, tmpP.x, tmpP.y, tmpP.z, mask);
+        tmpT.set(l.width / 2, 0, 0).applyQuaternion(tmpQ); put4(R, c + 1, tmpT.x, tmpT.y, tmpT.z, 0);
+        tmpT.set(0, l.height / 2, 0).applyQuaternion(tmpQ); put4(R, c + 2, tmpT.x, tmpT.y, tmpT.z, 0);
+        put4(R, c + 3, col.r * I, col.g * I, col.b * I, 0);
       }
     }
     U.rlLampCount.value.set(n.spot, n.point, n.rect);
   }
+  // Один раз на кадр и набор слоёв камеры: проходы композера (сцена, AO) и пачка граней зондов берут готовое.
+  // Сбрасывается в update() (раз в кадр) и invalidate() (сцена изменилась вне кадра, например перед снимком).
+  let lightsFor = -1;
   const prevBefore = scene.onBeforeRender;
   scene.onBeforeRender = function (r, s, cam, rt) {
     prevBefore?.call(this, r, s, cam, rt);
+    if (lightsFor === cam.layers.mask) return;
+    lightsFor = cam.layers.mask;
     updateMasks(cam);
     packLamps();
+    if (maskChanged) { maskChanged = false; maskTex.needsUpdate = true; }
   };
 
   // --- переотражения: кубические снимки зондов в один атлас, SH на процессоре, сетка в текстуру
@@ -751,7 +800,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
 
   const probeSH = P.map(() => new Float32Array(27));
   const target = new Float32Array(gridShow.image.data.length);   // куда плавно идёт показ
-  let bake = null, dirty = true, dirtyAt = 0, generation = 0, hasGI = false, blending = false;
+  let bake = null, bakeRest = 0, dirty = true, dirtyAt = 0, generation = 0, hasGI = false, blending = false;
 
   function projectProbe(p) {
     const sh = probeSH[p]; sh.fill(0);
@@ -811,35 +860,59 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     if (!list.length) return;
     let Y = 0;
     for (const pi of list) for (const n of AXES) { const e = shIrradiance(probeSH[pi], ...n); Y += Math.max(0, 0.2126 * e[0] + 0.7152 * e[1] + 0.0722 * e[2]); }
-    U.rlZoneInfo.value[L.index].w = LANDING_FILL * Y / (list.length * AXES.length);
+    const zi = U.rlZoneInfo.value[L.index], v = LANDING_FILL * Y / (list.length * AXES.length);
+    if (zi.w !== v) { zi.w = v; version++; }
   }
 
+  // Мелочь, которую грани зондов не рисуют (PROBE_SKIP_R): листовые меши без свечения. Только листья —
+  // иначе спрятались бы и источники внутри (число источников three сменилось бы, а с ним все программы).
+  const small = [], glows = m => m?.emissiveIntensity > 0 && m.emissive && m.emissive.r + m.emissive.g + m.emissive.b > 0;
+  function collectSmall() {
+    small.length = 0;
+    scene.traverseVisible(o => {
+      if (!o.isMesh || o.isInstancedMesh || o.children.length || !o.geometry?.attributes.position) return;
+      const g = o.geometry;
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      if (g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis() >= PROBE_SKIP_R) return;
+      if (Array.isArray(o.material) ? o.material.some(glows) : glows(o.material)) return;
+      small.push(o);
+    });
+  }
+
+  // Грани зондов по одной, пока не выйдет бюджет кадра. Первая грань задания рисуется полной сценой и
+  // обновляет карту тени солнца (оно могло сдвинуться); дальше — без мелочи и без теней (они уже свежие).
   const savedClear = new THREE.Color();
-  function renderProbes(from, to) {
+  function renderFaces(job, budget) {
+    const t0 = performance.now(), total = nP * 6;
     const bg = scene.background, rt = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate;
     const clearA = renderer.getClearAlpha(); renderer.getClearColor(savedClear);
     const grid = U.rlGrid.value;
     scene.background = null;                  // небо в окне уже дают прямоугольники окон
     renderer.setClearColor(0x000000, 1);
-    renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
+    renderer.shadowMap.autoUpdate = false;
     U.rlGrid.value = gridBake;
     U.rlGridB.value.z = 1;
+    atlas.scissorTest = true;
+    renderer.setRenderTarget(atlas);
+    let hidden = false;
     try {
-      for (let p = from; p < to; p++) {
-        const q = P[p];
-        for (let f = 0; f < 6; f++) {
-          probeCam.position.set(q.x, q.y, q.z);
-          probeCam.up.set(...UPS[f]);
-          probeCam.lookAt(q.x + DIRS[f][0], q.y + DIRS[f][1], q.z + DIRS[f][2]);
-          probeCam.updateMatrixWorld();
-          atlas.viewport.set(f * FACE, p * FACE, FACE, FACE);
-          atlas.scissor.set(f * FACE, p * FACE, FACE, FACE);
-          atlas.scissorTest = true;
-          renderer.setRenderTarget(atlas);
-          renderer.render(scene, probeCam);
-        }
-      }
+      do {
+        if (!job.full) { job.full = true; renderer.shadowMap.needsUpdate = true; }
+        else if (!hidden) { hidden = true; for (const o of small) o.visible = false; }
+        const p = Math.floor(job.face / 6), f = job.face % 6, q = P[p];
+        probeCam.position.set(q.x, q.y, q.z);
+        probeCam.up.set(...UPS[f]);
+        probeCam.lookAt(q.x + DIRS[f][0], q.y + DIRS[f][1], q.z + DIRS[f][2]);
+        probeCam.updateMatrixWorld();
+        atlas.viewport.set(f * FACE, p * FACE, FACE, FACE);
+        atlas.scissor.set(f * FACE, p * FACE, FACE, FACE);
+        renderer.setRenderTarget(atlas);      // вьюпорт цели применяется при setRenderTarget
+        renderer.render(scene, probeCam);
+        job.face++;
+      } while (job.face < total && performance.now() - t0 < budget);
+      return performance.now() - t0;
     } finally {
+      if (hidden) for (const o of small) o.visible = true;
       U.rlGrid.value = grid;
       U.rlGridB.value.z = hasGI ? 1 : 0;
       scene.background = bg;
@@ -852,18 +925,19 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   function stepBake(now) {
     if (dirty && now - dirtyAt > 120) {
       dirty = false; generation++;
-      bake = { gen: generation, pass: 0, next: 0, reading: false };
+      bake = { gen: generation, pass: 0, face: 0, full: false, reading: false };
+      collectSmall();
       // первый проход — только прямой свет: сетка пересчёта обнуляется (кроме номеров зон ячеек)
       const d = gridBake.image.data;
       for (let i = 0; i < d.length; i++) if (i % 40 !== 0) d[i] = 0;
       gridBake.needsUpdate = true;
     }
-    if (!bake || bake.reading) return false;
-    if (bake.next < nP) {
-      const to = Math.min(nP, bake.next + PROBES_PER_FRAME);
-      renderProbes(bake.next, to);
-      bake.next = to;
-      return false;
+    // ждём новый пересчёт (старый всё равно выбросится) и фоновую сборку шейдеров (иначе соберутся здесь, с заморозкой)
+    if (!bake || bake.reading || dirty || now < bakeRest || rasterBusy(renderer)) return;
+    if (bake.face < nP * 6) {
+      const budget = BAKE_MS[quality] ?? BAKE_MS.high, spent = renderFaces(bake, budget);
+      if (spent > 2 * budget) bakeRest = now + spent;
+      return;
     }
     bake.reading = true;
     const job = bake;
@@ -873,15 +947,14 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       for (let p = 0; p < nP; p++) projectProbe(p);
       fillGrid(gridBake.image.data); gridBake.needsUpdate = true;
       setLandingFill();
-      job.reading = false; job.pass++; job.next = 0;
-      if (job.pass >= BOUNCES) {
+      job.reading = false; job.pass++; job.face = 0; job.full = true;
+      if (job.pass >= (BOUNCES_BY[quality] ?? BOUNCES)) {
         bake = null; mirrorsDirty = true;
         if (!hasGI) { gridShow.image.data.set(gridBake.image.data); gridShow.needsUpdate = true; hasGI = true; U.rlGridB.value.z = 1; giActive = true; }
         else { target.set(gridBake.image.data); blending = true; }
         requestRender();
       }
     }).catch(err => { console.warn('lighting: зонды не прочитались', err); bake = null; });
-    return false;
   }
 
   function blendStep() {
@@ -957,6 +1030,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       scene.backgroundRotation.set(0, theta, 0);
       scene.environmentRotation.set(0, theta, 0);
       U.rlEnvSH.value.forEach((v, j) => v.set(e.sh[j * 3], e.sh[j * 3 + 1], e.sh[j * 3 + 2]));
+      version++;
     }
     scene.environmentIntensity = ENV_INTENSITY[mode] ?? 1;
     scene.backgroundIntensity = BG_INTENSITY[mode] ?? 1;
@@ -987,30 +1061,51 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     invalidate();
   }
 
-  function invalidate() { dirty = true; dirtyAt = performance.now(); mirrorsDirty = true; requestRender(); }
+  // Сцена изменилась: пересчитать переотражения и перерисовать тени (в «Экономе» они не обновляются от камеры)
+  function invalidate() {
+    dirty = true; dirtyAt = performance.now(); mirrorsDirty = true; lightsFor = -1;
+    renderer.shadowMap.needsUpdate = true;
+    requestRender();
+  }
+
+  // WebGL вернулся после сброса: содержимое целей (карты окружения PMREM, зеркала, тени, атлас зондов) пропало,
+  // данные (сетки, таблица) three зальёт сам. Карты окружения — заново из панорам, остальное — пересчётом.
+  function onRestored() {
+    for (const e of Object.values(env)) {
+      const src = resizeEquirect(THREE, e.bg, ENV_WIDTH), old = e.env;
+      e.env = pmrem.fromEquirectangular(src).texture;
+      if (src !== e.bg) src.dispose();
+      disposables[disposables.indexOf(old)] = e.env;
+    }
+    scene.traverse(o => { if (o.isLight && o.castShadow && o.shadow) o.shadow.needsUpdate = true; });
+    bake = null;
+    if (current.mode) apply(current.mode, current.state); else invalidate();
+  }
+  renderer.domElement.addEventListener('webglcontextrestored', onRestored);
 
   function update() {
     const now = performance.now();
+    lightsFor = -1;
     patchScene();
     let changed = adapt(now);
     stepBake(now);
     if (blendStep()) changed = true;
     // зеркала — когда переотражения досчитаны (или их ещё нет вовсе)
-    if (mirrors.length && mirrorsDirty && !bake && !blending && !(dirty && hasGI)) { renderMirrors(); changed = true; }
+    if (mirrors.length && mirrorsDirty && !bake && !blending && !(dirty && hasGI) && !rasterBusy(renderer)) { renderMirrors(); changed = true; }
     return changed;
   }
 
-  function setQuality(q) {
-    const s = q === 'high' || q === 'ultra' ? 4096 : 2048;
-    sun.shadow.mapSize.set(s, s);
-    sun.shadow.map?.dispose(); sun.shadow.map = null;
-  }
+  // Качество задаёт только бюджет и глубину пересчёта; карты теней — в render.js (одно место)
+  let quality = 'high';
+  function setQuality(q) { quality = q; }
 
   function dispose() {
     scene.onBeforeRender = prevBefore ?? (() => {});
+    renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
     scene.remove(sun, sun.target, ...windows.map(w => w.light));
     for (const d of disposables) d.dispose?.();
     maskTex.dispose(); pmrem.dispose();
+    gl.useProgram = useProgram;
   }
 
   // для проверок из консоли / тестовой страницы

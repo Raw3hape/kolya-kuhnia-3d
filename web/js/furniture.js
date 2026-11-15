@@ -547,6 +547,7 @@ function buildSofa(S, c) {
       if (!o.isMesh) return;
       o.castShadow = true; o.receiveShadow = true;
       o.userData.slot = 'sofa'; o.userData.furnId = 'sofa';
+      o.userData.glb = true;   // геометрия общая с кешем GLB: при пересборке не освобождать (main.js rebuildFurniture)
       if (!cover?.model) {   // своя модель обивки уже окрашена, иначе перекрашиваем только fabric
         const swap = m => (isFabric(m) ? coverMat(e, cover, m) : m);
         o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);

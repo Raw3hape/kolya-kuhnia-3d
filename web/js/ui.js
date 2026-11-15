@@ -27,10 +27,13 @@
 //   «Сбросить раздел» (значения из initUI({ defaults }), иначе из def контрола), поиск по вариантам во вкладках с поиском.
 // Клавиатура: в группе выбора одна остановка Tab, стрелки/Home/End — по вариантам, Пробел/Enter — выбрать;
 //   1–5 — вкладки, / — поиск, ⌘Z / ⇧⌘Z — отмена и возврат.
+// Всплывающее сообщение: handle.toast(msg, action, ms) или событие NOTICE на window (render.js — сброс WebGL,
+// мало кадров); событие QUALITY_REQUEST (render.js) ставит качество как выбор пользователя.
 import { NAV_HINT } from './nav.js';
 import { SLOTS, MATERIALS, OPTIONS, PRESETS, FLOOR_CATS, resolveItem } from './catalog.js';
 import { LAMP_OPTIONS, DIM } from './lamps.js';
 import { formatSun } from './site.js';
+import { NOTICE, QUALITY_REQUEST } from './render.js';
 
 export const TABS = [
   { id: 'mat',       title: 'Материалы',    short: 'Материалы', icon: 'swatch',  search: 'Найти: дуб, микроцемент, Carrea…' },
@@ -349,7 +352,8 @@ export function initUI(api) {
       ] },
       { id: 'render', tab: 'view', title: 'Рендер и экспорт', order: 10, open: true, controls: [
         { type: 'seg', key: 'quality', src: 'pref', def: 'high', label: 'Качество',
-          options: opt(['fast', 'Быстрое'], ['high', 'Высокое'], ...(ultra ? [['ultra', 'Ультра']] : [])) },
+          hint: 'Эконом — максимум кадров в секунду: меньше пикселей, без затенения углов и свечения, отражённый свет считается проще',
+          options: opt(['eco', 'Эконом'], ['fast', 'Быстрое'], ['high', 'Высокое'], ...(ultra ? [['ultra', 'Ультра']] : [])) },
         { type: 'button', key: 'photo', feature: 'render', primary: true, value: (s, i) => !i.photo?.running,
           label: (s, i) => (i.photo?.running ? 'Выключить фото-рендер' : 'Включить фото-рендер') },
         { type: 'progress', key: 'photo', id: 'photoProgress', feature: 'render', format: photoStatus },
@@ -1153,10 +1157,14 @@ export function initUI(api) {
   // --- всплывающее сообщение
   const toastEl = $('#toast');
   let tt = 0;
-  function toast(msg, action) {
-    toastEl.replaceChildren(h('span', {}, msg), action ? h('button', { type: 'button', class: 'toast-act', onclick: () => { toastEl.hidden = true; action.run(); } }, action.label) : null);
-    toastEl.hidden = false; clearTimeout(tt); tt = setTimeout(() => { toastEl.hidden = true; }, action ? 5000 : 2600);
+  function toast(msg, action, ms) {
+    toastEl.replaceChildren(h('span', {}, msg), ...(action ? [h('button', { type: 'button', class: 'toast-act', onclick: () => { toastEl.hidden = true; action.run(); } }, action.label)] : []));
+    toastEl.hidden = false; clearTimeout(tt); tt = setTimeout(() => { toastEl.hidden = true; }, ms ?? (action ? 5000 : 2600));
   }
+  // Сообщения модулей без доступа к панели (render.js: сброс WebGL): событие NOTICE на window, detail { msg, action, ms }
+  addEventListener(NOTICE, e => toast(e.detail.msg, e.detail.action, e.detail.ms));
+  // render.js предложил качество ниже и пользователь согласился — как выбор в панели (настройка этого браузера)
+  addEventListener(QUALITY_REQUEST, e => { prefs.quality = e.detail; savePrefs(); emit('quality', e.detail); update(); });
 
   function applyTheme(t) {
     if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;

@@ -1,5 +1,24 @@
-// Рендер: растровая цепочка по качеству (fast / high / ultra) и фото-режим с трассировкой пути.
+// Рендер: растровая цепочка по качеству (eco / fast / high / ultra) и фото-режим с трассировкой пути.
 // Фото-режим копит проходы, пока камера и сцена неподвижны; invalidate() начинает кадр заново.
+//
+//   const pipe = createPipeline({ THREE, renderer, scene, camera });
+//   pipe.render()               — каждый кадр (рисует, только если что-то изменилось: в покое кадров нет)
+//   pipe.invalidate()           — сцена или камера изменились; pipe.setQuality(q), setSize, setToneMapping
+//   pipe.enterPhoto()/exitPhoto(), capture(minSamples) -> Blob PNG, onProgress(cb), onLive(fn), setOverlay(o)
+//   rasterBusy(renderer)        — идёт фоновая сборка шейдеров: lighting.js в это время не снимает зонды
+//   NOTICE                      — имя события на window для всплывающих сообщений (ловит ui.js)
+//   QUALITY_REQUEST             — событие «сменить качество» (кнопка в подсказке о малом числе кадров; ловит ui.js)
+//
+// Почему не замирает:
+// - Карты теней перерисовываются, только когда сдвинулся отбрасывающий тень меш или источник (refreshShadows), а не каждый кадр.
+// - Композер один на все качества (сцена → GTAO → свечение → вывод), качество только включает проходы и меняет
+//   размеры: программы материалов на всех качествах одни и те же (раньше «Быстрое» рисовало прямо на холст —
+//   +26 программ и ~0,9 с заморозки на переключении). MSAA только у цели сцены, не больше 4.
+// - Новые и изменённые материалы, смена набора источников: шейдеры собираются фоном (KHR_parallel_shader_compile),
+//   до готовности держится прошлый кадр — без секундных заморозок на первой отрисовке.
+// - Фото: BVH сцены (≈1,2 млн треугольников, ~5 с) строится в Web Worker; трассировщик (≈1 ГБ памяти) освобождается
+//   через PHOTO_KEEP после выхода из фото.
+// - Сброс WebGL (нехватка видеопамяти): сообщение, восстановление сцены, фото выключается; не вернулся — «Перезагрузить».
 //
 // Договорённости со сценой (их соблюдают main.js, lamps.js и остальные):
 //   слой камеры не совпадает (вырез, слой 1) или userData.shadowOnly — в фото не видно камере, но свет и тени держит;
@@ -17,62 +36,116 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-// pr — [мин, макс] плотности пикселей; shadow — карта тени солнца; ao — выборки GTAO.
+// px — бюджет пикселей кадра (плотность снижается до pr[0], если окно большое); pr — [мин, макс] плотности;
+// shadow — карта тени солнца (споты — вчетверо меньше); ao — выборки GTAO (0 — без AO); bloom — свечение.
+// eco («Эконом», макс. FPS): плотность ≤ 1, без AO и свечения, переотражения — один отскок.
+// Программы материалов на всех качествах те же — переключение без сборки шейдеров.
 // Трассировка (фото-режим) включается и выключается только явно (enterPhoto/exitPhoto), само качество её не включает.
 export const QUALITY = {
-  fast:  { pr: [1, 1],   msaa: 0, post: false, shadow: 2048 },
-  high:  { pr: [1, 1.6], msaa: 4, post: true,  shadow: 4096, ao: 16, pd: { radius: 6, rings: 2, samples: 16 } },
-  ultra: { pr: [1.5, 2], msaa: 8, post: true,  shadow: 8192, ao: 32, pd: { radius: 8, rings: 3, samples: 24 } },
+  eco:   { px: 1.2e6, pr: [0.6, 1],  msaa: 0, shadow: 1024, ao: 0,  bloom: false },
+  fast:  { px: 2.5e6, pr: [0.75, 1], msaa: 0, shadow: 2048, ao: 0,  bloom: false },
+  high:  { px: 4.5e6, pr: [1, 1.6],  msaa: 4, shadow: 4096, ao: 16, bloom: true,  pd: { radius: 6, rings: 2, samples: 16 } },
+  ultra: { px: 9e6,   pr: [1.5, 2],  msaa: 4, shadow: 4096, ao: 32, bloom: true,  pd: { radius: 8, rings: 3, samples: 24 } },
 };
+export const NOTICE = 'kitchen-notice';
+const notice = (msg, action = null, ms) => dispatchEvent(new CustomEvent(NOTICE, { detail: { msg, action, ms } }));
+// Просьба сменить качество (detail — id из QUALITY): ui.js ставит его как выбор пользователя (настройка браузера)
+export const QUALITY_REQUEST = 'kitchen-quality';
+const ORDER = ['eco', 'fast', 'high', 'ultra'];
+// Слежение за частотой кадров: непрерывная отрисовка (прогулка, охота, долгий облёт) дольше SLOW_WINDOW с медианой
+// кадра больше SLOW_FRAME — предложить качество ниже. Один раз на каждое качество за сеанс.
+const SLOW_WINDOW = 4000, SLOW_FRAME = 33;
 const TONE = { neutral: 'NeutralToneMapping', agx: 'AgXToneMapping', aces: 'ACESFilmicToneMapping' };
 const SETTLE = 150;          // мс тишины после изменения, прежде чем трассировать
 const METER_AT = 8;          // на каком проходе замерять яркость фото (среднее уже без смещения, шум терпим)
 const SUN_CAP = 100;         // яркость панорамы выше 100 × среднего — это солнце, его даёт DirectionalLight
 const CAPTURE_TIMEOUT = 180e3;
+const CAPTURE_PX = 12e6;     // снимок PNG растром — не больше 12 Мп (вдвое плотнее экрана, но без гигантских целей)
+const PHOTO_KEEP = 20e3;     // трассировщик живёт столько после выхода из фото (повторный вход — без сборки)
+const COMPILE_WAIT = 15e3;   // дольше фоновую сборку не ждём: рисуем как есть (three доберёт синхронно)
+const UPLOAD_MS = 8;        // бюджет заливки текстур новых материалов на кадр (минимум одна)
+const LOST_WAIT = 6e3;       // WebGL не вернулся за это время — предложить перезагрузку
 // Пикселей за один кадр трассировки: ~40 мс на M5 Pro в квартире, на слабой карте в разы дольше. Браузер
 // сбрасывает WebGL, если кадр идёт ~2 с, поэтому кадр делится на плитки, а не трассируется целиком.
 const TILE_PIXELS = 100e3;
 
+const busy = new WeakSet();   // рендереры, у которых идёт фоновая сборка шейдеров
+export const rasterBusy = renderer => busy.has(renderer);
+
 // photoPixels — сколько пикселей трассировать (больше — растягивается): 1,5 Мп ≈ 1,5 прохода/с на M5 Pro
 export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 1024, autoExposure = true, photoPixels = 1.5e6 }) {
   const canvas = renderer.domElement;
+  renderer.debug.checkShaderErrors = false;   // ошибки шейдеров проверяет фоновая сборка (startCompile), без журнала на каждую
   let quality = 'high', q = QUALITY.high;
   let size = { w: 1, h: 1, dpr: 1 };
-  let composer = null;
 
-  // ---------- растр ----------
+  // ---------- растр: один композер на все качества ----------
+  // Сцена рисуется в rtA (MSAA, глубина), проходы после неё — в rtB (без MSAA и глубины).
+  const rtB = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
+  const composer = new EffectComposer(renderer, rtB);
+  composer.renderTarget2.dispose();
+  const rtA = composer.renderTarget2 = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 0 });
+  composer.addPass(new RenderPass(scene, camera));
+  // AO под интерьер 2.64 м: радиус 45 см ловит углы и стыки мебели, не темнит стены целиком
+  const ao = new GTAOPass(scene, camera, 1, 1);
+  ao.blendIntensity = 0.9;
+  ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.6, thickness: 1.2, scale: 1.0 });
+  composer.addPass(ao);
+  // Свечение только у очень ярких точек (лампы, блик солнца): порог в линейной яркости до экспозиции
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.15, 0.35, 2.0);
+  // ТВ (tv.js): альфа кадра — «дыра» под YouTube-плеер за холстом. Свечение прибавляет только цвет и альфу не трогает
+  // (у штатного AdditiveBlending альфа экрана росла бы на ~0.2 и затемняла видео). GTAO и OutputPass альфу и так хранят.
+  Object.assign(bloom.blendMaterial, { blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneFactor,
+    blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor });
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+  let aoKey = '';
 
-  function buildComposer() {
-    if (composer) { composer.passes.forEach(p => p.dispose()); composer.dispose(); composer = null; }
-    if (!q.post) return;
+  function configureComposer() {
     const samples = Math.min(q.msaa, renderer.capabilities.maxSamples);
-    composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples }));
-    composer.addPass(new RenderPass(scene, camera));
-    // AO под интерьер 2.64 м: радиус 45 см ловит углы и стыки мебели, не темнит стены целиком
-    const ao = new GTAOPass(scene, camera, 1, 1);
-    ao.blendIntensity = 0.9;
-    ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.6, thickness: 1.2, scale: 1.0, samples: q.ao });
-    ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, ...q.pd });
-    composer.addPass(ao);
-    // Свечение только у очень ярких точек (лампы, блик солнца): порог в линейной яркости до экспозиции
-    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.15, 0.35, 2.0);
-    // ТВ (tv.js): альфа кадра — «дыра» под YouTube-плеер за холстом. Свечение прибавляет только цвет и альфу не трогает
-    // (у штатного AdditiveBlending альфа экрана росла бы на ~0.2 и затемняла видео). GTAO и OutputPass альфу и так хранят.
-    Object.assign(bloom.blendMaterial, { blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneFactor,
-      blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor });
-    composer.addPass(bloom);
-    composer.addPass(new OutputPass());
+    if (rtA.samples !== samples) { rtA.samples = samples; rtA.dispose(); }   // цель пересоздастся при следующей отрисовке
+    ao.enabled = q.ao > 0;
+    bloom.enabled = q.bloom;
+    const key = q.ao ? `${q.ao}|${q.pd.radius}|${q.pd.rings}|${q.pd.samples}` : aoKey;
+    if (key !== aoKey) {   // выборки — это defines: пересобирается только шейдер AO, не материалы
+      aoKey = key;
+      ao.updateGtaoMaterial({ samples: q.ao });
+      ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, ...q.pd });
+    }
   }
 
   function drawRaster() {
-    if (composer) composer.render(); else renderer.render(scene, camera);
+    composer.readBuffer = rtA; composer.writeBuffer = rtB;   // проходы меняют их местами — сцена всегда в rtA
+    composer.render();
+  }
+
+  const frameGaps = [], offered = new Set();
+  let lastDraw = 0, streakStart = 0;
+  function watchFrameRate(now) {
+    const gap = now - lastDraw;
+    lastDraw = now;
+    if (gap > 250) { frameGaps.length = 0; streakStart = now; return; }   // пауза — новая серия
+    frameGaps.push(gap);
+    if (now - streakStart < SLOW_WINDOW) return;
+    const sorted = frameGaps.slice().sort((a, b) => a - b), median = sorted[sorted.length >> 1];
+    frameGaps.length = 0; streakStart = now;
+    const lower = ORDER[ORDER.indexOf(quality) - 1];
+    if (median <= SLOW_FRAME || !lower || offered.has(quality)) return;
+    offered.add(quality);
+    const fps = Math.round(1000 / median), name = { eco: 'Эконом', fast: 'Быстрое', high: 'Высокое' }[lower];
+    notice(`Кадров мало: ~${fps} в секунду. Качество «${name}» будет плавнее`,
+      { label: 'Переключить', run: () => dispatchEvent(new CustomEvent(QUALITY_REQUEST, { detail: lower })) }, 8000);
   }
 
   function applySize(prOverride) {
-    const pr = prOverride ?? Math.min(q.pr[1], Math.max(q.pr[0], size.dpr));
+    const base = Math.min(q.pr[1], Math.max(q.pr[0], size.dpr));
+    const pr = prOverride ?? Math.max(q.pr[0], Math.min(base, Math.sqrt(q.px / Math.max(1, size.w * size.h))));
     renderer.setPixelRatio(pr);
     renderer.setSize(size.w, size.h, false);
-    if (composer) { composer.setPixelRatio(pr); composer.setSize(size.w, size.h); }
+    composer.setPixelRatio(pr); composer.setSize(size.w, size.h);
+    // выключенные проходы не держат полноэкранных целей (AO — нормали, глубина и шум; свечение — цепочка мипов)
+    if (!ao.enabled) ao.setSize(1, 1);
+    if (!bloom.enabled) bloom.setSize(1, 1);
   }
 
   // Карты теней по качеству: солнце — q.shadow, точечные и споты — вчетверо меньше (не больше 2048)
@@ -84,7 +157,115 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
       if (o.shadow.mapSize.x === s) return;
       o.shadow.mapSize.set(s, s);
       o.shadow.map?.dispose(); o.shadow.map = null;
+      renderer.shadowMap.needsUpdate = true;
     });
+  }
+
+  // ---------- тени: только когда что-то сдвинулось ----------
+  // Карты теней (солнце 4096 и до пяти спотов 1024, ~0,9 млн треугольников) three по умолчанию перерисовывает
+  // каждый кадр, хотя от движения камеры они не меняются: это половина времени кадра при облёте.
+  // Перерисовка — когда сдвинулся, появился или пропал отбрасывающий тень меш (двери, звери в hunt.js) или источник
+  // с тенью, плюс по lighting.invalidate() (смена света, мебели, материалов) и смене размеров карт.
+  renderer.shadowMap.autoUpdate = false;
+  let shadowSum = NaN;
+  function shadowCasters() {
+    scene.updateMatrixWorld();
+    let sum = 0, i = 0;
+    scene.traverseVisible(o => {
+      if (!o.castShadow || !(o.isMesh || o.isLight)) return;
+      const e = o.matrixWorld.elements, w = ++i;
+      sum += w * (e[0] + 3 * e[5] + 7 * e[10] + 11 * e[12] + 13 * e[13] + 17 * e[14] + 19 * e[1] + 23 * e[8]);
+      if (o.isInstancedMesh) sum += w * (o.instanceMatrix.version + 31 * o.count);
+      if (o.isLight) sum += w * (o.intensity > 0 ? 37 : 41);
+    });
+    return sum + i * 1e-3;
+  }
+  function refreshShadows() {
+    const s = shadowCasters();
+    if (s !== shadowSum) { shadowSum = s; renderer.shadowMap.needsUpdate = true; }
+  }
+
+  // ---------- фоновая сборка шейдеров ----------
+  // После invalidate() сцена сверяется (≈0,1 мс): новые материалы, сменившаяся версия (needsUpdate), набор источников.
+  // Если есть новое — renderer.compile() ставит программы в фоновую сборку, кадр не рисуется, пока они не готовы.
+  let seen = new WeakMap(), lightSig = '', scanNeeded = true, compile = null;
+  function lightSignature() {
+    const n = {};
+    scene.traverseVisible(o => {
+      if (!o.isLight || !o.layers.test(camera.layers)) return;
+      const k = o.type + (o.castShadow ? 's' : '') + (o.map ? 'm' : '');
+      n[k] = (n[k] || 0) + 1;
+    });
+    return Object.keys(n).sort().map(k => k + n[k]).join();
+  }
+  // Прозрачные двусторонние (и стекло с пропусканием) three сам рисует в два прохода, переключая side с needsUpdate:
+  // их версия растёт каждый кадр без новых программ — у них считается только появление, не версия.
+  const twoPass = m => m.side === THREE.DoubleSide && !m.forceSinglePass && (m.transparent || m.transmission > 0);
+  // Возвращает null — нового нет; [] — сменился набор источников (собрать всё); иначе меши с новыми материалами.
+  function scanScene() {
+    scanNeeded = false;
+    const fresh = [];
+    const check = m => {
+      if (!m) return false;
+      const v = seen.get(m);
+      if (v === m.version || (v !== undefined && twoPass(m))) return false;
+      seen.set(m, m.version); return true;
+    };
+    scene.traverse(o => {
+      if (!o.material) return;
+      if (Array.isArray(o.material) ? o.material.map(check).includes(true) : check(o.material)) fresh.push(o);
+    });
+    const sig = lightSignature();
+    if (sig !== lightSig) { lightSig = sig; return []; }
+    return fresh.length ? fresh : null;
+  }
+  // Собирать только новое: обход всей сцены в renderer.compile — ~60 мс. Меши подаются «тенями» (Object.create)
+  // без детей: их источники не попадут в сборку второй раз (иначе ключ программ был бы с лишним светом).
+  const batch = new THREE.Object3D();
+  // Программы собираются фоном, а текстуры новых материалов тем временем льются по UPLOAD_MS за кадр (карта 2048 —
+  // 30–45 мс заливки, все сразу — сотни мс в одном кадре). Пока идёт, кадр не рисуется: на экране прошлый.
+  const gl = renderer.getContext();
+  function startCompile(list) {
+    batch.children = list.map(o => Object.assign(Object.create(o), { children: [] }));
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(rtA);   // ключ программы как у растра: в цель, без тональной кривой (так же снимают зонды)
+    let materials;
+    try { materials = list.length ? renderer.compile(batch, camera, scene) : renderer.compile(scene, camera); }
+    finally { renderer.setRenderTarget(prev); batch.children = []; }
+    const textures = new Set();
+    for (const m of materials) for (const k in m) if (m[k]?.isTexture && !m[k].isRenderTargetTexture && m[k].image) textures.add(m[k]);
+    const job = compile = { until: performance.now() + COMPILE_WAIT, materials, textures: [...textures] };
+    busy.add(renderer);
+    const poll = () => {
+      if (compile !== job) return;
+      for (const m of materials) {
+        const prog = renderer.properties.get(m).currentProgram;
+        if (prog?.isReady() === false) continue;
+        // проверка ошибок three (renderer.debug.checkShaderErrors) выключена: её журнал стоит 10–30 мс на программу
+        if (prog && !gl.getProgramParameter(prog.program, gl.LINK_STATUS)) console.warn('render.js: шейдер не собрался', m.name || m.type, gl.getProgramInfoLog(prog.program));
+        materials.delete(m);
+      }
+      if (materials.size && performance.now() < job.until && !lost) { setTimeout(poll, 16); return; }
+      job.programsReady = true;
+    };
+    poll();
+  }
+  // true — держать прошлый кадр (идёт сборка или заливка текстур)
+  function compiling() {
+    if (!compile) {
+      const list = scanNeeded ? scanScene() : null;
+      if (!list) return false;
+      startCompile(list);
+    }
+    const job = compile, t0 = performance.now();   // текстуры льются, пока программы собираются в фоне
+    while (job.textures.length && performance.now() - t0 < UPLOAD_MS) {
+      const t = job.textures.pop(), p = renderer.properties.get(t);
+      if (p.__webglTexture && p.__version === t.version) continue;
+      renderer.initTexture(t);
+    }
+    if ((job.textures.length || !job.programsReady) && !lost) return true;
+    compile = null; busy.delete(renderer); rasterDirty = true;
+    return false;
   }
 
   // ---------- состояние кадра ----------
@@ -93,8 +274,23 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   let rasterDirty = true, sceneDirty = true;
   let explicit = false;
   let pt = null, ptLoading = null, ptFailed = false, broken = false, lost = false, matteOK = false;
-  const onLost = () => { lost = true; waiters.splice(0).forEach(w => w.resolve()); report(0, 'error'); };
-  const onRestored = () => { lost = false; disposeTracer(); setQuality(quality); };   // трассировщик заново при следующем фото
+  let building = null, keepTimer = 0, lostTimer = 0;
+  const onLost = () => {
+    lost = true; compile = null; busy.delete(renderer);
+    waiters.splice(0).forEach(w => w.resolve()); report(0, 'error');
+    notice('Видеокарта сбросила 3D-сцену. Восстанавливаем…', null, LOST_WAIT);
+    clearTimeout(lostTimer);
+    lostTimer = setTimeout(() => { if (lost) notice('3D-сцена не восстановилась', { label: 'Перезагрузить', run: () => location.reload() }, 600e3); }, LOST_WAIT);
+  };
+  const onRestored = () => {
+    lost = false; clearTimeout(lostTimer);
+    const wasPhoto = explicit;
+    dropTracer();   // объекты трассировщика жили в потерянном контексте
+    explicit = false; report(0, 'idle');
+    seen = new WeakMap(); lightSig = '';   // все программы заново — фоном
+    setQuality(quality);
+    notice(wasPhoto ? 'Сцена восстановлена. Фото-режим выключен: не хватило видеопамяти' : 'Сцена восстановлена');
+  };
   canvas.addEventListener('webglcontextlost', onLost);
   canvas.addEventListener('webglcontextrestored', onRestored);
   let announced = false, gain = 1, metering = false, rasterPx = null;   // gain — множитель экспозиции фото
@@ -107,7 +303,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 
   function invalidate() {
     lastChange = performance.now();
-    rasterDirty = sceneDirty = true;
+    rasterDirty = sceneDirty = scanNeeded = true;
     broken = false;
     applyShadowSizes();
   }
@@ -120,10 +316,11 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   }
 
   // пока сцена не пересобрана, накопленное относится к прошлому кадру и не считается
-  const tracedSamples = () => (pt && !sceneDirty ? Math.floor(pt.samples) : 0);
+  const tracedSamples = () => (pt && !sceneDirty && !building ? Math.floor(pt.samples) : 0);
 
   function render() {
     if (document.hidden || lost) return;   // вкладка скрыта или WebGL сброшен — GPU не трогаем
+    if (compiling()) return;               // шейдеры собираются фоном — на экране прошлый кадр
     const now = performance.now(), quiet = now - lastChange;
     const done = tracedSamples();
     for (let i = waiters.length - 1; i >= 0; i--) {
@@ -132,22 +329,17 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     const ov = !explicit && !!overlay?.active();
     const want = explicit && !ptFailed && !broken;
     if (want && !pt) loadTracer();
-    if (!want || !pt || quiet < SETTLE) {
-      if (rasterDirty) { rasterDirty = false; drawRaster(); if (ov) overlay.draw(); }
-      report(0, want ? (pt ? 'waiting' : 'loading') : 'idle');
+    if (!want || !pt || building || quiet < SETTLE) {
+      if (rasterDirty) { rasterDirty = false; refreshShadows(); drawRaster(); if (ov) overlay.draw(); if (!explicit) watchFrameRate(now); }
+      report(0, want ? (pt && !building ? 'waiting' : building ? 'building' : 'loading') : 'idle');
       return;
     }
     if (sceneDirty) {
-      // один кадр на показ «собирается»: следующая сборка BVH может занять секунду
+      // один кадр на показ «собирается», дальше сборка идёт фоном (BVH — в Worker)
       if (!announced) { announced = true; report(0, 'building'); return; }
       announced = false; sceneDirty = false;
-      try { flushTracer(); } catch (err) {
-        // сцену не удалось собрать: показываем растр, следующая попытка — после изменения сцены
-        console.warn('render.js: сцена для фото не собралась', err);
-        broken = rasterDirty = true;
-        report(0, 'error');
-        return;
-      }
+      flushTracer();
+      return;
     }
     if (pt.samples < maxSamples) {
       pt.renderSample();
@@ -159,10 +351,13 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 
   // ---------- трассировщик ----------
 
+  let bvhWorker = null, noWorker = false;
   function loadTracer() {
     if (ptLoading) return;
-    ptLoading = import('three-gpu-pathtracer').then(({ WebGLPathTracer }) => {
+    ptLoading = Promise.all([import('three-gpu-pathtracer'), import('three-mesh-bvh')]).then(([{ WebGLPathTracer }, { MeshBVH, CENTER }]) => {
       pt = new WebGLPathTracer(renderer);
+      if (noWorker) pt._generator.bvhOptions = { strategy: CENTER };   // ~0,7 с вместо ~5 с на главном потоке
+      else { bvhWorker = createBVHWorker(THREE, MeshBVH); pt.setBVHWorker(bvhWorker); }
       matteOK = patchMatte(pt._pathTracer.material);
       if (!matteOK) console.warn('render.js: патч «стена-невидимка» не применился, вырезанные стены в фото исключены');
       // интерьер светится отражённым светом; 5 отскоков против 8 — на 30 % быстрее, недобор света снимает экспозиция
@@ -189,19 +384,51 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     });
   }
 
+  // Сборка сцены трассировщика: геометрия и материалы — сразу (под tracerView), BVH — в Worker; когда он готов,
+  // сцена «одевается» ещё раз (те же двойники) и трассировщик получает результат. Изменилась сцена за время
+  // сборки — результат выбрасывается и сборка начинается заново.
   function flushTracer() {
-    const view = tracerView(THREE, scene, camera, { matte: matteOK, environment: tracerEnvironment() });
+    const gen = pt._generator, token = building = {};
+    let result;
+    const dressed = () => tracerView(THREE, scene, camera, { matte: matteOK, environment: tracerEnvironment() });
+    const fail = err => {
+      // сцену не удалось собрать: показываем растр, следующая попытка — после изменения сцены
+      console.warn('render.js: сцена для фото не собралась', err);
+      if (building === token) building = null;
+      broken = rasterDirty = true;
+      report(0, 'error');
+    };
+    let view = dressed();
     try {
       const n = view.textureSources;   // массив текстур трассировщика: 16 МБ на слой при 2048
-      pt.textureSize.set(n <= 32 ? 2048 : 1024, n <= 32 ? 2048 : 1024);
+      const side = n <= 12 ? 2048 : n <= 48 ? 1024 : 512;
+      pt.textureSize.set(side, side);
       pt.renderScale = Math.min(1, Math.sqrt(photoPixels / (canvas.width * canvas.height)));
-      const side = Math.max(2, Math.ceil(Math.sqrt(canvas.width * canvas.height * pt.renderScale ** 2 / TILE_PIXELS)));
-      pt.tiles.set(side, side);          // один проход = side² кадров: каждый кадр короткий
-      pt.setScene(scene, camera);
-      if (!fixMaterialIndex(THREE, pt)) console.warn('render.js: номера материалов трассировщика не сошлись');
-    } finally { view.restore(); }
-    metering = autoExposure;
-    if (autoExposure) rasterPx = measure(null);
+      const tiles = Math.max(2, Math.ceil(Math.sqrt(canvas.width * canvas.height * pt.renderScale ** 2 / TILE_PIXELS)));
+      pt.tiles.set(tiles, tiles);        // один проход = tiles² кадров: каждый кадр короткий
+      scene.updateMatrixWorld(true); camera.updateMatrixWorld();
+      gen.setObjects(scene);
+      gen._buildAsync = !!bvhWorker;
+      try { result = gen.generate(); } finally { gen._buildAsync = false; }
+    } catch (err) { view.restore(); fail(err); return; }
+    view.restore();
+    Promise.resolve(result.bvh).then(bvh => {
+      if (building !== token) return;
+      result.bvh = gen.bvh = bvh;
+      view = dressed();   // сцена могла поменяться за время сборки — тогда sceneDirty уже стоит и следующая сборка поправит
+      try {
+        pt._updateFromResults(scene, camera, result);
+        if (!fixMaterialIndex(THREE, pt)) console.warn('render.js: номера материалов трассировщика не сошлись');
+      } finally { view.restore(); }
+      building = null;
+      metering = autoExposure;
+      if (autoExposure) rasterPx = measure(null);
+    }).catch(err => {
+      if (building !== token) return;
+      noWorker = true;   // дальше — синхронно и быстрой стратегией: трассировщик пересоздаётся с нуля
+      dropTracer();
+      fail(err);
+    });
   }
 
   // Экспозиция и баланс белого фото подгоняются под растр. Сравнение — в сжатых яркостях y/(1+y), как их
@@ -227,7 +454,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   }
 
   // Окружение для трассировщика — исходная панорама (PMREM он не читает) без диска солнца
-  const envCache = new WeakMap();
+  const envCache = new Map();
   function tracerEnvironment() {
     const src = [scene.environment, scene.background]
       .find(t => t?.isDataTexture && t.mapping === THREE.EquirectangularReflectionMapping);
@@ -275,8 +502,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   }
 
   async function captureFrame(minSamples) {
-    if (!minSamples || ptFailed) {   // растр с удвоенной плотностью
-      applySize(Math.max(2, renderer.getPixelRatio()));
+    if (!minSamples || ptFailed) {   // растр с удвоенной плотностью (не больше CAPTURE_PX)
+      applySize(Math.min(Math.max(2, renderer.getPixelRatio()), Math.sqrt(CAPTURE_PX / Math.max(1, size.w * size.h))));
       drawRaster();
       const blob = await toBlob();
       applySize(); invalidate();
@@ -297,34 +524,51 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     return blob;
   }
 
-  // У WebGLPathTracer 0.0.23 dispose() сломан (обращается к несуществующему полю) — освобождаем по частям
-  function disposeTracer() {
-    if (!pt) return;
-    const m = pt._pathTracer.material;
-    for (const u of Object.values(m.uniforms)) u.value?.dispose?.();
-    m.dispose();
-    pt._pathTracer.dispose(); pt._lowResPathTracer.dispose(); pt._quad.dispose();
+  // Освободить трассировщик целиком: GPU-ресурсы, сцену генератора (≈1 ГБ в куче), двойники и копии геометрии.
+  // У WebGLPathTracer 0.0.23 dispose() сломан (обращается к несуществующему полю) — освобождаем по частям.
+  function dropTracer() {
+    clearTimeout(keepTimer);
+    building = null;
+    if (pt) {
+      const m = pt._pathTracer.material;
+      for (const u of Object.values(m.uniforms)) u.value?.dispose?.();
+      m.dispose();
+      pt._pathTracer.dispose(); pt._lowResPathTracer.dispose(); pt._quad.dispose();
+      pt._internalBackground?.dispose?.();
+      pt._generator.geometry.dispose();
+      pt._generator.bvh = null;
+    }
     pt = null; ptLoading = null; balance = null; sceneDirty = true;
+    bvhWorker?.dispose(); bvhWorker = null;
+    envCache.forEach(t => t.dispose()); envCache.clear();
+    dropTracerCaches();
   }
 
   function dispose() {
     exitPhoto();
-    disposeTracer();
-    if (composer) { composer.passes.forEach(p => p.dispose()); composer.dispose(); composer = null; }
+    dropTracer();
+    composer.passes.forEach(p => p.dispose()); composer.dispose();
     if (meter) { meter.rt.dispose(); meter.quad.dispose(); meter.quad.material.dispose(); meter = null; }
     canvas.removeEventListener('webglcontextlost', onLost);
     canvas.removeEventListener('webglcontextrestored', onRestored);
+    clearTimeout(lostTimer);
+    busy.delete(renderer);
   }
 
   // ---------- интерфейс ----------
 
-  function enterPhoto() { explicit = true; lastChange = performance.now() - SETTLE; }
-  function exitPhoto() { explicit = false; rasterDirty = true; report(0, 'idle'); }
+  function enterPhoto() { clearTimeout(keepTimer); explicit = true; lastChange = performance.now() - SETTLE; }
+  function exitPhoto() {
+    explicit = false; rasterDirty = true; report(0, 'idle');
+    clearTimeout(keepTimer);
+    if (pt || ptLoading) keepTimer = setTimeout(() => { if (!explicit) dropTracer(); }, PHOTO_KEEP);
+  }
 
   function setQuality(name) {
     quality = QUALITY[name] ? name : 'high';
     q = QUALITY[quality];
-    buildComposer();
+    configureComposer();
+    renderer.shadowMap.needsUpdate = true;
     applySize();
     invalidate();
   }
@@ -356,6 +600,65 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   };
 }
 
+// ---------- BVH в Web Worker ----------
+// Import map в воркере не действует, поэтому three-mesh-bvh грузится копией исходника с полным адресом three.
+// Интерфейс — как у GenerateMeshBVHWorker из three-mesh-bvh: generate(geometry, options) -> Promise<MeshBVH>
+// (массивы позиций и индексов на время сборки передаются воркеру и возвращаются обратно).
+const WORKER_SRC = (three, bvh) => `
+import { BufferGeometry, BufferAttribute } from '${three}';
+import { MeshBVH } from '${bvh}';
+onmessage = ({ data: { index, position, options } }) => {
+  try {
+    const g = new BufferGeometry();
+    g.setAttribute('position', new BufferAttribute(position, 3, false));
+    if (index) g.setIndex(new BufferAttribute(index, 1, false));
+    for (const gr of options.groups) g.addGroup(gr.start, gr.count, gr.materialIndex);
+    const bvh = new MeshBVH(g, options);
+    const s = MeshBVH.serialize(bvh, { copyIndexBuffer: false });
+    const transfer = [position.buffer, ...s.roots];
+    if (s.index && s.index.buffer !== position.buffer) transfer.push(s.index.buffer);
+    if (s.indirectBuffer) transfer.push(s.indirectBuffer.buffer);
+    postMessage({ serialized: s, position }, transfer);
+  } catch (err) { postMessage({ error: String(err) }); }
+};`;
+
+function createBVHWorker(THREE, MeshBVH) {
+  let worker = null, urls = [];
+  async function start() {
+    const three = import.meta.resolve('three'), bvhUrl = import.meta.resolve('three-mesh-bvh');
+    const src = (await (await fetch(bvhUrl)).text()).replaceAll(`from 'three'`, `from '${three}'`);
+    const lib = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    const main = URL.createObjectURL(new Blob([WORKER_SRC(three, lib)], { type: 'text/javascript' }));
+    urls = [lib, main];
+    return new Worker(main, { type: 'module' });
+  }
+  return {
+    async generate(geometry, options) {
+      worker ??= await start();
+      const { onProgress, ...opts } = options;
+      const index = geometry.index?.array ?? null, position = geometry.attributes.position.array;
+      const data = await new Promise((resolve, reject) => {
+        worker.onmessage = e => resolve(e.data);
+        worker.onerror = e => reject(new Error(e.message || 'BVH worker'));
+        worker.postMessage({ index, position, options: { ...opts, groups: geometry.groups.map(g => ({ ...g })) } },
+          [position.buffer, ...(index && index.buffer !== position.buffer ? [index.buffer] : [])]);
+      });
+      if (data.error) throw new Error(data.error);
+      const { serialized, position: back } = data;
+      const bvh = MeshBVH.deserialize(serialized, geometry, { setIndex: false });
+      geometry.attributes.position.array = back;
+      if (serialized.index) {
+        if (geometry.index) geometry.index.array = serialized.index;
+        else geometry.setIndex(new THREE.BufferAttribute(serialized.index, 1, false));
+      }
+      geometry.boundingBox = bvh.getBoundingBox(new THREE.Box3());
+      onProgress?.(1);
+      return bvh;
+    },
+    dispose() { worker?.terminate(); worker = null; urls.forEach(u => URL.revokeObjectURL(u)); urls = []; },
+  };
+}
+
 // ---------- подготовка сцены для трассировщика (временная, откатывается restore) ----------
 
 // Трассировщик не знает слоёв и инстансов и берёт свойства прямо из материалов.
@@ -363,7 +666,9 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 // стекло — двойника с пропусканием, плафоны — двойника без тени; инстансы разворачиваются в обычные меши;
 // подсветка-обманка и выключенные источники прячутся; окружение подменяется панорамой без солнца.
 const twins = new Map();      // `${uuid}|${flags}` -> материал-двойник (только данные, в растре не рисуется)
-const proxies = new WeakMap(); // InstancedMesh -> развёрнутый меш
+let proxies = new WeakMap();   // InstancedMesh -> развёрнутый меш
+// Двойники и копии геометрии нужны только живому трассировщику: с ним и уходят (на GPU их не было — только данные)
+function dropTracerCaches() { twins.clear(); proxies = new WeakMap(); plain = new WeakMap(); }
 
 const HIDDEN = 1, GLASS = 2, PASS = 4, COAT = 8, FLAT = 16;
 // Трассировщик копирует ВСЕ текстуры материала в плоский массив; кубы (envMap зеркала) и массивы туда не лезут
@@ -439,7 +744,7 @@ export function tracerView(THREE, scene, camera, { matte = true, environment = n
 // Геометрия, которую трассировщик прочтёт правильно. Он копирует сырые массивы атрибутов: сжатый GLB
 // (Int16 normalized) становится мешем в десятки километров, чередованный массив читается вперемешку,
 // а цвет RGB не сливается с его RGBA по умолчанию. Всё это переводим в обычный Float32.
-const plain = new WeakMap();   // геометрия -> { key, geometry }
+let plain = new WeakMap();     // геометрия -> { key, geometry }
 const needsPlain = g => g.attributes.color?.itemSize === 3 ||
   Object.values(g.attributes).some(a => !flat32(a));
 const flat32 = a => !a.normalized && !a.isInterleavedBufferAttribute && a.array instanceof Float32Array;

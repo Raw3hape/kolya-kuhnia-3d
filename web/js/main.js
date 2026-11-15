@@ -248,7 +248,7 @@ const lighting = createLighting({ THREE, scene, renderer, plan, M, camera, contr
 // Мебель гостиной (диван, ТВ, тумба, ковёр, столик) — furniture.js. Положение меняется без пересборки.
 let furn = null;
 function rebuildFurniture() {
-  if (furn) { scene.remove(furn.group); furn.group.traverse(o => o.geometry?.dispose()); }
+  if (furn) { scene.remove(furn.group); furn.group.traverse(o => { if (!o.userData.glb) o.geometry?.dispose(); }); }   // общие GLB не трогать
   furn = buildFurniture(FURN_SPEC, state, M, plan, kit);
   scene.add(furn.group);
   furn.ready?.then(requestRender);
