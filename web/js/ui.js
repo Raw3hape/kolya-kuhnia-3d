@@ -89,6 +89,15 @@ const plural = (n, one, few, many) => {
   const a = Math.abs(n) % 100, b = a % 10;
   return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many;
 };
+// Состояние фото-рендера (info.photo из main.js): строка для раздела «Рендер» и плашки поверх сцены
+const photoStatus = p => {
+  const n = `${p.passes} ${plural(p.passes, 'проход', 'прохода', 'проходов')}`;
+  if (p.phase === 'error') return 'Фото недоступно, показан обычный рендер';
+  if (p.phase === 'loading') return 'Загружаю трассировщик…';
+  if (p.phase === 'building' || p.phase === 'waiting') return 'Сцена собирается…';
+  if (!p.running) return p.passes ? `Выключен на ${n}` : 'Выключен. Включается только кнопкой, сам не запускается';
+  return p.phase === 'done' ? `Кадр готов: ${n}` : `Кадр собирается: ${n}`;
+};
 const titleOf = it => (it.note ? `${it.name} · ${it.note}` : it.name);
 const optName = (list, id) => list?.find(o => o.id === id)?.name ?? '';
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -342,15 +351,8 @@ export function initUI(api) {
         { type: 'seg', key: 'quality', src: 'pref', def: 'high', label: 'Качество',
           options: opt(['fast', 'Быстрое'], ['high', 'Высокое'], ...(ultra ? [['ultra', 'Ультра']] : [])) },
         { type: 'button', key: 'photo', feature: 'render', primary: true, value: (s, i) => !i.photo?.running,
-          label: (s, i) => (i.photo?.running ? 'Остановить фото' : 'Фото-режим') },
-        { type: 'progress', key: 'photo', id: 'photoProgress', feature: 'render', format: p => {
-          const n = `${p.passes} ${plural(p.passes, 'проход', 'прохода', 'проходов')}`;
-          if (p.phase === 'error') return 'Фото недоступно, показан обычный рендер';
-          if (p.phase === 'loading') return 'Загружаю трассировщик…';
-          if (p.phase === 'building' || p.phase === 'waiting') return 'Сцена собирается…';
-          if (!p.running) return p.passes ? `Остановлено на ${n}` : 'Трассировка света: нажмите «Фото-режим» и не двигайте камеру';
-          return p.phase === 'done' ? `Кадр готов: ${n}` : `Кадр собирается: ${n}`;
-        } },
+          label: (s, i) => (i.photo?.running ? 'Выключить фото-рендер' : 'Включить фото-рендер') },
+        { type: 'progress', key: 'photo', id: 'photoProgress', feature: 'render', format: photoStatus },
         { type: 'button', key: 'snapshot', label: 'Снимок PNG', primary: !ultra, visible: () => api.canExport },
         { type: 'button', key: 'glb', label: 'Модель GLB для Blender', visible: () => api.canExport },
       ] },
@@ -806,7 +808,11 @@ export function initUI(api) {
   toggleBtn.addEventListener('click', () => setPanelOpen(true));
   const badge = h('div', { id: 'ab-badge', hidden: true, 'aria-hidden': 'true' }, h('b'), h('span', {}, 'C — переключить'));
   const tip = h('div', { id: 'tip', role: 'tooltip' });
-  document.body.append(badge, tip);
+  // Плашка фото-рендера: пока трассировка идёт, на экране всегда видно, что она идёт, и как её выключить
+  const photoTxt = h('span');
+  const photoBadge = h('div', { id: 'photo-badge', role: 'status', hidden: true }, h('i'), h('b', {}, 'Фото-рендер'), photoTxt,
+    h('button', { type: 'button', onclick: () => emit('photo', false) }, 'Выключить'));
+  document.body.append(badge, tip, photoBadge);
 
   // --- вкладки
   const panes = {}, empties = {}, scrolls = {};
@@ -867,6 +873,9 @@ export function initUI(api) {
     vname.textContent = p?.name || saved.find(v => v.code === code)?.name || 'Свой вариант';
     undoBtn.disabled = !undoStack.length; redoBtn.disabled = !redoStack.length;
     abStart.hidden = !!ab; abPill.hidden = !ab; badge.hidden = !ab;
+    const ph = info.photo;
+    photoBadge.hidden = !ph?.running;
+    if (ph?.running) { photoBadge.classList.toggle('done', ph.phase === 'done'); photoTxt.textContent = photoStatus(ph); }
     if (ab) {
       for (const [b, side] of [[abA, 'A'], [abB, 'B']]) { b.classList.toggle('on', ab.side === side); b.setAttribute('aria-pressed', String(ab.side === side)); }
       badge.firstChild.textContent = ab.side;

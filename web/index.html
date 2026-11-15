@@ -303,6 +303,18 @@
     display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px;
     box-shadow: var(--shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font: 12px var(--f-body); color: var(--muted); transition: left 0.28s var(--ease); }
   #ab-badge b { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font: 600 13px/1 var(--f-display); }
+  /* фото-рендер идёт: видно всегда, выключается одной кнопкой (ui.js, info.photo) */
+  #photo-badge { position: fixed; z-index: 5; top: calc(86px + env(safe-area-inset-top, 0px)); left: calc(50% - var(--shift, 0px)); transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px; padding: 5px 5px 5px 12px; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px;
+    box-shadow: var(--shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font: 12.5px var(--f-body); color: var(--ink);
+    white-space: nowrap; max-width: calc(100vw - 32px); transition: left 0.28s var(--ease); }
+  #photo-badge i { width: 8px; height: 8px; border-radius: 50%; background: #d64545; animation: photo-dot 1.2s ease-in-out infinite; }
+  #photo-badge.done i { animation: none; background: var(--plan-green); }
+  #photo-badge span { font-family: var(--f-data); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  #photo-badge button { border: 0; border-radius: 4px; padding: 6px 10px; background: var(--accent); color: var(--accent-ink); font: 600 12px/1 var(--f-body); cursor: pointer; }
+  #photo-badge button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @keyframes photo-dot { 50% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) { #photo-badge i { animation: none; } }
 
   button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -336,6 +348,7 @@
     #toast { bottom: calc(var(--peek) + 64px + env(safe-area-inset-bottom, 0px)); }
     #panel.open ~ #toast { bottom: calc(min(76vh, 680px) + 12px); }
     #ab-badge { top: auto; bottom: calc(var(--peek) + 64px + env(safe-area-inset-bottom, 0px)); }
+    #photo-badge { top: auto; bottom: calc(var(--peek) + 112px + env(safe-area-inset-bottom, 0px)); }
     .slot-head, .sec-head { min-height: 44px; }
     #mat-search, .mini-sel, .ctl select, .pop-form input { font-size: 16px; }   /* меньше 16 px — iOS приближает страницу при фокусе */
     #views { padding-right: 20px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); }

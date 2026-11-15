@@ -16,11 +16,12 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-// pr — [мин, макс] плотности пикселей; shadow — карта тени солнца; ao — выборки GTAO; autoPhoto — мс покоя до фото
+// pr — [мин, макс] плотности пикселей; shadow — карта тени солнца; ao — выборки GTAO.
+// Трассировка (фото-режим) включается и выключается только явно (enterPhoto/exitPhoto), само качество её не включает.
 export const QUALITY = {
   fast:  { pr: [1, 1],   msaa: 0, post: false, shadow: 2048 },
   high:  { pr: [1, 1.6], msaa: 4, post: true,  shadow: 4096, ao: 16, pd: { radius: 6, rings: 2, samples: 16 } },
-  ultra: { pr: [1.5, 2], msaa: 8, post: true,  shadow: 8192, ao: 32, pd: { radius: 8, rings: 3, samples: 24 }, autoPhoto: 1000 },
+  ultra: { pr: [1.5, 2], msaa: 8, post: true,  shadow: 8192, ao: 32, pd: { radius: 8, rings: 3, samples: 24 } },
 };
 const TONE = { neutral: 'NeutralToneMapping', agx: 'AgXToneMapping', aces: 'ACESFilmicToneMapping' };
 const SETTLE = 150;          // мс тишины после изменения, прежде чем трассировать
@@ -89,7 +90,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 
   let lastChange = performance.now();
   let rasterDirty = true, sceneDirty = true;
-  let explicit = false, autoSuppressed = false;
+  let explicit = false;
   let pt = null, ptLoading = null, ptFailed = false, broken = false, lost = false, matteOK = false;
   const onLost = () => { lost = true; waiters.splice(0).forEach(w => w.resolve()); report(0, 'error'); };
   const onRestored = () => { lost = false; disposeTracer(); setQuality(quality); };   // трассировщик заново при следующем фото
@@ -100,17 +101,13 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   let progressCb = null, lastReport = '';
   const waiters = [];
   // Слой поверх растра (руки с оружием в прогулке, viewmodel.js): { active() -> bool, draw() }.
-  // Рисуется только в живом растре: не в фото-режиме, не в capture() и не в трассировщике; пока он виден,
-  // авто-фото (ultra) не включается, чтобы слой не пропадал из кадра.
+  // Рисуется только в живом растре: не в фото-режиме, не в capture() и не в трассировщике.
   let overlay = null;
-  // Живое содержимое под холстом (tv.js: YouTube в «дыре» экрана): пока любой fn() — true, авто-фото (ultra) не включается,
-  // иначе непрозрачный кадр трассировки закроет видео постером. Явный фото-режим этим не отменяется.
-  const holds = new Set();
 
   function invalidate() {
     lastChange = performance.now();
     rasterDirty = sceneDirty = true;
-    autoSuppressed = broken = false;
+    broken = false;
     applyShadowSizes();
   }
 
@@ -132,8 +129,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
       if (ptFailed || broken || lost || done >= waiters[i].n || now > waiters[i].until) waiters.splice(i, 1)[0].resolve();
     }
     const ov = !explicit && !!overlay?.active();
-    const held = !explicit && [...holds].some(fn => fn());
-    const want = !ptFailed && !broken && (explicit || (!!q.autoPhoto && !autoSuppressed && !ov && !held && quiet >= q.autoPhoto));
+    const want = explicit && !ptFailed && !broken;
     if (want && !pt) loadTracer();
     if (!want || !pt || quiet < SETTLE) {
       if (rasterDirty) { rasterDirty = false; drawRaster(); if (ov) overlay.draw(); }
@@ -322,7 +318,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   // ---------- интерфейс ----------
 
   function enterPhoto() { explicit = true; lastChange = performance.now() - SETTLE; }
-  function exitPhoto() { explicit = false; autoSuppressed = true; rasterDirty = true; report(0, 'idle'); }
+  function exitPhoto() { explicit = false; rasterDirty = true; report(0, 'idle'); }
 
   function setQuality(name) {
     quality = QUALITY[name] ? name : 'high';
@@ -350,7 +346,6 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     exitPhoto,
     capture,
     onLive(fn) { liveFns.add(fn); return () => liveFns.delete(fn); },   // см. capture() — tv.js
-    holdLive(fn) { holds.add(fn); return () => holds.delete(fn); },     // см. holds выше — tv.js
     dispose,
     onProgress(cb) { progressCb = cb; },
     setOverlay(o) { overlay = o; rasterDirty = true; },   // см. overlay выше; null — снять
