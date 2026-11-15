@@ -55,6 +55,8 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
   const HOLE = { value: 0 };
   let live = true;
   const offLive = pipe.onLive(on => { live = on; if (!on) HOLE.value = 0; });
+  // ТВ в кадре — живой растр не сменяется авто-фото (ultra): видео должно идти всегда
+  const offHold = pipe.holdLive(() => shown);
 
   // ---------- слой с плеером ----------
   const layer = document.createElement('div');
@@ -224,7 +226,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
     clearInterval(watchdog);
     window.removeEventListener('pointerdown', onGesture, { capture: true });
     window.removeEventListener('keydown', onGesture, { capture: true });
-    offLive();
+    offLive(); offHold();
     HOLE.value = 0;
     player?.destroy?.();
     layer.remove();

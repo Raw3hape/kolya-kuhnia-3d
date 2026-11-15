@@ -103,6 +103,9 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   // Рисуется только в живом растре: не в фото-режиме, не в capture() и не в трассировщике; пока он виден,
   // авто-фото (ultra) не включается, чтобы слой не пропадал из кадра.
   let overlay = null;
+  // Живое содержимое под холстом (tv.js: YouTube в «дыре» экрана): пока любой fn() — true, авто-фото (ultra) не включается,
+  // иначе непрозрачный кадр трассировки закроет видео постером. Явный фото-режим этим не отменяется.
+  const holds = new Set();
 
   function invalidate() {
     lastChange = performance.now();
@@ -129,7 +132,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
       if (ptFailed || broken || lost || done >= waiters[i].n || now > waiters[i].until) waiters.splice(i, 1)[0].resolve();
     }
     const ov = !explicit && !!overlay?.active();
-    const want = !ptFailed && !broken && (explicit || (!!q.autoPhoto && !autoSuppressed && !ov && quiet >= q.autoPhoto));
+    const held = !explicit && [...holds].some(fn => fn());
+    const want = !ptFailed && !broken && (explicit || (!!q.autoPhoto && !autoSuppressed && !ov && !held && quiet >= q.autoPhoto));
     if (want && !pt) loadTracer();
     if (!want || !pt || quiet < SETTLE) {
       if (rasterDirty) { rasterDirty = false; drawRaster(); if (ov) overlay.draw(); }
@@ -346,6 +350,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     exitPhoto,
     capture,
     onLive(fn) { liveFns.add(fn); return () => liveFns.delete(fn); },   // см. capture() — tv.js
+    holdLive(fn) { holds.add(fn); return () => holds.delete(fn); },     // см. holds выше — tv.js
     dispose,
     onProgress(cb) { progressCb = cb; },
     setOverlay(o) { overlay = o; rasterDirty = true; },   // см. overlay выше; null — снять
