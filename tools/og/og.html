@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- Исходник картинки для соцсетей (web/og.jpg, 1200×630). Фон — scene.jpg: кадр прогулки, винтовка в прицеле с балкона
+     на кабанов (снят в 2400×1260). Пересобрать: открыть этот файл в браузере с окном 1200×630 и масштабом 2,
+     снять скриншот и ужать: magick shot.png -resize 1200x630 -quality 86 ../../web/og.jpg -->
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@500&family=IBM+Plex+Mono:wght@500&family=Caveat:wght@700&display=swap">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body { position: relative; background: #cfd8dc url(scene.jpg) center / cover no-repeat; font-family: "Inter", Arial, sans-serif; }
+    .card { position: absolute; right: 40px; top: 36px; width: 468px; padding: 20px 26px 22px; border-radius: 16px;
+    background: rgba(250, 249, 246, .95); box-shadow: 0 14px 40px rgba(20, 30, 35, .28); color: #1c2326; }
+  .row { display: flex; align-items: center; gap: 14px; }
+  .row img { width: 54px; height: 54px; }
+  .label { font: 500 15px/1.3 "IBM Plex Mono", monospace; letter-spacing: .06em; color: #66706f; text-transform: uppercase; }
+  .label b { color: #0f4352; font-weight: 500; }
+  h1 { margin: 12px 0 10px; font: 700 60px/1.0 "Inter Tight", Arial, sans-serif; letter-spacing: -.02em; }
+  p { margin: 0; font-size: 21px; line-height: 1.3; color: #3b4447; }
+  svg.mark { position: absolute; inset: 0; width: 1200px; height: 630px; pointer-events: none; }
+  .scrawl { position: absolute; left: 96px; top: 196px; transform: rotate(-6deg); font: 700 54px/1 "Caveat", cursive; color: #e5322b;
+    text-shadow: 0 0 6px #fff, 0 0 2px #fff, 0 2px 0 #fff; }
+</style></head><body>
+  <div class="card">
+    <div class="row"><img src="../../web/favicon.svg" alt=""><div class="label"><b>Кухня-гостиная 3D</b><br>617 × 368 см · потолок 2,64 м</div></div>
+    <h1>Кухня с видом<br>на ужин</h1>
+    <p>Плитка, свет, мебель —<br>и кабаны под балконом.</p>
+  </div>
+  <svg class="mark" viewBox="0 0 1200 630">
+    <path d="M150 300 C175 262 420 255 488 290 C535 316 510 392 420 404 C320 418 175 408 150 360 C138 338 146 318 170 300"
+      fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".85"/>
+    <path d="M150 300 C175 262 420 255 488 290 C535 316 510 392 420 404 C320 418 175 408 150 360 C138 338 146 318 170 300"
+      fill="none" stroke="#e5322b" stroke-width="5" stroke-linecap="round"/>
+  </svg>
+  <div class="scrawl">ужин × 40</div>
+</body></html>

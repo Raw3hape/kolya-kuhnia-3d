@@ -125,4 +125,7 @@ blender -b -P blender/render.py -- --glb exports/<file>.glb --view living --out 
 - `exports/` и `renders/` временные: держать последние, тестовые удалять.
 - Онлайн-версия: Vercel-проект `kolya-kuhnia-3d`, собирается из `main` (GitHub Raw3hape/kolya-kuhnia-3d, приватный)
   командой `node tools/build_static.mjs` → `dist/`; каркас страницы общий с serve.py: `tools/skeleton.html`.
+- Иконка и превью ссылки: `web/favicon.svg` (кабан-шеф; из него `favicon.ico` и `apple-touch-icon.png`, rsvg-convert +
+  magick), `web/og.jpg` 1200×630 (исходник и команда пересборки — `tools/og/og.html`, фон `tools/og/scene.jpg`).
+  Мета-теги og:/twitter: в начале `web/index.html`, ссылки на иконки — в `tools/skeleton.html`. Адрес картинки абсолютный.
 - Сервер запускать через preview_start (имя `kitchen` в `Research/.claude/launch.json`), после работы останавливать.
