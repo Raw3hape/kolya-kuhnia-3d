@@ -2,11 +2,13 @@
 // Модели: web/models/viewmodel/ (SOURCE.md): стволы Quaternius (CC0) и процедурные перчатки с рукавами, грузятся при первом выборе.
 // Рисуется поверх растра своей камерой со своим углом обзора (render.js setOverlay): в стены не проваливается,
 // в фото-режим, снимок и GLB не попадает. Свет вспышки живёт только в сцене рук: свет и тени квартиры не трогает.
+// Попадания (impacts.js): луч из центра экрана, дырка на задетой поверхности и всплеск пыли, щепок и искр.
 //
 // createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors, getSeats })
 //   getDoors()?.target / getSeats()?.target — дверь или сиденье под прицелом: тогда клик открывает/сажает, а не стреляет;
 //   getSeats()?.active — сидим: оружие можно показывать, но не стрелять кликом по экрану ТВ
 //   -> { update(dt, { active, moving, running }) -> bool (true — нужен кадр), setWeapon(id), setSound(on),
+//        clearHoles() — убрать следы попаданий, holes — сколько их сейчас,
 //        weapon, sound, armed (оружие сейчас в руках: клик стреляет), shots, dispose() }
 // registerViewmodelUI(addSection, getVM) — раздел «Оружие» во вкладке 'view' сразу после «Прогулки».
 // Ввод в прогулке: 1 — убрать, 2 — пистолет, 3 — автомат (E занята: дверь, сесть; подсказку клавиш показывает walk.js). Мышь: клик — выстрел, перетаскивание —
@@ -16,15 +18,16 @@
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { createImpacts } from './impacts.js';
 
 // pos — место центра рукояти в пространстве камеры рук (м): вправо, вверх, вперёд = −z; yaw — доворот к центру экрана,
 // pitch — подъём ствола, рад.
-// rate — выстрелов в секунду; kick — откат (back — назад, м; pitch — подброс, рад); flash — размер вспышки, м.
+// rate — выстрелов в секунду; spread — разброс пуль, рад; kick — откат (back — назад, м; pitch — подброс, рад); flash — размер вспышки, м.
 export const WEAPONS = [
   { id: 'none', name: 'Нет' },
-  { id: 'pistol', name: 'Пистолет', file: 'pistol.glb', pos: [0.1, -0.112, -0.42], yaw: 0.16, auto: false, rate: 6,
+  { id: 'pistol', name: 'Пистолет', file: 'pistol.glb', pos: [0.1, -0.112, -0.42], yaw: 0.16, auto: false, rate: 6, spread: 0.004,
     kick: { back: 0.045, pitch: 0.2 }, flash: 0.13, sound: { gain: 1, cutoff: 3200, decay: 0.16, thump: 150 } },
-  { id: 'rifle', name: 'Автомат', file: 'rifle.glb', pos: [0.14, -0.2, -0.56], yaw: 0.03, pitch: 0.05, auto: true, rate: 10,
+  { id: 'rifle', name: 'Автомат', file: 'rifle.glb', pos: [0.14, -0.2, -0.56], yaw: 0.03, pitch: 0.05, auto: true, rate: 10, spread: 0.018,
     kick: { back: 0.026, pitch: 0.06 }, flash: 0.2, sound: { gain: 0.8, cutoff: 2400, decay: 0.12, thump: 110 } },
 ];
 const VM = {
@@ -48,7 +51,7 @@ function writePref(p) { try { localStorage.setItem(PREF, JSON.stringify(p)); } c
 const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 const coarse = () => { try { return matchMedia('(hover: none), (pointer: coarse)').matches; } catch { return false; } };
 
-export function createViewmodel({ THREE, camera, renderer, pipe, canvas, requestRender, getDoors, getSeats }) {
+export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors, getSeats }) {
   const aimed = () => !!(getDoors?.()?.target || getSeats?.()?.target);   // клик достаётся двери или сиденью
   const seated = () => !!getSeats?.()?.active;
   const pref = readPref();
@@ -113,8 +116,15 @@ export function createViewmodel({ THREE, camera, renderer, pipe, canvas, request
   const lastPos = new THREE.Vector3(), fwd = new THREE.Vector3();
   let lastYaw = null, lastPitch = 0;
   const W = () => byId(weapon);
+  const impacts = createImpacts({ THREE, scene, camera, renderer, pipe, requestRender });
 
-  function update(dt = 1 / 60, { active = false, moving = false, running = false } = {}) {
+  // частицы попаданий живут и после выхода из прогулки, поэтому считаются отдельно от рук
+  function update(dt = 1 / 60, opts) {
+    const fx = impacts.update(dt);
+    return hands(dt, opts) || fx;
+  }
+
+  function hands(dt = 1 / 60, { active = false, moving = false, running = false } = {}) {
     const want = active && weapon !== 'none';
     if (want && !models[weapon]) load(weapon);
     if (want && mounted !== weapon && models[weapon]?.root) mount();
@@ -189,6 +199,7 @@ export function createViewmodel({ THREE, camera, renderer, pipe, canvas, request
     if (!shown || raise < 0.7 || aimed()) return false;
     if (now - lastShot < 1000 / w.rate) return false;
     lastShot = now; shots++;
+    impacts.shoot(w.spread);
     recV += 26 * (0.85 + Math.random() * 0.3);
     recYaw = (Math.random() - 0.5) * 0.25;
     flash = VM.flashTime;
@@ -270,6 +281,7 @@ export function createViewmodel({ THREE, camera, renderer, pipe, canvas, request
   // ---------- слой поверх растра ----------
   let rt = null, quad = null;
   const size = new THREE.Vector2(), clear = new THREE.Color();
+  let vmShift = 0;   // px кадра: сдвиг рук влево от открытой панели
   pipe?.setOverlay?.({
     active: () => shown,
     draw() {
@@ -290,7 +302,16 @@ export function createViewmodel({ THREE, camera, renderer, pipe, canvas, request
       } else if (rt.width !== size.x || rt.height !== size.y) rt.setSize(size.x, size.y);
       const aspect = size.x / Math.max(1, size.y);
       const fov = aspect >= 1 ? VM.fovV : THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(VM.fovV / 2)) / aspect));
-      if (vmCam.aspect !== aspect || vmCam.fov !== fov) { vmCam.aspect = aspect; vmCam.fov = fov; vmCam.updateProjectionMatrix(); }
+      // открытая боковая панель закрывает правую часть холста: руки сдвигаются в середину свободной части
+      // (как плавающие кнопки, --shift в index.html); нижняя панель телефона по горизонтали не мешает
+      const panel = document.body.classList.contains('panel-open') ? document.getElementById('panel')?.getBoundingClientRect() : null;
+      const freeShift = panel && panel.left > innerWidth / 2 ? (canvas.clientWidth - panel.left) / 2 : 0;
+      const shift = Math.round(freeShift * size.x / Math.max(1, canvas.clientWidth));
+      if (vmCam.aspect !== aspect || vmCam.fov !== fov || vmShift !== shift) {
+        vmCam.aspect = aspect; vmCam.fov = fov; vmShift = shift;
+        if (shift) vmCam.setViewOffset(size.x, size.y, shift, 0, size.x, size.y); else vmCam.clearViewOffset();
+        vmCam.updateProjectionMatrix();
+      }
       // руки освещены «как глаз видит»: свет делится на экспозицию сцены, днём и вечером одинаково
       const k = VM.light / Math.max(1e-3, renderer.toneMappingExposure);
       hemi.intensity = BASE.hemi * k; key.intensity = BASE.key * k; rim.intensity = BASE.rim * k;
@@ -335,10 +356,13 @@ export function createViewmodel({ THREE, camera, renderer, pipe, canvas, request
     flashTex.dispose(); flashMat.dispose();
     rt?.dispose(); quad?.material.dispose(); quad?.dispose();
     audio.dispose();
+    impacts.dispose();
   }
 
   return {
     update, setWeapon, setSound, dispose,
+    clearHoles: impacts.clear,
+    get holes() { return impacts.holes; },
     get weapon() { return weapon; },
     get sound() { return sound; },
     get armed() { return shown && !seated(); },
@@ -358,6 +382,7 @@ export function registerViewmodelUI(addSection, getVM) {
       { type: 'toggle', key: 'vmSound', label: 'Звук выстрела', visible: () => cur() !== 'none',
         get: () => getVM()?.sound ?? readPref().sound !== false,
         set: v => { const vm = getVM(); if (vm) vm.setSound(v); else writePref({ ...readPref(), sound: !!v }); } },
+      { type: 'button', key: 'vmClearHoles', label: 'Убрать следы', run: () => getVM()?.clearHoles() },
       { type: 'readout', key: 'vmKeys', style: 'hint',
         value: 'Видно только в прогулке. 1 — убрать, 2 — пистолет, 3 — автомат. Клик — выстрел, у автомата зажать. Двойной клик — захват мыши. Клик по двери или сиденью открывает её или сажает. На телефоне — кнопка огня.' },
     ],

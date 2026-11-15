@@ -499,7 +499,7 @@ export async function snapshot() {
 
 export async function exportGLB() {
   const hidden = [];
-  scene.traverse(o => { if (o.userData.shadowOnly && o.visible) { o.visible = false; hidden.push(o); } });
+  scene.traverse(o => { if ((o.userData.shadowOnly || o.userData.rasterOnly) && o.visible) { o.visible = false; hidden.push(o); } });   // следы пуль и обманки света — не в GLB
   const parts = [shell.group, floors, doorsGroup, kitchen.group, lamps?.fixtures, furn?.group, decor?.group, bath.group, scene.getObjectByName('fixtures')].filter(Boolean);
   const glb = await new GLTFExporter().parseAsync(parts, { binary: true, onlyVisible: true, maxTextureSize: 2048 });
   hidden.forEach(o => { o.visible = true; });
@@ -520,7 +520,7 @@ walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, getObsta
   onChange: () => { if (walk.active && furnEditor?.enabled) { furnEditor.disable(); ui.info({ furnEdit: false }); } requestRender(); } });
 
 // Двери открываются взглядом + E / кликом (doors.js); руки с оружием в прогулке (viewmodel.js)
-doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, walk, requestRender, onChange: () => cutaway.rebuild() });
+doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, walk, requestRender, onChange: () => { cutaway.rebuild(); lighting.invalidate(); } });   // дверь открыта или закрыта — свет из соседних зон пересчитать
 viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
 tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender });

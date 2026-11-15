@@ -5,10 +5,13 @@
 //
 //   const lamps = buildLamps(plan, kit, state, M, island)  — { group, fixtures, lights, above, update(state, mode), dispose() }
 //
-// Включение, яркость и цвет не меняют состав источников: выключенный светит с интенсивностью 0, а не прячется
-// (иначе three пересобирает шейдеры всех материалов — секунды заморозки). Новый набор светильников меняет
-// состав; его шейдеры main.js собирает в фоне (lighting.prepare) и только потом ставит в сцену.
+// Состав источников, которые видит three, постоянный при любом выборе в панели: three собирает шейдер каждого
+// материала под число источников, и смена этого числа — пересборка всей сцены (на этой квартире 10–30 с).
+// Поэтому светильники без тени живут на слое SHADER_LAMP_LAYER и считаются циклом lighting.js, а с тенью — это
+// постоянный набор из SHADOW_BUDGET прожекторов (POOL), которым новая раскладка только меняет место и конус.
+// Выключенный светит с интенсивностью 0, а не прячется (visible тоже меняет счёт).
 import * as THREE from 'three';
+import { SHADER_LAMP_LAYER } from './lighting.js';
 
 // ---------- варианты (id идут в код варианта по номеру: новые только в конец) ----------
 
@@ -69,8 +72,30 @@ const RHO = 0.45;
 // Тени: только самые заметные источники. Бюджет — по текстурным блокам шейдера (WebGL2 гарантирует 16):
 // 5 карт материала (GLB мебели: цвет, нормали, шероховатость, металл, AO) + окружение + 2 текстуры зон
 // (lighting.js) + 2 таблицы RectAreaLight + тень солнца = 11, на светильники остаётся 5. Больше — шейдер
-// тяжёлых материалов не собирается. Точечный свет с тенью — 6 проходов и блок, поэтому без теней.
-const SHADOW_BUDGET = 5, POINT_SHADOW_BUDGET = 0, SHADOW_MAP = 1024;
+// тяжёлых материалов не собирается. Точечный свет с тенью — 6 проходов и блок, поэтому тени только у прожекторов.
+const SHADOW_BUDGET = 5, SHADOW_MAP = 1024;
+
+// Прожекторы с тенью — постоянный набор, общий для всех сборок: места под тени раскладки; свободный
+// светит с интенсивностью 0 и не перерисовывает тень.
+const POOL = { group: null, spots: [] };
+function shadowPool() {
+  if (POOL.group) return POOL;
+  POOL.group = new THREE.Group(); POOL.group.name = 'lamp_shadow_pool';
+  for (let i = 0; i < SHADOW_BUDGET; i++) {
+    const l = new THREE.SpotLight(0xffffff, 0, 0, Math.PI / 4, 0, 2);
+    l.castShadow = true;
+    l.shadow.autoUpdate = false;
+    l.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
+    l.shadow.bias = -0.0004;
+    l.shadow.normalBias = 0.02;
+    l.shadow.camera.near = 0.05;
+    l.shadow.camera.far = 8;
+    l.shadow.camera.layers.enableAll();   // скрытые вырезом стены тоже дают тень
+    POOL.spots.push(l);
+    POOL.group.add(l, l.target);
+  }
+  return POOL;
+}
 
 // Паспорта светильников (реальные изделия этого класса).
 const SPEC = {
@@ -217,6 +242,7 @@ export function buildLamps(plan, kit, state, M, island) {
   // --- свет
   const reg = (light, base, lm, pri, name) => {
     light.name = name;
+    if (!light.isHemisphereLight) light.layers.set(SHADER_LAMP_LAYER);
     light.userData = { lm, base, pri };
     lightsGroup.add(light);
     if (light.target) lightsGroup.add(light.target);
@@ -459,33 +485,36 @@ export function buildLamps(plan, kit, state, M, island) {
   const rooms = [plan.rooms.kitchen_living, plan.rooms.hall, plan.rooms.room2, plan.rooms.room3].filter(Boolean).flatMap(r => r.rects);
   const F = rooms.reduce((s, r) => s + area(r), 0), A = 2 * F + 4 * Math.sqrt(F) * H;
   const bounce = new THREE.HemisphereLight(0xffffff, 0xffffff, 0);
-  if (totalLm > 0) {
-    reg(bounce, RHO * totalLm / (A * (1 - RHO)), 0, 0, 'lamp_bounce');
-    // заливка-обманка: lighting.js гасит её, когда считает настоящие переотражения; в фото не идёт
-    Object.assign(bounce.userData, { giFill: true, rasterOnly: true });
-  }
+  reg(bounce, RHO * totalLm / (A * (1 - RHO)), 0, 0, 'lamp_bounce');   // и без светильников: состав постоянный
+  // заливка-обманка: lighting.js гасит её, когда считает настоящие переотражения; в фото не идёт
+  Object.assign(bounce.userData, { giFill: true, rasterOnly: true });
 
   // --- тени: самые важные источники в пределах бюджета. Группа одного приоритета (ряд спотов,
   // пара подвесов) получает тени целиком или не получает: иначе один спот из ряда выглядел бы иначе.
-  let budget = SHADOW_BUDGET, pointBudget = POINT_SHADOW_BUDGET;
+  // Выбранный прожектор передаёт место, конус и паспорт прожектору из POOL и уходит из сцены.
+  const pool = shadowPool();
+  group.add(pool.group);
+  let used = 0;
   const byPri = new Map();
-  for (const { light: l } of entries) {
-    if (l.userData.pri > 0 && (l.isSpotLight || l.isPointLight)) byPri.set(l.userData.pri, [...(byPri.get(l.userData.pri) || []), l]);
+  for (const e of entries) {
+    const pri = e.light.userData.pri;
+    if (pri > 0 && (e.light.isSpotLight || e.light.isPointLight)) byPri.set(pri, [...(byPri.get(pri) || []), e]);
   }
-  for (const [, ls] of [...byPri].sort((a, b) => b[0] - a[0])) {
-    const points = ls.filter(l => l.isPointLight).length;
-    if (ls.length > budget || points > pointBudget) continue;
-    budget -= ls.length; pointBudget -= points;
-    for (const l of ls) {
-      l.castShadow = true;
-      l.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
-      l.shadow.bias = -0.0004;
-      l.shadow.normalBias = 0.02;
-      l.shadow.camera.near = 0.05;
-      l.shadow.camera.far = 8;
-      l.shadow.camera.layers.enableAll();   // скрытые вырезом стены тоже дают тень
-      if (l.isSpotLight && l.angle > 1) l.shadow.focus = 0.8;
+  for (const [, es] of [...byPri].sort((a, b) => b[0] - a[0])) {
+    if (used + es.length > SHADOW_BUDGET || es.some(e => e.light.isPointLight)) continue;
+    for (const e of es) {
+      const l = e.light, p = pool.spots[used++];
+      p.name = l.name; p.userData = l.userData;
+      p.position.copy(l.position); p.target.position.copy(l.target.position);
+      p.angle = l.angle; p.penumbra = l.penumbra; p.distance = l.distance; p.decay = l.decay;
+      p.shadow.focus = l.angle > 1 ? 0.8 : 1;
+      lightsGroup.remove(l, l.target);
+      e.light = p;
     }
+  }
+  for (const p of pool.spots.slice(used)) {
+    p.name = 'lamp_spare'; p.userData = { lm: 0, base: 0, pri: 0 };
+    entries.push({ light: p, base: 0 });
   }
 
   const color = new THREE.Color();
@@ -504,10 +533,10 @@ export function buildLamps(plan, kit, state, M, island) {
     const fin = FINISH[s.lampFinish] || FINISH.white;
     mat.housing.color.set(fin.color); mat.housing.roughness = fin.rough; mat.housing.metalness = fin.metal;
   }
-  // геометрия общая (GEO) — освобождаются только источники (карты теней)
+  // геометрия общая (GEO), прожекторы с тенью — общие (POOL): отцепить их от этой сборки, карт теней своих нет
   function dispose() {
-    for (const { light } of entries) light.dispose();
+    if (pool.group.parent === group) group.remove(pool.group);
   }
   update(state);
-  return { group, fixtures, lights: entries.map(e => e.light), above, update, dispose };
+  return { group, fixtures, lights: entries.filter(e => e.base > 0).map(e => e.light), above, update, dispose };
 }

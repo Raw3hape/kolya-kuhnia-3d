@@ -65,13 +65,24 @@
   - `model.js` — стены, проёмы, кухня (UV в метрах); `materials.js` — текстуры; `catalog.js` — варианты.
   - `lighting.js` — солнце, небо (HDRI), свет окон и отражённый свет по комнатам: свет не протекает сквозь стены,
     экспозиция «как глаз». `lamps.js` — светильники по зонам. `site.js` — солнце над Варшавой по дате и времени,
-    окружающие дома (`web/spec/site.json`, `tools/fetch_site.py`).
+    окружающие дома и сезон: листва и трава по дате (`web/spec/site.json`, `tools/fetch_site.py`).
   - `cutaway.js` — изнутри прячет стену между камерой и точкой взгляда целиком; снаружи стены стоят,
     прячутся только потолок и этажи сверху. Спрятанное уходит на слой 1: не видно камере, но даёт тень и свет.
   - `render.js` — растр (качество fast/high/ultra) и фото-режим (трассировка пути, three-gpu-pathtracer).
-    Метки: `userData.glass`, `passLight`, `shadowOnly`, у света `rasterOnly`.
+    Фото-режим включается только кнопкой (сам не стартует), пока идёт — виден значок «Фото-рендер · Выключить».
+    Метки: `userData.glass`, `passLight`, `shadowOnly`, `rasterOnly` (свет-обманка или меш только для растра: не в фото,
+    PNG и GLB). Светильники без тени `lighting.js` считает в своём шейдере (слой 3): смена ламп и времени суток
+    не пересобирает шейдеры, кадр ~0,1 с.
   - `nav.js` — камера как в 3D-редакторе (колесо к курсору, WASD/QE, правая кнопка — сдвиг);
     `walk.js` — прогулка (F), рост 180, глаза 168, FOV 55; `minimap.js` — план с переходом по клику.
+  - `doors.js` — межкомнатные и балконные двери открываются (E или клик), сталкиваются в прогулке.
+  - `seats.js` — «Сесть» на диван, кресла, стулья (места из мебели и обстановки), из орбиты и из прогулки.
+  - `tv.js` + `spec/tv.json` — на экране ТВ настоящий YouTube: iframe под прозрачным холстом («дыра» в кадре),
+    в фото, PNG и GLB — постер. Проверено в Chrome и настоящем Safari (2026-11-15).
+  - `viewmodel.js` — руки с пистолетом (2) и автоматом (3) в прогулке, 1 — убрать; `impacts.js` — дырки от пуль
+    и частицы (только растр, кнопка «Убрать следы»). Модели `web/models/viewmodel/`, конвейер `tools/viewmodel/`.
+  - `decor.js` + `spec/decor/*.json` — обстановка комнат (реальные вещи IKEA и др.), контракт
+    `web/models/decor/README.md`, конвейер `tools/decor/`. Зоны и опции — только в конец.
   - `furniture.js` + `spec/furniture.json` — диван, ТВ, тумба, ковёр, столик и редактор расстановки;
     `bath.js` — ванная; `ui.js` — панель (разделы регистрируются через `addSection`).
 - Зоны: пол открытого пространства делится по X = `state.split` на floorA (вход и кухня) и floorB (гостиная),
@@ -95,6 +106,7 @@ uv run --with numpy --with pillow tools/make_bath_tile.py    # уложенна�
 uv run --with numpy --with pillow tools/make_rugs.py <tmp> [id]   # ковры из фото IKEA, <tmp> потом удалить
 uv run --with numpy --with pillow tools/make_bath_wall_tile.py    # плитка стен ванной 15×7,5
 python3 tools/fetch_site.py                                  # дома вокруг и солнце -> web/spec/site.json
+uv run --with numpy --with pillow tools/make_wood.py        # реальные деревянные полы (tools/real_wood.json, w_* в catalog.js)
 blender -b -P blender/render.py -- --glb exports/<file>.glb --view living --out renders/x.png \
   --date 2026-11-15 --time 13:00 --context --save blender/kitchen.blend
 ```

@@ -4,8 +4,7 @@
 //   lighting.apply(mode, state)  — режим day / overcast / evening, солнце state.sunAz/sunEl/sunUp, экспозиция
 //   lighting.update()            — каждый кадр до рендера; true = нужен новый кадр (досчитались переотражения)
 //   lighting.invalidate()        — сцена изменилась (материалы, мебель): пересчитать переотражения
-//   lighting.prepare(add, remove) — Promise: шейдеры сцены, где вместо remove стоит add (новые светильники),
-//                                  собраны в фоне; после него замена в сцене не замораживает кадр
+//   SHADER_LAMP_LAYER            — слой «светильник шейдера» (см. п. 7): так помечает свои источники lamps.js
 //   lighting.ready               — Promise: дневная панорама загружена
 //   lighting.lights, .sun, .setQuality(q), .dispose()
 //
@@ -30,6 +29,11 @@
 // 6. Экспозиция «глаза»: в комнате — полная поправка EXPOSURE_IN, на балконе — никакой (человек на улице),
 //    камера облёта снаружи — половина. Смена режима и времени не меняет состав источников (солнце гаснет
 //    интенсивностью), а карты окружения одного размера: шейдеры при этом не пересобираются.
+// 7. Светильники без тени — «светильники шейдера»: источник на слое SHADER_LAMP_LAYER three в растре не видит
+//    (камеры смотрят слои 0 и 1), его параметры идут в массивы юниформ и считаются своим циклом в том же
+//    шейдере (та же формула three: RE_Direct / RE_Direct_RectArea). Число источников three поэтому постоянно,
+//    и смена светильников или их включение не пересобирают программы (раньше — 10–30 с заморозки на каждую
+//    смену). Трассировщик (render.js) видит их как обычные источники: он слои не смотрит.
 //
 // Обманки помечены userData.rasterOnly (render.js не берёт их в фото): окна-прямоугольники.
 // Физические источники для трассировщика — солнце и панорама.
@@ -56,6 +60,9 @@ const PROBES_PER_FRAME = 3;    // 18 маленьких рендеров за к
 const BOUNCES = 4;
 const CELL = 0.2;              // шаг сетки освещённости, м
 const MAX_BOX = 32, MAX_ZONE = 16, MASK_W = 64;
+// Светильники шейдера: слой и предел числа по типам (юниформы фрагментного шейдера: 4 + 3 + 4 vec4 на штуку)
+export const SHADER_LAMP_LAYER = 3;
+const LAMP_MAX = { spot: 48, point: 8, rect: 16 };
 const OPEN_ROOMS = ['kitchen_living', 'hall', 'shaft'];   // одна зона: между ними нет дверей
 // Баланс белого переотражений: глаз в комнате подстраивается под тёплый отскок от дубового пола и стен,
 // поэтому цвет отражённого света приглушается (1 — физически, 0 — серый). Иначе белый потолок выходит персиковым.
@@ -280,6 +287,10 @@ uniform vec4 rlGridA;                     // x0, z0, 1/шаг, nx
 uniform vec4 rlGridB;                     // nz, первая строка средних, включено, 0
 uniform vec3 rlEnvSH[ 9 ];
 uniform float rlGiSat;
+uniform vec4 rlSpot[ ${LAMP_MAX.spot * 4} ];    // мир: позиция + маска зон, к источнику от цели + cos края, цвет + cos полутени, дальность, спад
+uniform vec4 rlPoint[ ${LAMP_MAX.point * 3} ];  // позиция + маска, цвет, дальность и спад
+uniform vec4 rlRect[ ${LAMP_MAX.rect * 4} ];    // центр + маска, полуширина, полувысота, цвет
+uniform ivec3 rlLampCount;                      // споты, точечные, прямоугольные
 varying vec3 vRlWorld;
 #ifdef RL_LOCAL_ENV
 uniform vec3 rlEnvMin, rlEnvMax, rlEnvPos;   // комната и точка съёмки куб-зонда (мир)
@@ -321,6 +332,52 @@ void rlGatherSH( const in int zone, const in vec3 p, out vec3 sh[ 9 ] ) {
 		for ( int j = 0; j < 9; j ++ ) sh[ j ] = texelFetch( rlGrid, ivec2( 1 + j, row ), 0 ).rgb;
 	}
 }
+`;
+
+// Светильники шейдера: те же формулы, что у three (getSpotLightInfo, getPointLightInfo, RE_Direct_RectArea),
+// только из своих массивов, в мировых координатах, с маской зон и циклом по фактическому числу.
+// Формулу RectAreaLight шейдер получает всегда: окна (п. 3) — настоящие RectAreaLight, они есть в любом режиме.
+const GLSL_LAMPS = /* glsl */`
+#if defined( RE_Direct )
+for ( int i = 0; i < ${LAMP_MAX.spot}; i ++ ) {
+	if ( i >= rlLampCount.x ) break;
+	vec4 a = rlSpot[ i * 4 ], b = rlSpot[ i * 4 + 1 ], c = rlSpot[ i * 4 + 2 ], d = rlSpot[ i * 4 + 3 ];
+	if ( ( ( int( a.w ) >> rlZone ) & 1 ) == 0 ) continue;
+	vec3 lv = a.xyz - vRlWorld;
+	float ld = length( lv );
+	vec3 dir = lv / max( ld, 1e-5 );
+	float att = getSpotAttenuation( b.w, c.w, dot( dir, b.xyz ) );
+	if ( att <= 0.0 ) continue;
+	directLight.color = c.rgb * att * getDistanceAttenuation( ld, d.x, d.y );
+	directLight.direction = normalize( ( viewMatrix * vec4( dir, 0.0 ) ).xyz );
+	directLight.visible = true;
+	RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+}
+for ( int i = 0; i < ${LAMP_MAX.point}; i ++ ) {
+	if ( i >= rlLampCount.y ) break;
+	vec4 a = rlPoint[ i * 3 ], b = rlPoint[ i * 3 + 1 ], c = rlPoint[ i * 3 + 2 ];
+	if ( ( ( int( a.w ) >> rlZone ) & 1 ) == 0 ) continue;
+	vec3 lv = a.xyz - vRlWorld;
+	float ld = length( lv );
+	directLight.color = b.rgb * getDistanceAttenuation( ld, c.x, c.y );
+	directLight.direction = normalize( ( viewMatrix * vec4( lv / max( ld, 1e-5 ), 0.0 ) ).xyz );
+	directLight.visible = true;
+	RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+}
+#endif
+#if defined( RE_Direct_RectArea ) && NUM_RECT_AREA_LIGHTS > 0
+for ( int i = 0; i < ${LAMP_MAX.rect}; i ++ ) {
+	if ( i >= rlLampCount.z ) break;
+	vec4 a = rlRect[ i * 4 ];
+	if ( ( ( int( a.w ) >> rlZone ) & 1 ) == 0 ) continue;
+	RectAreaLight rl;
+	rl.position = ( viewMatrix * vec4( a.xyz, 1.0 ) ).xyz;
+	rl.halfWidth = mat3( viewMatrix ) * rlRect[ i * 4 + 1 ].xyz;
+	rl.halfHeight = mat3( viewMatrix ) * rlRect[ i * 4 + 2 ].xyz;
+	rl.color = rlRect[ i * 4 + 3 ].rgb;
+	RE_Direct_RectArea( rl, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+}
+#endif
 `;
 
 const GLSL_ZONE = /* glsl */`
@@ -382,7 +439,7 @@ function patchedLightsBegin(THREE) {
   }
   const hemi = 'irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );';
   if (s.includes(hemi)) s = s.replace(hemi, 'irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal ) * rlLightMask( 4, UNROLLED_LOOP_INDEX );');
-  return GLSL_ZONE + s;
+  return GLSL_ZONE + s + GLSL_LAMPS;
 }
 
 // ---------- основное ----------
@@ -489,6 +546,10 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     rlGridB: { value: new THREE.Vector4(gz, gz, 0, 0) },
     rlEnvSH: { value: Array.from({ length: 9 }, () => new THREE.Vector3()) },
     rlGiSat: { value: GI_SAT },
+    rlSpot: { value: Array.from({ length: LAMP_MAX.spot * 4 }, () => new THREE.Vector4()) },
+    rlPoint: { value: Array.from({ length: LAMP_MAX.point * 3 }, () => new THREE.Vector4()) },
+    rlRect: { value: Array.from({ length: LAMP_MAX.rect * 4 }, () => new THREE.Vector4()) },
+    rlLampCount: { value: new THREE.Vector3() },
   };
 
   // --- патч материалов (один раз на материал; клоны и новые материалы подхватываются в update)
@@ -542,7 +603,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     const rt = new THREE.WebGLCubeRenderTarget(MIRROR_FACE, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
     const cam = new THREE.CubeCamera(0.03, 30, rt);
     cam.position.copy(pos);
-    cam.children.forEach(k => k.layers.enableAll());   // стены и потолок, спрятанные вырезом, в отражении есть
+    cam.children.forEach(k => { k.layers.set(0); k.layers.enable(1); });   // стены и потолок, спрятанные вырезом, в отражении есть
     mat.envMap = rt.texture;
     mat.envMapIntensity = 1;
     mat.userData.rlLocalEnv = { uniforms: { rlEnvMin: { value: min }, rlEnvMax: { value: max }, rlEnvPos: { value: pos } } };
@@ -611,10 +672,50 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     }
     if (changed) maskTex.needsUpdate = true;
   }
+  // --- светильники шейдера: источники слоя SHADER_LAMP_LAYER (видимые, горящие) — в юниформы, мировые координаты
+  const lampLayer = new THREE.Layers(); lampLayer.set(SHADER_LAMP_LAYER);
+  const lampList = [], tmpP = new THREE.Vector3(), tmpT = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
+  let lampWarned = false;
+  function collectLamps(o) {
+    if (o.visible === false) return;
+    if (o.isLight && o.layers.test(lampLayer) && !o.layers.isEnabled(0) && o.intensity > 0) lampList.push(o);
+    for (const c of o.children) collectLamps(c);
+  }
+  function packLamps() {
+    lampList.length = 0;
+    collectLamps(scene);
+    const n = { spot: 0, point: 0, rect: 0 }, S = U.rlSpot.value, Pt = U.rlPoint.value, R = U.rlRect.value;
+    for (const l of lampList) {
+      const t = l.isSpotLight ? 'spot' : l.isPointLight ? 'point' : l.isRectAreaLight ? 'rect' : null;
+      if (!t) continue;
+      if (n[t] >= LAMP_MAX[t]) { if (!lampWarned) console.warn('lighting: светильников шейдера больше', LAMP_MAX[t], t); lampWarned = true; continue; }
+      const i = n[t]++, mask = lightMask(l), I = l.intensity, col = l.color;
+      tmpP.setFromMatrixPosition(l.matrixWorld);
+      if (t === 'spot') {
+        tmpT.setFromMatrixPosition(l.target.matrixWorld).subVectors(tmpP, tmpT).normalize();   // от цели к источнику
+        S[i * 4].set(tmpP.x, tmpP.y, tmpP.z, mask);
+        S[i * 4 + 1].set(tmpT.x, tmpT.y, tmpT.z, Math.cos(l.angle));
+        S[i * 4 + 2].set(col.r * I, col.g * I, col.b * I, Math.cos(l.angle * (1 - l.penumbra)));
+        S[i * 4 + 3].set(l.distance, l.decay, 0, 0);
+      } else if (t === 'point') {
+        Pt[i * 3].set(tmpP.x, tmpP.y, tmpP.z, mask);
+        Pt[i * 3 + 1].set(col.r * I, col.g * I, col.b * I, 0);
+        Pt[i * 3 + 2].set(l.distance, l.decay, 0, 0);
+      } else {
+        l.getWorldQuaternion(tmpQ);
+        R[i * 4].set(tmpP.x, tmpP.y, tmpP.z, mask);
+        R[i * 4 + 1].copy(tmpT.set(l.width / 2, 0, 0).applyQuaternion(tmpQ)).setW(0);
+        R[i * 4 + 2].copy(tmpT.set(0, l.height / 2, 0).applyQuaternion(tmpQ)).setW(0);
+        R[i * 4 + 3].set(col.r * I, col.g * I, col.b * I, 0);
+      }
+    }
+    U.rlLampCount.value.set(n.spot, n.point, n.rect);
+  }
   const prevBefore = scene.onBeforeRender;
   scene.onBeforeRender = function (r, s, cam, rt) {
     prevBefore?.call(this, r, s, cam, rt);
     updateMasks(cam);
+    packLamps();
   };
 
   // --- переотражения: кубические снимки зондов в один атлас, SH на процессоре, сетка в текстуру
@@ -624,7 +725,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   disposables.push(atlas);
   const pixels = new Float32Array(6 * FACE * FACE * nP * 4);
   const probeCam = new THREE.PerspectiveCamera(90, 1, 0.03, 400);
-  probeCam.layers.enableAll();   // все стены и потолки, даже спрятанные вырезом
+  probeCam.layers.set(0); probeCam.layers.enable(1);   // все стены и потолки, даже спрятанные вырезом (слой 1)
   const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
   const UPS = [[0, 1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [0, 1, 0], [0, 1, 0]];
   // направления и веса пикселей грани (камера смотрит вдоль F, вправо R, вверх U)
@@ -888,31 +989,6 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
 
   function invalidate() { dirty = true; dirtyAt = performance.now(); mirrorsDirty = true; requestRender(); }
 
-  // --- шейдеры под новый набор источников — в фоне. Программа материала в three собирается под число источников
-  // каждого типа; поставь новые светильники в сцену сразу — первый кадр синхронно компилирует все материалы
-  // (на этой квартире секунды). Здесь новый набор на мгновение ставится вместо старого, компиляция запускается
-  // без ожидания (KHR_parallel_shader_compile), промис ждёт готовности новых программ; кадры тем временем идут
-  // со старыми светильниками. Два варианта программ: в цель рендера (композер, зонды, зеркала — линейный цвет
-  // без тонмаппинга) и на холст (качество «Быстрое»). Без расширения программы готовы сразу (как раньше).
-  function prepare(add, remove = null) {
-    const before = new Set(renderer.info.programs);
-    const rt = renderer.getRenderTarget(), vis = remove?.visible;
-    if (remove) remove.visible = false;
-    scene.add(add);
-    try {
-      for (const target of [atlas, null]) { renderer.setRenderTarget(target); renderer.compile(scene, camera ?? probeCam); }
-    } finally {
-      scene.remove(add);
-      if (remove) remove.visible = vis;
-      renderer.setRenderTarget(rt);
-    }
-    const fresh = renderer.info.programs.filter(p => !before.has(p));
-    return new Promise(resolve => {
-      const poll = () => (fresh.every(p => p.isReady()) ? resolve() : setTimeout(poll, 16));
-      poll();
-    });
-  }
-
   function update() {
     const now = performance.now();
     patchScene();
@@ -943,5 +1019,5 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     probeSH, irradianceAt(p, n = [0, 1, 0]) { return shIrradiance(probeSH[p], ...n); }, U,
   };
 
-  return { apply, update, invalidate, prepare, setQuality, dispose, ready, sun, lights: [sun, ...windows.map(w => w.light)], windows: windows.map(w => w.light), debug };
+  return { apply, update, invalidate, setQuality, dispose, ready, sun, lights: [sun, ...windows.map(w => w.light)], windows: windows.map(w => w.light), debug };
 }
