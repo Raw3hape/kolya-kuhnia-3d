@@ -4,7 +4,7 @@
 // «Илон твитнул». Пары: BTC, ETH, DOGE и КОЛЯКОИН (его показывают чаще). Всё рисуется на 2D-холсте → CanvasTexture.
 //
 // Где экран: часть обстановки decor.js с моделью MODEL (её материал 'screen' без UV). Поверх него — своя плоскость
-// (размер и место — по габариту меша экрана в координатах части, +Z модели — к зрителю), дочка части: едет за
+// (размер и место — по габариту меша экрана в координатах модели, +Z модели — к зрителю), дочка модели: растёт с ней и едет за
 // перетаскиванием, пересборка обстановки — ищем заново. Плоскость и меш экрана помечены userData.screen (трещины).
 // Материал: чёрный глянец + emissiveMap с холста; яркость делится на экспозицию кадра (как постер ТВ в tv.js),
 // поэтому экран одинаково светится днём и вечером. В фото-режиме, PNG и GLB — последний нарисованный кадр.
@@ -124,8 +124,11 @@ export function createTicker({ THREE, scene, camera, renderer, pipe, requestRend
     holder.traverse(o => { if (!mesh && o.isMesh && o.material?.name === SCREEN_MAT) mesh = o; });
     if (!mesh) return null;
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    // плоскость — дочка самой модели (верхний узел под частью), не части: модель после первого вида «вырастает»
+    // из уменьшенной (decor.js GROW_FROM), и экран, посчитанный по части в этот момент, ушёл бы внутрь корпуса
+    let top = mesh; while (top.parent && top.parent !== holder) top = top.parent;
     holder.updateWorldMatrix(true, true);
-    _rel.multiplyMatrices(_inv.copy(holder.matrixWorld).invert(), mesh.matrixWorld);
+    _rel.multiplyMatrices(_inv.copy(top.matrixWorld).invert(), mesh.matrixWorld);
     _box.copy(mesh.geometry.boundingBox).applyMatrix4(_rel);
     const w = _box.max.x - _box.min.x, h = _box.max.y - _box.min.y;
     if (!(w > 0.05 && h > 0.05)) return null;
@@ -134,7 +137,7 @@ export function createTicker({ THREE, scene, camera, renderer, pipe, requestRend
     plane.position.set((_box.min.x + _box.max.x) / 2, (_box.min.y + _box.max.y) / 2, _box.max.z + 0.0012);
     plane.castShadow = false; plane.receiveShadow = false;
     plane.userData.screen = true; mesh.userData.screen = true;
-    holder.add(plane);
+    top.add(plane);
     return { holder, plane, center: new THREE.Vector3(), normal: new THREE.Vector3(), radius: Math.hypot(w, h) / 2, dist: Infinity };
   }
   function scan(now) {
