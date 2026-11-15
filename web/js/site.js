@@ -10,7 +10,7 @@
 //     с разметкой, тротуары, бордюры; свой дом; соседи с окнами по этажам, крышами, балконами (в радиусе
 //     деталей); заборы, фонари, машины (web/models/site/cars.glb); деревья и кусты экземплярами по видам.
 //     group.setSeason(dateISO) -> true, если вид поменялся (листва, трава, поле): нужен новый кадр.
-//     group.ready -> Promise: текстуры и машины загружены.
+//     group.ready -> Promise: текстуры и машины загружены. opts.assetUrl / opts.track — из loading.js (в node — нет).
 //   Вечером (тёмное небо панорамы у горизонта) сами зажигаются окна соседей и фонари; дальнее тонет в дымке
 //   цвета этого же неба. Мелочь (деревья, машины, решётки) не попадает в кубы зондов переотражений lighting.js.
 //
@@ -783,11 +783,11 @@ function cardGeometry(THREE, tree, def, scale, seed, fraction = 1) {
 
 // cars.glb (tools/fetch_site.py --assets): меши sedan/hatchback/suv/van, цвет вершин из палитры Kenney.
 // Кузов (самый частый насыщенный цвет) получает aPaint = 1 — его перекрашивает экземпляр; стёкла темнеют.
-async function loadCars(THREE) {
+async function loadCars(THREE, assetUrl, track) {
   const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
     import('three/addons/loaders/GLTFLoader.js'), import('three/addons/libs/meshopt_decoder.module.js')]);
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-  const gltf = await loader.loadAsync(CARS_URL);
+  const gltf = await track(loader.loadAsync(assetUrl(CARS_URL)));
   gltf.scene.updateMatrixWorld(true);
   const out = {};
   gltf.scene.traverse(o => {
@@ -835,6 +835,7 @@ async function loadCars(THREE) {
 //   context.ready              -> Promise: текстуры и машины загружены (перерисовать и пересчитать свет)
 //   group.userData.parts       -> меши по именам (для отладки)
 export function buildContext(site, THREE, opts = {}) {
+  const { assetUrl = p => p, track = p => p } = opts;   // адрес с версией и учёт загрузки (loading.js, из main.js)
   const { far = true } = opts;
   const browser = typeof document !== 'undefined';
   const fy = site.floorY, ground = -fy;
@@ -850,8 +851,9 @@ export function buildContext(site, THREE, opts = {}) {
   const tex = {};
   for (const name of Object.keys(TEX_M)) {
     if (!texLoader) { tex[name] = null; continue; }
-    const t = texLoader.load(`${TEX_DIR}${name}.jpg`);
-    pending.push(new Promise(res => { t.image ? res() : (t.onUpdate = () => res()); }));
+    // 512 px (tools/make_web_assets.py): землю видно только издали, из окон и с балкона
+    const t = texLoader.load(assetUrl(`${TEX_DIR}512/${name}.jpg`));
+    pending.push(track(new Promise(res => { t.image ? res() : (t.onUpdate = () => res()); })));
     t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
     t.repeat.set(1 / TEX_M[name], 1 / TEX_M[name]);
     tex[name] = t;
@@ -1219,7 +1221,7 @@ export function buildContext(site, THREE, opts = {}) {
   });
   const cars = site.cars ?? [];
   if (browser && cars.length) {
-    pending.push(loadCars(THREE).then(geos => {
+    pending.push(loadCars(THREE, assetUrl, track).then(geos => {
       const names = site.carModels ?? ['sedan', 'hatchback', 'suv', 'van'];
       const colours = (site.carColours ?? []).map(c => new THREE.Color(`#${c}`));
       names.forEach((name, mi) => {

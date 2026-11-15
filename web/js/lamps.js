@@ -10,6 +10,16 @@
 // Поэтому светильники без тени живут на слое SHADER_LAMP_LAYER и считаются циклом lighting.js, а с тенью — это
 // постоянный набор из SHADOW_BUDGET прожекторов (POOL), которым новая раскладка только меняет место и конус.
 // Выключенный светит с интенсивностью 0, а не прячется (visible тоже меняет счёт).
+//
+// Прихожая (холл) без окна: её светильники в режиме «Авто» (lampsOn: 'auto') горят и днём, ослабленные под
+// дневную экспозицию (HALL_DAY_GAIN, как лампа ванной в main.js). Подсветка прихожей (state.hallGlow) — тёплые
+// LED-акценты на том же правиле: ореол за зеркалом, свет под обувницей (по выбранной в обстановке вещи: у опции
+// в web/spec/decor/hall.json поле "glow") и линия у пола вдоль длинной стены коридора. Источники всех вариантов
+// строятся всегда (шейдерные полосы, тени не дают), выбор только гасит их: смена зеркала, обувницы и подсветки
+// не пересобирает светильники (main.js не знает этих полей) и не меняет счёт источников three.
+// Сдвинутую в редакторе вещь подсветка не догоняет — её свет гаснет (запись в state.moves).
+// Код варианта: hallGlow — НЕ в LAMP_SCHEMA. Его место — слот-поле в конце web/spec/decor/balcony.json
+// (хвост всего кода ссылки, см. FIELDS в decor.js); новые поля светильников — так же, не сюда в LAMP_SCHEMA.
 import * as THREE from 'three';
 import { SHADER_LAMP_LAYER } from './lighting.js';
 
@@ -38,12 +48,25 @@ export const LAMP_OPTIONS = {
   ],
   plinthLed:  [ { id: 'off', name: 'Нет' }, { id: 'on', name: 'Есть' } ],
   lampTemp:   [ { id: 'k2700', name: '2700 K' }, { id: 'k3000', name: '3000 K' }, { id: 'k4000', name: '4000 K' } ],
-  lampsOn:    [ { id: 'auto', name: 'Вечером' }, { id: 'on', name: 'Включены' }, { id: 'off', name: 'Выключены' } ],
+  // «Авто»: вечером горит всё, а прихожая и ванная (без окон) — всегда; hint — пояснение к опции для панели.
+  lampsOn:    [ { id: 'auto', name: 'Авто', hint: 'Вечером везде, в прихожей и ванной — всегда' },
+                { id: 'on', name: 'Включены' }, { id: 'off', name: 'Выключены' } ],
   lampFinish: [ { id: 'white', name: 'Белые' }, { id: 'black', name: 'Чёрные' } ],
+  // Подсветка прихожей: «Акценты» — ореол за зеркалом и свет под обувницей, «Акценты и пол» — плюс линия у пола.
+  hallGlow:   [ { id: 'off', name: 'Нет' }, { id: 'accent', name: 'Акценты' }, { id: 'full', name: 'Акценты и пол' } ],
+};
+// Подписи контролов панели «Светильники» (ui.js берёт их отсюда): ключ состояния → подпись. Новый ключ в
+// LAMP_OPTIONS — подпись сюда же.
+export const LAMP_LABELS = {
+  ceilingKitchen: 'Потолок кухни', ceilingLiving: 'Потолок гостиной', ceilingHall: 'Потолок холла',
+  ceilingRoom2: 'Потолок комнаты 2', ceilingRoom3: 'Потолок комнаты 3', pendants: 'Над островом',
+  plinthLed: 'Подсветка цоколя', lampTemp: 'Цвет света', lampsOn: 'Когда горят', lampFinish: 'Корпуса',
+  hallGlow: 'Подсветка прихожей',
 };
 export const LAMP_DEFAULTS = {
   ceilingKitchen: 'spots', ceilingLiving: 'spots', ceilingHall: 'spots',
   plinthLed: 'off', lampTemp: 'k3000', lampsOn: 'auto', lampFinish: 'white', lampDim: 0.8,
+  hallGlow: 'full',
 };
 // Новые поля для кода варианта, в этом порядке (pendants уже есть в v2). lampDim — проценты.
 const ids = list => list.map(o => o.id);
@@ -64,6 +87,10 @@ export const DIM = { min: 0.1, max: 1 };
 export const NIGHT_SCALE = 0.025;
 // Адаптация глаза: днём при окнах те же лампы заметны слабее.
 const MODE_GAIN = { day: 0.45, overcast: 0.6, evening: 1 };
+// Прихожая без окна днём: экспозиция «глаза» в помещении ×6 (lighting.js) рассчитана на комнаты с окнами,
+// поэтому её свет днём ослаблен до вида вечера (как ванная, BATH_DAY_GAIN в main.js), и ещё немного: холл открыт
+// в светлую кухню, тёплые 3000 K рядом с дневным светом иначе красят стены в персик (проверено в прогулке).
+const HALL_DAY_GAIN = 0.6 / 6;
 // Баланс белого «камеры»: 2700 K выглядит тёплым, но не оранжевым (как ночной интерьерный кадр).
 const WHITE_BALANCE_K = 4800;
 const TEMP_K = { k2700: 2700, k3000: 3000, k4000: 4000 };
@@ -108,6 +135,9 @@ const SPEC = {
   globe:     { lm: 800, eff: 0.8 },                  // опаловое стекло пропускает ~80 %
   bar:       { lmPerM: 2000, w: 0.035 },             // линейный подвес, свет вниз
   strip:     { lmPerM: 300, w: 0.01 },               // лента 4.8 Вт/м
+  halo:      { lmPerM: 450, w: 0.012 },              // лента за зеркалом 6 Вт/м, 2700–3000 K
+  under:     { lmPerM: 300, w: 0.01 },               // лента под дном обувницы, 4 Вт/м
+  path:      { lmPerM: 250, w: 0.01 },               // линия у пола в профиле плинтуса, мягкая
 };
 // Яркость светящихся деталей при 100 % (без засветки до бесконечности, если позже добавят bloom).
 const GLOW = { diffuser: 6, bulb: 14, opal: 2.2, reflector: 0.6, led: 5 };
@@ -164,8 +194,20 @@ function mats() {
     led:       std('lamp_led', { color: '#fdfcf8', roughness: 0.5, emissive: '#ffffff', emissiveIntensity: 0 }),
     opal: Object.assign(new THREE.MeshPhysicalMaterial({ color: '#f7f4ee', roughness: 0.35, sheen: 0.2, emissive: '#ffffff', emissiveIntensity: 0 }), { name: 'lamp_opal' }),
   };
+  // прихожая горит и днём, когда остальные погашены: своё свечение рассеивателей и лент (тот же тип — та же программа)
+  MAT.hall = {
+    diffuser: std('lamp_diffuser_hall', { color: '#fbfaf6', roughness: 0.3, emissive: '#ffffff', emissiveIntensity: 0 }),
+    led:      std('lamp_led_hall', { color: '#fdfcf8', roughness: 0.5, emissive: '#ffffff', emissiveIntensity: 0 }),
+  };
   return MAT;
 }
+
+// Обстановка прихожей для подсветки (зеркало, обувница): decor.js отдаёт разобранные зоны при загрузке каталога,
+// до первой сборки светильников. Нет зоны — подсветка только архитектурная (линия у пола).
+let HALL_DECOR = null;
+export function useDecorZones(zones) { HALL_DECOR = zones?.find(z => z.id === 'hall') ?? null; }
+// Сдвинута ли часть в редакторе (формат state.moves — шапка decor.js: записи через '~', запись = <pkey>_…).
+const movedPart = (moves, pkey) => typeof moves === 'string' && moves.split('~').some(e => e === pkey || e.startsWith(`${pkey}_`));
 
 // ---------- сборка ----------
 
@@ -240,14 +282,17 @@ export function buildLamps(plan, kit, state, M, island) {
   const fixture = (name, x, z) => { const f = new THREE.Group(); f.name = name; f.position.set(x, 0, z); fixtures.add(f); return f; };
 
   // --- свет
-  const reg = (light, base, lm, pri, name) => {
+  // hall — светильник прихожей (горит и днём); accent — подсветка: { slot, option, pkey } или { path: true },
+  // её поток не идёт в заливку переотражений (bounce): акцент, а не общий свет.
+  let hallTag = false, gm = mat;   // gm — материалы свечения текущей зоны (у прихожей свои)
+  const reg = (light, base, lm, pri, name, accent = null) => {
     light.name = name;
     if (!light.isHemisphereLight) light.layers.set(SHADER_LAMP_LAYER);
     light.userData = { lm, base, pri };
     lightsGroup.add(light);
     if (light.target) lightsGroup.add(light.target);
-    entries.push({ light, base });
-    totalLm += lm;
+    entries.push({ light, base, hall: hallTag || !!accent, accent });
+    if (!accent) totalLm += lm;
     return light;
   };
   const spot = (spec, pos, target, pri, name) => {
@@ -268,12 +313,12 @@ export function buildLamps(plan, kit, state, M, island) {
     return reg(l, lm / (4 * Math.PI), lm, pri, name);
   };
   // Светящаяся полоса: RectAreaLight светит вдоль своей −Z; axis — длинная сторона, dir — куда светит.
-  const rect = (lm, len, w, pos, dir, axis, name) => {
+  const rect = (lm, len, w, pos, dir, axis, name, accent) => {
     const l = new THREE.RectAreaLight(0xffffff, 0, len, w);
     const z = dir.clone().normalize().negate(), x = axis.clone().normalize(), y = new THREE.Vector3().crossVectors(z, x);
     l.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
     l.position.copy(pos);
-    return reg(l, lm / (Math.PI * len * w), lm, 0, name);
+    return reg(l, lm / (Math.PI * len * w), lm, 0, name, accent);
   };
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const DOWN = V(0, -1, 0), AX = V(1, 0, 0), AZ = V(0, 0, 1);
@@ -282,13 +327,13 @@ export function buildLamps(plan, kit, state, M, island) {
   function downlight(name, p, pri) {
     const f = fixture(name, p.x, p.z);
     disc(0.0425, 0.004, mat.housing, `${name}_trim`, f, H - 0.002, { ceil: true });
-    disc(0.028, 0.002, mat.diffuser, `${name}_lens`, f, H - 0.0045, { ceil: true });
+    disc(0.028, 0.002, gm.diffuser, `${name}_lens`, f, H - 0.0045, { ceil: true });
     spot(SPEC.downlight, V(p.x, H - 0.012, p.z), V(p.x, 0, p.z), pri, name);
   }
   function plafond(name, p, pri) {
     const f = fixture(name, p.x, p.z);
     disc(0.16, 0.045, mat.housing, `${name}_body`, f, H - 0.0225, { ceil: true });
-    disc(0.15, 0.006, mat.diffuser, `${name}_diffuser`, f, H - 0.047, { ceil: true });
+    disc(0.15, 0.006, gm.diffuser, `${name}_diffuser`, f, H - 0.047, { ceil: true });
     lambertDown(SPEC.plafond.lm, V(p.x, H - 0.055, p.z), pri, name);
   }
   // Встроенная линия: светит вниз, вдоль axis ('x' или 'z'), центр c, длина len.
@@ -296,7 +341,7 @@ export function buildLamps(plan, kit, state, M, island) {
     const f = fixture(name, c.x, c.z), w = SPEC.line.w, alongX = axis === 'x';
     const box = (a, b, h) => geo(THREE.BoxGeometry, alongX ? a : b, h, alongX ? b : a);
     mesh(box(len + 0.02, w + 0.02, 0.003), mat.housing, `${name}_frame`, f, { ceil: true }).position.y = H - 0.0015;
-    mesh(box(len, w, 0.002), mat.diffuser, `${name}_diffuser`, f, { ceil: true }).position.y = H - 0.004;
+    mesh(box(len, w, 0.002), gm.diffuser, `${name}_diffuser`, f, { ceil: true }).position.y = H - 0.004;
     rect(SPEC.line.lmPerM * len, len, w, V(c.x, H - 0.006, c.z), DOWN, alongX ? AX : AZ, name);
   }
   // Накладной трек с поворотными прожекторами: a → b по оси, aims — точки, куда смотрит каждый.
@@ -314,7 +359,7 @@ export function buildLamps(plan, kit, state, M, island) {
       stem.position.set(pivot.x, pivot.y + 0.025, pivot.z);
       const head = mesh(geo(THREE.CylinderGeometry, 0.032, 0.032, 0.12, 28), mat.housing, `${name}_head${i + 1}`, f, { ceil: true });
       head.quaternion.copy(q); head.position.copy(pivot).addScaledVector(dir, 0.03);
-      const lens = mesh(geo(THREE.CylinderGeometry, 0.026, 0.026, 0.002, 24), mat.diffuser, `${name}_lens${i + 1}`, f, { ceil: true });
+      const lens = mesh(geo(THREE.CylinderGeometry, 0.026, 0.026, 0.002, 24), gm.diffuser, `${name}_lens${i + 1}`, f, { ceil: true });
       lens.quaternion.copy(q); lens.position.copy(pivot).addScaledVector(dir, 0.09);
       spot(SPEC.track, pivot.clone().addScaledVector(dir, 0.095), aim, pri(i), `${name}_${i + 1}`);
     });
@@ -397,9 +442,61 @@ export function buildLamps(plan, kit, state, M, island) {
       line('line_hall', centre(main), 'x', main.x1 - main.x0 - 0.8);
     }
   }
+  // --- подсветка прихожей (state.hallGlow): источники всех вариантов строятся всегда, update гасит невыбранное
+  const pathMeshes = [];
+  function hallAccents() {
+    // по вещам обстановки: у опции поле glow ("halo" | "under" или { kind, len, y }), место и габарит — из каталога
+    for (const slot of HALL_DECOR?.slots ?? []) {
+      for (const o of slot.options) {
+        const g = typeof o.glow === 'string' ? { kind: o.glow } : o.glow, p = o.parts?.[0];
+        if (!g?.kind || !p || !o.size) continue;
+        const [w, h, d] = o.size, r = rad(p.rot);
+        const f = V(Math.sin(r), 0, Math.cos(r)), a = V(Math.cos(r), 0, -Math.sin(r));   // перед вещи и её ширина
+        const tag = { slot: slot.key, option: o.id, pkey: `hall.${slot.id}.${o.id}.0` }, name = `hall_glow_${slot.id}_${o.id}`;
+        const base = V(p.pos[0], p.pos[1], p.pos[2]);
+        if (g.kind === 'halo') {
+          // зеркало с подсветкой: две вертикальные ленты у левого и правого края, вплотную к стене за зеркалом,
+          // светят вдоль стены наружу — по бокам зеркала на стене тёплый ореол. len — доля высоты (круглое зеркало)
+          const len = (h - 0.06) * (g.len ?? 1), back = base.clone().addScaledVector(f, -d / 2 + 0.007);
+          [-1, 1].forEach((sg, i) => {
+            const c = back.clone().addScaledVector(a, sg * (w / 2 - 0.04)); c.y = p.pos[1] + h / 2;   // за краем: самой ленты не видно
+            rect(SPEC.halo.lmPerM * len, len, SPEC.halo.w, c, a.clone().multiplyScalar(sg), V(0, 1, 0), `${name}_${i + 1}`, tag);
+          });
+        } else if (g.kind === 'under') {
+          // лента под передней кромкой: светит на пол и чуть вперёд — вещь «парит» над пятном тёплого света
+          // y — высота дна над полом (у IKEA на ножках ~8–10 см), лента в 5 см от передней кромки светит почти вниз
+          const len = w - 0.06, c = base.clone().addScaledVector(f, d / 2 - 0.05); c.y = p.pos[1] + (g.y ?? 0.08);
+          rect(SPEC.under.lmPerM * len, len, SPEC.under.w, c, f.clone().multiplyScalar(0.25).add(DOWN), a, name, tag);
+        }
+      }
+    }
+    // линия у пола вдоль самой длинной глухой стены коридора (без проёмов): профиль в 2 см от стены, 4 см от пола
+    const cor = Z.hall[0];
+    if (!cor) return;
+    let best = null;
+    for (const [zf, sg] of [[cor.z0, 1], [cor.z1, -1]]) {
+      let segs = plan.walls.filter(w => Math.abs((sg > 0 ? w.z1 : w.z0) - zf) < 0.01)
+        .map(w => [Math.max(w.x0, cor.x0), Math.min(w.x1, cor.x1)]).filter(([a0, a1]) => a1 - a0 > 0.05).sort((u, v) => u[0] - v[0]);
+      segs = segs.reduce((out, sgm) => { const l = out[out.length - 1]; if (l && sgm[0] <= l[1] + 0.01) l[1] = Math.max(l[1], sgm[1]); else out.push([...sgm]); return out; }, []);
+      for (const o of plan.openings.filter(o => o.along === 'x' && o.z0 - 0.01 <= zf && zf <= o.z1 + 0.01)) {
+        segs = segs.flatMap(([a0, a1]) => [[a0, Math.min(a1, o.x0)], [Math.max(a0, o.x1), a1]]).filter(([a0, a1]) => a1 - a0 > 0.05);
+      }
+      for (const [a0, a1] of segs) if (!best || a1 - a0 > best.a1 - best.a0) best = { a0, a1, zf, sg };
+    }
+    if (!best || best.a1 - best.a0 < 0.8) return;
+    const len = best.a1 - best.a0 - 0.2, cx = (best.a0 + best.a1) / 2, z = best.zf + best.sg * 0.02, y = 0.04;
+    const f = fixture('hall_glow_path', cx, z);
+    const m = mesh(geo(THREE.BoxGeometry, len, 0.008, 0.012), gm.led, 'hall_glow_path_led', f);
+    m.position.y = y; pathMeshes.push(m);
+    rect(SPEC.path.lmPerM * len, len, SPEC.path.w, V(cx, y - 0.005, z), V(0, -1, best.sg * 0.5), AX, 'hall_glow_path', { path: true });
+  }
+
   ceiling('kitchen', state.ceilingKitchen ?? LAMP_DEFAULTS.ceilingKitchen);
   ceiling('living', state.ceilingLiving ?? LAMP_DEFAULTS.ceilingLiving);
+  hallTag = true; gm = mat.hall;
   ceiling('hall', state.ceilingHall ?? LAMP_DEFAULTS.ceilingHall);
+  hallAccents();
+  hallTag = false; gm = mat;
   ceiling('room2', state.ceilingRoom2 ?? LAMP_ROOM_DEFAULTS.ceilingRoom2);
   ceiling('room3', state.ceilingRoom3 ?? LAMP_ROOM_DEFAULTS.ceilingRoom3);
 
@@ -518,18 +615,31 @@ export function buildLamps(plan, kit, state, M, island) {
   }
 
   const color = new THREE.Color();
+  // Горит ли подсветка: вариант hallGlow, выбранная вещь (и не сдвинута в редакторе), линия у пола — только «и пол».
+  function accentOn(acc, s) {
+    const level = s.hallGlow ?? LAMP_DEFAULTS.hallGlow;
+    if (level === 'off' || !LAMP_OPTIONS.hallGlow.some(o => o.id === level)) return false;
+    if (acc.path) return level === 'full';
+    const def = HALL_DECOR?.slots.find(sl => sl.key === acc.slot)?.def;
+    return (s[acc.slot] ?? def) === acc.option && !movedPart(s.moves, acc.pkey);
+  }
   function update(s, mode = s.light) {
     const on = s.lampsOn === 'on' || (s.lampsOn !== 'off' && mode === 'evening');
     const dim = THREE.MathUtils.clamp(s.lampDim ?? LAMP_DEFAULTS.lampDim, DIM.min, DIM.max);
     const gain = on ? dim * (MODE_GAIN[mode] ?? 1) : 0;
+    // прихожая без окна: «Авто» — горит и днём (ослаблена до вида вечера), «Выключены» — погашена
+    const hallGain = s.lampsOn === 'off' ? 0 : dim * (mode === 'evening' ? 1 : HALL_DAY_GAIN);
     kelvinColor(TEMP_K[s.lampTemp] ?? 3000, color);
-    for (const { light, base } of entries) {
-      light.intensity = base * NIGHT_SCALE * gain;
+    for (const { light, base, hall, accent } of entries) {
+      light.intensity = base * NIGHT_SCALE * (hall ? (accent && !accentOn(accent, s) ? 0 : hallGain) : gain);
       if (light.castShadow) light.shadow.autoUpdate = light.intensity > 0;   // погасший не перерисовывает тень
       light.color.copy(color);
       if (light.isHemisphereLight) light.groundColor.copy(color).multiplyScalar(0.55);
     }
     for (const [k, g] of Object.entries(GLOW)) { mat[k].emissive.copy(color); mat[k].emissiveIntensity = g * gain; }
+    for (const [k, m] of Object.entries(mat.hall)) { m.emissive.copy(color); m.emissiveIntensity = GLOW[k] * hallGain; }
+    const path = accentOn({ path: true }, s);
+    for (const m of pathMeshes) m.visible = path;   // профиль ленты есть, только когда она выбрана
     const fin = FINISH[s.lampFinish] || FINISH.white;
     mat.housing.color.set(fin.color); mat.housing.roughness = fin.rough; mat.housing.metalness = fin.metal;
   }

@@ -11,7 +11,8 @@
 #   гостиная — x 3.06…5.56, открывается створка x 4.64–5.49 (без вещей x ≥ 4.45: проход и место у перил 1,2 м для охоты).
 # Всё стоит одной полосой у фасада (глубина ≤ 0,76, крона бамбука в левом углу 0,9): вдоль перил сквозной
 # променад ≥ 1,08 м (в углу 0,93), у перил нет ничего выше поручня — поле за балконом (hunt.js) видно с любой точки на высоте глаз 1,68.
-# Сезоны: части с "season" видны только летом или только зимой (decor.js, decorSeason по дате сцены).
+# Сезоны: части с "season" видны только летом или только зимой (decor.js, sceneSeason: выбор «Сезон» или по дате сцены).
+# Конец файла — слоты-поля (field): места полей сцены в коде ссылки, см. блок перед spec.
 import json, math, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -252,9 +253,19 @@ slots.append({"id": "rug", "label": "Уличный ковёр", "default": "mor
            collide=False)
     for oid, k in (("morum", "morum-160"), ("lydersholm", "lydersholm-160"), ("lattbetong", "lattbetong-160"))]})
 
+# ---------- поля-настройки (не товары): только держат место поля в коде варианта ----------
+# Балкон — последняя зона index.json, поэтому его хвост — хвост всего кода ссылки (SCHEMA_V3 в main.js). Новое поле
+# сцены (не товар) дописывается сюда слотом {"id", "field"} в самый конец; варианты поля — у владельца (FIELDS в
+# web/js/decor.js). Новые слоты-товары балкона — тоже только после них. Ничего не переставлять.
+slots.append({"id": "season", "field": "balconySeason", "label": "Сезон",
+              "_note": "По дате / Лето / Зима: какие части с season видны (decor.js, SEASON_OPTIONS)."})
+slots.append({"id": "hallglow", "field": "hallGlow", "label": "Подсветка прихожей",
+              "_note": "Поле светильников прихожей (lamps.js, LAMP_OPTIONS.hallGlow); место — здесь, в конце кода."})
+
 spec = {"zone": "balcony", "title": "Балкон", "room": "balcony",
         "_note": "Генерирует tools/decor/balcony/compose.py — править раскладки там. Части с season видны только летом или "
-                 "зимой (decor.js). Порядок слотов и опций = код варианта: новое только в конец.",
+                 "зимой (decor.js). Порядок слотов и опций = код варианта: новое только в конец. Слоты с field — "
+                 "не товары, а места полей сцены в коде ссылки (decor.js, FIELDS).",
         "slots": slots}
 out = os.path.join(WEB, "spec", "decor", "balcony.json")
 json.dump(spec, open(out, "w"), ensure_ascii=False, indent=1)

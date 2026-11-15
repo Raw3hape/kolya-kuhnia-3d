@@ -16,7 +16,17 @@
 // Своё движение сглажено; если камеру двинул кто-то другой (ракурс, мини-карта, выход из прогулки),
 // недоделанное своё движение бросается.
 
-export const NAV_HINT = 'Колесо — к курсору · ЛКМ — вращать · ПКМ/Shift — сдвиг · WASD, Q/E — летать · двойной клик — фокус';
+import { addHelp } from './help.js';
+
+// Справка (help.js): окно «?» в ui.js
+addHelp(
+  { mode: 'design', topic: 'camera', keys: ['ЛКМ'], text: 'тянуть — вращать вокруг точки под курсором', touch: 'один палец — вращать', order: 10 },
+  { mode: 'design', topic: 'camera', keys: ['колесо'], text: 'ближе к курсору, сквозь стены дальше', touch: 'щипок — ближе или дальше', order: 20 },
+  { mode: 'design', topic: 'camera', keys: ['ПКМ'], text: 'тянуть — сдвиг (или Shift + ЛКМ, два пальца на трекпаде)', touch: 'два пальца — сдвиг', order: 30 },
+  { mode: 'design', topic: 'camera', keys: ['W', 'A', 'S', 'D', 'Q', 'E'], text: 'лететь; Shift — быстрее', touch: false, order: 40 },
+  { mode: 'design', topic: 'camera', keys: ['2× клик'], text: 'приблизиться к точке', touch: false, order: 50 },
+  { mode: 'design', topic: 'camera', keys: [], text: 'ракурсы — в полосе внизу: из холла, из гостиной, план сверху…', order: 55 },
+);
 
 export const NAV = {
   maxRadius: 40,        // дальше этого от центра квартиры камера не улетает, м

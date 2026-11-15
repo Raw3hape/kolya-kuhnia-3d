@@ -1,9 +1,15 @@
-// Панель настроек. Декларативный реестр «вкладка → раздел → контролы»; сама ничего не знает о 3D.
+// Интерфейс поверх сцены: панель-реестр «вкладка → раздел → контролы», режимы, полоса внизу, справка, загрузка.
+// Сама ничего не знает о 3D. Схема интерфейса для людей и агентов — docs/ui.md.
 //
+// Режим — что сейчас делает человек: 'design' (смотреть и менять), 'walk' (прогулка; 'seat' — сидя),
+//   'photo' (фото-рендер); 'arrange' — подрежим проекта «двигать мебель». Переключатель режимов — в карточке
+//   слева сверху, полоса внизу (#ctxbar) показывает то, что нужно именно в этом режиме. body[data-mode] = режим.
+// Вкладки (TABS) идут по намерению: оформить квартиру (group 'design'), побыть в ней ('live'), забрать результат
+//   ('out'), настройки этого браузера ('settings').
 // Раздел:  addSection({ id, tab, title, order, open, feature, focus: [slotId…], summary(s, info), elId, controls: [...] })
-//   tab — 'mat' | 'kitchen' | 'furniture' | 'light' | 'view'; order — место во вкладке (меньше — выше);
+//   tab — id из TABS; order — место во вкладке (меньше — выше);
 //   feature — раздел виден, только когда модуль подключён (initUI({ features }) или ui.enable(name));
-//   раздел с тем же id заменяет встроенный (так модуль подменяет заглушку настоящими контролами).
+//   раздел с тем же id заменяет встроенный.
 // Контрол: { type, key, label, hint, def, src, options, visible(s, has, info), feature, focus: [...] } +
 //   slot      — материал из catalog.SLOTS (key = id слота): строка-сводка, внутри фильтр и сетка миниатюр;
 //   swatches  — сетка образцов из options ({ id, name, note, tex | color });
@@ -16,33 +22,57 @@
 //   slider    — min, max, step, format(v), presets: [{ label, value }], input(v)/commit(v) вместо setState;
 //   button    — label (строка или (s, info) => строка), primary, value(s, info) -> аргумент действия;
 //               run(s, info) — вместо действия вызвать функцию модуля напрямую (модуль без ui.on, напр. seats.js);
-//   readout   — value (строка или (s, info) => строка) либо info[key]; style: 'dims' | 'hint' | 'keys'; link: { label, run };
+//   readout   — value (строка или (s, info) => строка) либо info[key]; style: 'dims' | 'hint' | 'code'; link: { label, run };
 //   progress  — info[key] = { passes, target, running }; format(p) -> подпись;
+//   help      — строки справки темы: { type: 'help', topic } (их объявляют модули через help.js, вручную не писать);
 //   group     — рамка с вложенными controls.
 // Откуда значение (src): 'state' — поле состояния, меняется через setState и попадает в отмену/код;
 //   'pref' — настройка этого браузера (localStorage); 'info' — живое значение модуля (ui.info({...})).
 //   Либо свои get(s, info) / set(v, s). Изменение pref/info и нажатие кнопки уходят в ui.on(key, fn),
-//   иначе в api.actions[key], иначе во встроенное действие (snapshot, glb, quality, theme).
+//   иначе в api.actions[key], иначе во встроенное действие (snapshot, glb, quality, theme, photo, help).
 // Сам раздел умеет: сводку в свёрнутом виде (без summary — по выбранным вариантам), точку «изменено» и ссылку
 //   «Сбросить раздел» (значения из initUI({ defaults }), иначе из def контрола), поиск по вариантам во вкладках с поиском.
 // Клавиатура: в группе выбора одна остановка Tab, стрелки/Home/End — по вариантам, Пробел/Enter — выбрать;
-//   1–5 — вкладки, / — поиск, ⌘Z / ⇧⌘Z — отмена и возврат.
-// Всплывающее сообщение: handle.toast(msg, action, ms) или событие NOTICE на window (render.js — сброс WebGL,
-// мало кадров); событие QUALITY_REQUEST (render.js) ставит качество как выбор пользователя.
-import { NAV_HINT } from './nav.js';
+//   цифры — вкладки, / — поиск, ? — справка, ⌘Z / ⇧⌘Z — отмена и возврат (сами строки — в help.js, из addHelp ниже).
+// Сообщения: handle.toast(msg, action, ms) или событие NOTICE на window (render.js — сброс WebGL, мало кадров);
+//   QUALITY_REQUEST (render.js) ставит качество как выбор пользователя.
+// Загрузка: событие PROGRESS из loading.js ('kitchen:progress') { phase: 'start'|'room'|'details'|'done', loaded, total } — экран загрузки
+//   до 'room' (дальше можно работать, внизу «догружаю» до 'done'); handle.ready() main.js зовёт на первом виде —
+//   заставка уходит и без событий.
+// Раскладка: ui.js пишет в :root --hud-bottom (сколько снизу занимает полоса режима): плавающие кнопки модулей
+//   (джойстик, огонь, патроны, сообщения) ставят bottom от неё и не наезжают на полосу ни на каком экране.
 import { SLOTS, MATERIALS, OPTIONS, PRESETS, FLOOR_CATS, resolveItem } from './catalog.js';
-import { LAMP_OPTIONS, DIM } from './lamps.js';
+import * as LAMPS from './lamps.js';
 import { formatSun } from './site.js';
-import { NOTICE, QUALITY_REQUEST } from './render.js';
+import { NOTICE, QUALITY_REQUEST, DEFAULT_QUALITY } from './render.js';
+import { HELP, HELP_MODES, helpFor, addHelp } from './help.js';
+import { assetUrl, PROGRESS } from './loading.js';
 
+// group — к какому намерению вкладка: между группами в полосе вкладок промежуток. iconOnly — без подписи (есть в title).
 export const TABS = [
-  { id: 'mat',       title: 'Материалы',    short: 'Материалы', icon: 'swatch',  search: 'Найти: дуб, микроцемент, Carrea…' },
-  { id: 'kitchen',   title: 'Кухня',        short: 'Кухня',     icon: 'kitchen', search: 'Найти: дуб, кварц, латунь…' },
-  { id: 'furniture', title: 'Мебель',       short: 'Мебель',    icon: 'sofa',    search: 'Найти: IKEA, кровать, стеллаж…',
-    empty: 'Здесь появятся диван, ТВ, тумба, ковёр и журнальный столик.' },
-  { id: 'light',     title: 'Свет',         short: 'Свет',      icon: 'bulb' },
-  { id: 'view',      title: 'Вид и рендер', short: 'Вид',       icon: 'camera' },
+  { id: 'mat',       group: 'design',   title: 'Материалы', short: 'Материалы', icon: 'swatch',  search: 'Найти: дуб, микроцемент, Carrea…' },
+  { id: 'kitchen',   group: 'design',   title: 'Кухня',     short: 'Кухня',     icon: 'kitchen', search: 'Найти: дуб, кварц, латунь…' },
+  { id: 'furniture', group: 'design',   title: 'Мебель и вещи', short: 'Мебель', icon: 'sofa',   search: 'Найти: IKEA, кровать, стеллаж…',
+    empty: 'Мебель ещё загружается.' },
+  { id: 'light',     group: 'design',   title: 'Свет',      short: 'Свет',      icon: 'bulb' },
+  { id: 'live',      group: 'live',     title: 'Прогулка и игры', short: 'Прогулка', icon: 'walk',
+    empty: 'Прогулка ещё загружается.' },
+  { id: 'out',       group: 'out',      title: 'Ссылка, фото и файлы', short: 'Экспорт', icon: 'share' },
+  { id: 'settings',  group: 'settings', title: 'Настройки', short: 'Настройки', icon: 'gear', iconOnly: true },
 ];
+
+// Строки справки самой панели (остальные объявляют модули)
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const MOD = isMac ? '⌘' : 'Ctrl';
+addHelp(
+  { mode: 'design', keys: [], text: 'нажмите на пол, стену, фасад или вещь — в панели откроются её варианты', touch: 'коснитесь пола, стены или вещи — в панели откроются её варианты', order: 1, brief: true },
+  { mode: 'panel', keys: [`1–${TABS.length}`], text: 'вкладки панели', touch: false, order: 10 },
+  { mode: 'panel', keys: ['/'], text: 'поиск материала и вещи', touch: false, order: 20 },
+  { mode: 'panel', keys: [MOD, 'Z'], text: 'отменить, вместе с ⇧ — вернуть', touch: 'стрелки вверху панели — отменить и вернуть', order: 30 },
+  { mode: 'panel', keys: ['C'], text: 'переключить A и B, когда сравниваете два варианта', touch: false, order: 40 },
+  { mode: 'panel', keys: ['?'], text: 'эта справка', touch: false, order: 90 },
+  { mode: 'panel', keys: ['Esc'], text: 'закрыть окно или поиск', touch: false, order: 95 },
+);
 
 const extra = [];      // разделы, добавленные модулями через addSection
 let live = null;       // панель после initUI: новый раздел встраивается сразу
@@ -54,13 +84,21 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const h = (tag, attrs = {}, ...kids) => {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'class') el.className = v;
+    if (k === 'class') { if (v) el.className = v; }
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (v !== false && v != null) el.setAttribute(k, v === true ? '' : v);
   }
   for (const c of kids.flat()) if (c != null) el.append(c.nodeType ? c : document.createTextNode(c));
   return el;
 };
+// Файл из textures/ или models/ с версией сборки (loading.js assetUrl: ?v=<хеш папки>, локально — как есть).
+// Путь нормализуется: карточки дивана дают tex '../models/sofas/<id>'. Внешние и уже версионные адреса не трогаем.
+function fileUrl(path) {
+  if (/^[a-z]+:|^\/\/|\?/i.test(path)) return path;
+  const out = [];
+  for (const seg of path.split('/')) { if (seg === '..') out.pop(); else if (seg && seg !== '.') out.push(seg); }
+  return assetUrl(out.join('/'));
+}
 const ICONS = {
   swatch: '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/>',
   kitchen: '<path d="M2 9h16"/><rect x="3" y="9" width="14" height="8" rx="1"/><path d="M10 9v8M6 6h2M12 6h2"/>',
@@ -79,6 +117,13 @@ const ICONS = {
   none: '<circle cx="10" cy="10" r="6"/><path d="m5.8 14.2 8.4-8.4"/>',
   box: '<path d="M3.5 6.5 10 3l6.5 3.5v7L10 17l-6.5-3.5z"/><path d="m3.5 6.5 6.5 3.5 6.5-3.5M10 10v7"/>',
   reset: '<path d="M4 10a6 6 0 1 0 2-4.5"/><path d="M4 3.5V7h3.5"/>',
+  walk: '<circle cx="10.8" cy="3.6" r="1.6"/><path d="M10.2 6.6 8.3 11l2.6 2 .6 4M10 7.2l2.9 2.5 2 .1M8.3 11l-2 5M10 7.2 7 8.6l-1 2.4"/>',
+  share: '<path d="M10 3v10M6.5 6.5 10 3l3.5 3.5"/><path d="M5 10H4v7h12v-7h-1"/>',
+  gear: '<circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/>',
+  help: '<circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 2.8 1.8c-.5.2-.8.7-.8 1.2v.5"/><path d="M10 14h.01"/>',
+  check: '<path d="m4.5 10.5 3.5 3.5 7.5-8"/>',
+  move: '<path d="M10 2.5v15M2.5 10h15M10 2.5 8 4.5M10 2.5l2 2M10 17.5l-2-2M10 17.5l2-2M2.5 10l2-2M2.5 10l2 2M17.5 10l-2-2M17.5 10l-2 2"/>',
+  link: '<path d="M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2L10 5.8"/><path d="M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l1.1-1.1"/>',
 };
 const icon = n => {
   const t = document.createElement('template');
@@ -101,11 +146,49 @@ const photoStatus = p => {
   if (!p.running) return p.passes ? `Выключен на ${n}` : 'Выключен. Включается только кнопкой, сам не запускается';
   return p.phase === 'done' ? `Кадр готов: ${n}` : `Кадр собирается: ${n}`;
 };
+const opt = (...pairs) => pairs.map(([id, name]) => ({ id, name }));
+// Качество графики (render.js QUALITY): одна строка о том, что даёт и чего стоит
+const QUALITY_OPTS = opt(['eco', 'Эконом'], ['fast', 'Быстрое'], ['high', 'Высокое'], ['ultra', 'Ультра']);
+const QUALITY_NOTE = {
+  eco: 'Эконом — плавнее всего: меньше пикселей, проще тени и отражённый свет. Для ноутбуков и телефонов.',
+  fast: 'Быстрое — чётче и тени мягче, кадров чуть меньше.',
+  high: 'Высокое — затенение углов и свечение ламп. Нужна хорошая видеокарта.',
+  ultra: 'Ультра — максимум деталей для снимков, тяжело даже мощному компьютеру.',
+};
 const titleOf = it => (it.note ? `${it.name} · ${it.note}` : it.name);
 const optName = (list, id) => list?.find(o => o.id === id)?.name ?? '';
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-const MOD = isMac ? '⌘' : 'Ctrl+';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+// сенсорный экран: по устройству или по первому касанию (ноутбук с тачскрином)
+let touchSeen = false;
+addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; }, { capture: true, passive: true });
+const isTouch = () => touchSeen || matchMedia('(hover: none) and (pointer: coarse)').matches;
+
+// Строка справки: клавиши + что делают; на сенсорном — жест словами (help.js)
+const cap = t => (t ? t[0].toUpperCase() + t.slice(1) : '');
+function helpRow(e, touch, cls = 'kr') {
+  const gesture = touch && typeof e.touch === 'string', keys = !gesture && e.keys.length > 0;
+  const text = gesture ? e.touch : e.text;
+  return h('span', { class: cls }, keys ? h('span', { class: 'kk' }, e.keys.map(k => h('kbd', {}, k))) : null,
+    h('span', { class: 'kt' }, keys ? text : cap(text)));
+}
+const helpInline = (e, touch) => helpRow(e, touch, 'ki');
+
+// ---------- загрузка: экран до 'room', дальше полоса «догружаю» (kitchen:progress; без событий — до ready()) ----------
+const LOAD = { phase: null, loaded: 0, total: 0 };
+let onLoadChange = null;
+const loadFrac = () => (LOAD.total > 0 ? Math.min(1, LOAD.loaded / LOAD.total) : null);
+addEventListener(PROGRESS, e => {
+  Object.assign(LOAD, e.detail || {});
+  if (LOAD.phase && LOAD.phase !== 'start') document.body.classList.add('usable');
+  const el = document.getElementById('loading'), f = loadFrac();
+  if (el) {
+    el.classList.toggle('det', f != null);
+    el.style.setProperty('--p', `${((f ?? 0) * 100).toFixed(1)}%`);
+    const num = el.querySelector('.ld-num');
+    if (num) num.textContent = LOAD.total ? `${LOAD.loaded} из ${LOAD.total}` : '';
+  }
+  onLoadChange?.();
+});
 
 // дата состояния солнца: 'YYYY-MM-DD' <-> номер дня в году (год берётся из даты)
 const todayISO = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; };
@@ -130,8 +213,9 @@ function fillSwatch(el, it) {
   if (!it || (!it.tex && !it.color)) { el.style.background = 'var(--wall-swatch)'; return; }
   if (!it.tex) { el.style.background = it.color; return; }
   if (it.tint) el.style.background = it.tint;
-  el.append(h('img', { src: `textures/${it.tex}/thumb.jpg`, alt: '', loading: 'lazy', decoding: 'async', class: it.tint ? 'tinted' : null,
-    onerror: e => { const img = e.currentTarget; if (img.src.endsWith('thumb.jpg')) img.src = `textures/${it.tex}/color.jpg`; } }));
+  let fell = false;   // нет миниатюры — сама текстура, один раз
+  el.append(h('img', { src: fileUrl(`textures/${it.tex}/thumb.jpg`), alt: '', loading: 'lazy', decoding: 'async', class: it.tint ? 'tinted' : null,
+    onerror: e => { if (fell) return; fell = true; e.currentTarget.src = fileUrl(`textures/${it.tex}/color.jpg`); } }));
 }
 // Сведения о материале для фильтров: вид покрытия, бренд и цена. Берутся из полей kind/brand/price_pln,
 // а у реальных товаров — из note вида «Carrea · 60×60 · 129 zł/m²» (бренд — первая часть, цена — число перед zł).
@@ -179,63 +263,6 @@ function fixStop(group, force = false) {
   items.forEach(b => { b.tabIndex = b === pick ? 0 : -1; });
 }
 
-// ---------- заглушки модулей в работе: ключи состояния предварительные (см. отчёт интегратору) ----------
-
-const opt = (...pairs) => pairs.map(([id, name]) => ({ id, name }));
-function moduleSections(roomW) {
-  const not = (k, v) => s => (s[k] ?? '') !== v;   // поле не равно v (например, «дивана нет»)
-  const FABRICS = [
-    { id: 'linen', name: 'Лён светлый', color: '#d8d0c2' }, { id: 'boucle', name: 'Букле молочное', color: '#ece7de' },
-    { id: 'oat', name: 'Овсяный', color: '#c9b9a0' }, { id: 'grey', name: 'Серый меланж', color: '#8e8f8c' },
-    { id: 'olive', name: 'Олива', color: '#6e6f4e' }, { id: 'terra', name: 'Терракота', color: '#a9644a' },
-    { id: 'navy', name: 'Тёмно-синий', color: '#2f3b4e' }, { id: 'cognac', name: 'Кожа коньяк', color: '#8a5232' },
-  ];
-  const along = { min: 0.3, max: Math.round((roomW - 0.3) * 100) / 100, step: 0.01, format: cm };
-  return [
-    { id: 'sofa', tab: 'furniture', title: 'Диван', order: 10, open: true, feature: 'furniture', focus: ['sofa'],
-      summary: s => optName(OPTIONS.sofa || SOFA, s.sofaType ?? 'straight'),
-      controls: [
-        { type: 'chips', key: 'sofaType', label: 'Тип', def: 'straight', options: OPTIONS.sofa || SOFA },
-        { type: 'swatches', key: 'sofaFabric', label: 'Обивка', def: 'linen', options: OPTIONS.fabric || FABRICS, visible: not('sofaType', 'none') },
-        { type: 'slider', key: 'sofaX', label: 'Вдоль окон', def: 4.4, ...along, visible: not('sofaType', 'none') },
-        { type: 'slider', key: 'sofaZ', label: 'От окон', def: 2.4, min: 0.3, max: 3.4, step: 0.01, format: cm, visible: not('sofaType', 'none') },
-        { type: 'seg', key: 'sofaRot', label: 'Поворот', def: 0, options: opt([0, '0°'], [90, '90°'], [180, '180°'], [270, '270°']), visible: not('sofaType', 'none') },
-      ] },
-    { id: 'tv', tab: 'furniture', title: 'Телевизор', order: 20, feature: 'furniture', focus: ['tv'],
-      summary: s => optName(TV, s.tvSize ?? 55),
-      controls: [
-        { type: 'chips', key: 'tvSize', label: 'Диагональ', def: 55, options: TV },
-        { type: 'slider', key: 'tvHeight', label: 'Центр экрана от пола', def: 1.1, min: 0.8, max: 1.6, step: 0.01, format: cm, visible: not('tvSize', 0) },
-        { type: 'slider', key: 'tvPos', label: 'Вдоль стены', def: 1.8, ...along, visible: not('tvSize', 0) },
-      ] },
-    { id: 'media', tab: 'furniture', title: 'ТВ-тумба', order: 30, feature: 'furniture', focus: ['media'],
-      summary: s => optName(MEDIA, s.mediaType ?? 'low'),
-      controls: [
-        { type: 'chips', key: 'mediaType', label: 'Тип', def: 'low', options: MEDIA },
-        { type: 'swatches', key: 'mediaFinish', label: 'Отделка', def: 'oak-01', options: MATERIALS.fronts, visible: not('mediaType', 'none') },
-        { type: 'slider', key: 'mediaW', label: 'Ширина', def: 1.8, min: 1.2, max: 3.0, step: 0.05, format: cm, visible: not('mediaType', 'none') },
-      ] },
-    { id: 'rug', tab: 'furniture', title: 'Ковёр и столик', order: 40, feature: 'furniture', focus: ['rug', 'coffee'],
-      summary: s => [optName(RUG, s.rug ?? 'wool'), optName(COFFEE, s.coffee ?? 'round-oak')].join(' · '),
-      controls: [
-        { type: 'chips', key: 'rug', label: 'Ковёр', def: 'wool', options: RUG },
-        { type: 'seg', key: 'rugSize', label: 'Размер', def: '200x300', options: opt(['160x230', '160×230'], ['200x300', '200×300'], ['250x350', '250×350']), visible: not('rug', 'none') },
-        { type: 'chips', key: 'coffee', label: 'Журнальный столик', def: 'round-oak', options: COFFEE },
-      ] },
-    { id: 'arrange', tab: 'furniture', title: 'Расстановка', order: 50, open: true, feature: 'furniture',
-      controls: [
-        { type: 'toggle', key: 'furnEdit', src: 'info', label: 'Двигать мебель в 3D' },
-        { type: 'readout', key: 'furnHint', style: 'hint', value: 'Тяните предмет мышью, Shift — поворот. Esc — готово.', visible: (s, _, i) => !!i.furnEdit },
-        { type: 'button', key: 'furnReset', label: 'Расставить как было' },
-      ] },
-  ];
-}
-const SOFA = opt(['none', 'Нет'], ['straight', 'Прямой'], ['corner', 'Угловой'], ['modular', 'Модульный']);
-const TV = opt([0, 'Нет'], [43, '43″'], [55, '55″'], [65, '65″'], [75, '75″']);
-const MEDIA = opt(['none', 'Нет'], ['low', 'Низкая'], ['floating', 'Подвесная'], ['tall', 'Со стеллажом']);
-const RUG = opt(['none', 'Нет'], ['wool', 'Шерсть светлая'], ['berber', 'Бербер'], ['jute', 'Джут'], ['grey', 'Серый']);
-const COFFEE = opt(['none', 'Нет'], ['round-oak', 'Круглый дуб'], ['round-stone', 'Круглый камень'], ['rect-oak', 'Прямоугольный'], ['nesting', 'Пара столиков']);
-
 // ---------- панель ----------
 
 export function initUI(api) {
@@ -255,8 +282,12 @@ export function initUI(api) {
   let saved = readJSON(STORE, []);
   const storeSaved = list => { saved = list; writeJSON(STORE, list); };
 
+  // качество графики: что стоит на самом деле (render.js), иначе выбор этого браузера, иначе умолчание render.js
+  const quality = () => api.getQuality?.() || prefs.quality || DEFAULT_QUALITY;
   // --- действия и значения
   const BUILTIN = {
+    share: () => share(),
+    help: () => openHelp(),
     quality: q => api.setQuality?.(q),
     theme: applyTheme,
     snapshot: async () => { toast('Готовлю снимок…'); const ok = await api.snapshot(); toast(ok ? 'Снимок сохранён в exports/' : 'Снимок скачан'); },
@@ -336,47 +367,73 @@ export function initUI(api) {
         { type: 'slider', key: 'sunEl', label: 'Солнце: высота', min: 6, max: 62, step: 1, format: v => `${Math.round(v)}°`, visible: (s, f) => !f('sun') && s.light === 'day' },
         { type: 'slider', key: 'exposure', label: 'Экспозиция', min: 0.5, max: 1.8, step: 0.01, format: v => v.toFixed(2) },
       ] },
-      { id: 'lamps', elId: 'sec-lamps', tab: 'light', title: 'Светильники', order: 20, open: true, focus: ['lamps', 'pendants'],
-        summary: s => `${optName(LAMP_OPTIONS.lampsOn, s.lampsOn)} · ${optName(LAMP_OPTIONS.lampTemp, s.lampTemp)}`, controls: [
-        { type: 'chips', key: 'ceilingKitchen', label: 'Потолок кухни', options: LAMP_OPTIONS.ceilingKitchen },
-        { type: 'chips', key: 'ceilingLiving', label: 'Потолок гостиной', options: LAMP_OPTIONS.ceilingLiving },
-        { type: 'chips', key: 'ceilingHall', label: 'Потолок холла', options: LAMP_OPTIONS.ceilingHall },
-        { type: 'chips', key: 'ceilingRoom2', label: 'Потолок комнаты 2', options: LAMP_OPTIONS.ceilingRoom2 },
-        { type: 'chips', key: 'ceilingRoom3', label: 'Потолок комнаты 3', options: LAMP_OPTIONS.ceilingRoom3 },
-        { type: 'chips', key: 'pendants', label: 'Над островом', options: LAMP_OPTIONS.pendants },
-        { type: 'toggle', key: 'plinthLed', label: 'Подсветка цоколя', values: ['off', 'on'] },
-        { type: 'seg', key: 'lampFinish', label: 'Корпуса', options: LAMP_OPTIONS.lampFinish },
-        { type: 'seg', key: 'lampTemp', label: 'Цвет света', options: LAMP_OPTIONS.lampTemp, hint: '2700 K — тёплый, 3000 K — мягкий, 4000 K — нейтральный' },
-        { type: 'seg', key: 'lampsOn', label: 'Включены', options: LAMP_OPTIONS.lampsOn },
-        { type: 'slider', key: 'lampDim', label: 'Яркость', min: DIM.min, max: DIM.max, step: 0.01, format: pct, visible: s => s.lampsOn !== 'off' },
-      ] },
-      { id: 'render', tab: 'view', title: 'Рендер и экспорт', order: 10, open: true, controls: [
-        { type: 'seg', key: 'quality', src: 'pref', def: 'high', label: 'Качество',
-          hint: 'Эконом — максимум кадров в секунду: меньше пикселей, без затенения углов и свечения, отражённый свет считается проще',
-          options: opt(['eco', 'Эконом'], ['fast', 'Быстрое'], ['high', 'Высокое'], ...(ultra ? [['ultra', 'Ультра']] : [])) },
-        { type: 'button', key: 'photo', feature: 'render', primary: true, value: (s, i) => !i.photo?.running,
-          label: (s, i) => (i.photo?.running ? 'Выключить фото-рендер' : 'Включить фото-рендер') },
-        { type: 'progress', key: 'photo', id: 'photoProgress', feature: 'render', format: photoStatus },
-        { type: 'button', key: 'snapshot', label: 'Снимок PNG', primary: !ultra, visible: () => api.canExport },
-        { type: 'button', key: 'glb', label: 'Модель GLB для Blender', visible: () => api.canExport },
-      ] },
-      { id: 'camera', tab: 'view', title: 'Камера', order: 15, summary: () => 'мышь и клавиши', controls: [
-        { type: 'readout', key: 'navHint', style: 'hint', value: NAV_HINT.split(' · ').join('\n') },
-      ] },
-      { id: 'walk', tab: 'view', title: 'Прогулка', order: 20, feature: 'walk', summary: () => (walkApi()?.active ? 'идёт' : walkApi()?.personHeight ? `рост ${Math.round(walkApi().personHeight)} см` : ''), controls: [
-        { type: 'toggle', key: 'walking', label: 'Пройтись от первого лица', get: () => !!walkApi()?.active, set: () => walkApi()?.toggle() },
+      lampSection(),
+      { id: 'walk', tab: 'live', title: 'Прогулка', order: 10, open: true, feature: 'walk',
+        summary: () => (walkApi()?.active ? 'идёт' : walkApi()?.personHeight ? `рост ${Math.round(walkApi().personHeight)} см` : ''), controls: [
+        { type: 'button', key: 'walkGo', primary: true, run: () => setMode(walkApi()?.active ? 'design' : 'walk'),
+          label: () => (walkApi()?.active ? 'Выйти из прогулки' : 'Пройтись по квартире') },
         { type: 'slider', key: 'personHeight', label: 'Рост', min: 150, max: 200, step: 1, def: 180,
           get: () => walkApi()?.personHeight, set: v => walkApi()?.setPersonHeight(v),
           format: v => `${Math.round(v)} см · глаза на ${Math.round((walkApi()?.eyeHeight ?? 1.68) * 100)} см` },
-        { type: 'readout', key: 'walkKeys', style: 'hint', value: 'WASD или стрелки — шаг, Shift — быстрее, мышь — взгляд. F — войти, Esc — выйти.' },
+        { type: 'help', topic: 'walk' },
       ] },
-      { id: 'interface', tab: 'view', title: 'Интерфейс', order: 90, controls: [
+      { id: 'share', tab: 'out', title: 'Ссылка на вариант', order: 10, open: true, summary: () => 'скопировать', controls: [
+        { type: 'readout', key: 'shareHint', style: 'hint',
+          value: 'В ссылке всё, что выбрано в панели, и расстановка вещей. Графика и тема — настройки этого браузера, в ссылку не входят.' },
+        { type: 'readout', key: 'shareCode', style: 'code', value: s => api.encode(s) },
+        { type: 'button', key: 'share', label: 'Скопировать ссылку', primary: true },
+        { type: 'button', key: 'copyCode', label: 'Только код', run: () => copyText(api.encode(state), 'Код варианта скопирован') },
+      ] },
+      { id: 'photo', tab: 'out', title: 'Фото-рендер', order: 20, open: true, feature: 'render',
+        summary: (s, i) => (i.photo?.running ? 'идёт' : 'выключен'), controls: [
+        { type: 'readout', key: 'photoHint', style: 'hint',
+          value: 'Свет считается как в жизни, кадр становится чище, пока камера стоит. Тяжело для слабого компьютера; включается только кнопкой.' },
+        { type: 'button', key: 'photoGo', primary: true, run: () => setMode(info.photo?.running ? 'design' : 'photo'),
+          label: (s, i) => (i.photo?.running ? 'Выключить фото-рендер' : 'Включить фото-рендер') },
+        { type: 'progress', key: 'photo', id: 'photoProgress', format: photoStatus },
+      ] },
+      { id: 'files', tab: 'out', title: 'Файлы', order: 30, open: true, visible: () => api.canExport, summary: () => 'PNG · GLB', controls: [
+        { type: 'button', key: 'snapshot', label: 'Снимок PNG', primary: true },
+        { type: 'button', key: 'glb', label: 'Модель GLB для Blender' },
+        { type: 'readout', key: 'filesHint', style: 'hint', value: 'Снимок — ровно то, что на экране (в фото-режиме — фото). GLB — вся квартира для Blender.' },
+      ] },
+      { id: 'graphics', tab: 'settings', title: 'Графика', order: 10, open: true, summary: () => optName(QUALITY_OPTS, quality()), controls: [
+        { type: 'seg', key: 'quality', src: 'pref', get: quality, options: QUALITY_OPTS.filter(o => o.id !== 'ultra' || ultra) },
+        { type: 'readout', key: 'qualityNote', style: 'hint', value: () => `${QUALITY_NOTE[quality()] || ''} Запоминается в этом браузере.` },
+      ] },
+      { id: 'interface', tab: 'settings', title: 'Интерфейс', order: 20, open: true, controls: [
         { type: 'seg', key: 'theme', src: 'pref', def: 'auto', label: 'Тема', options: opt(['auto', 'Как в системе'], ['light', 'Светлая'], ['dark', 'Тёмная']) },
-        { type: 'readout', key: 'shortcuts', style: 'keys',
-          value: `1–5 — вкладки, / — поиск\n${MOD}Z — отменить, ⇧${MOD}Z — вернуть\nСтрелки — по вариантам, Пробел — выбрать\nC — переключить A/B\nF — прогулка, Esc — закрыть` },
-        { type: 'readout', key: 'clickHint', style: 'hint', value: 'Нажмите на поверхность в 3D, чтобы открыть её материалы.' },
+        { type: 'button', key: 'help', label: 'Все клавиши и жесты' },
+        { type: 'button', key: 'tipsAgain', label: 'Показать подсказки снова', run: () => { prefs.seen = {}; savePrefs(); coach(); } },
       ] },
     ];
+  }
+  // Светильники: контролы из lamps.js LAMP_OPTIONS (новый ключ там — новый контрол здесь, без правок панели).
+  // Подпись — lamps.js LAMP_LABELS[key], иначе options.label, иначе из таблицы ниже (подписи старых ключей).
+  // Два варианта off/on — переключатель, до трёх — сегменты, больше — чипы. Режим работы ламп — сверху раздела.
+  const LAMP_LABEL = {
+    ceilingKitchen: 'Потолок кухни', ceilingLiving: 'Потолок гостиной', ceilingHall: 'Потолок холла',
+    ceilingRoom2: 'Потолок комнаты 2', ceilingRoom3: 'Потолок комнаты 3', pendants: 'Над островом',
+    plinthLed: 'Подсветка цоколя', hallGlow: 'Подсветка прихожей', lampFinish: 'Корпуса', lampTemp: 'Цвет света', lampsOn: 'Включены',
+    ...(LAMPS.LAMP_LABELS || {}),
+  };
+  const LAMP_MODE = ['lampsOn', 'lampTemp'];
+  function lampControl(key) {
+    const options = LAMPS.LAMP_OPTIONS[key], label = LAMP_LABEL[key] || options.label || key;
+    const ids = options.map(o => o.id);
+    if (ids.length === 2 && ids.includes('off') && ids.includes('on')) return { type: 'toggle', key, label, values: ['off', 'on'] };
+    return { type: options.length <= 3 ? 'seg' : 'chips', key, label, options };
+  }
+  function lampSection() {
+    const L = LAMPS.LAMP_OPTIONS, keys = Object.keys(L);
+    return { id: 'lamps', elId: 'sec-lamps', tab: 'light', title: 'Светильники', order: 20, open: true, focus: ['lamps', 'pendants'],
+      summary: s => `${optName(L.lampsOn, s.lampsOn)} · ${optName(L.lampTemp, s.lampTemp)}`, controls: [
+        { type: 'group', id: 'lampMode', controls: [
+          ...LAMP_MODE.filter(k => L[k]).map(lampControl),
+          { type: 'slider', key: 'lampDim', label: 'Яркость', min: LAMPS.DIM.min, max: LAMPS.DIM.max, step: 0.01, format: pct, visible: s => s.lampsOn !== 'off' },
+        ] },
+        ...keys.filter(k => !LAMP_MODE.includes(k)).map(lampControl),
+      ] };
   }
 
   // --- построители контролов
@@ -459,6 +516,15 @@ export function initUI(api) {
         return true;
       } };
     },
+    help(c) {
+      const el = h('div', { class: 'ctl keys-list', id: ctlId(c) });
+      let sig = '';
+      return { el, sync: () => {
+        const touch = isTouch(), rows = helpFor({ topic: c.topic, mode: c.mode, touch }), k = `${touch}|${rows.length}`;
+        if (k !== sig) { sig = k; el.replaceChildren(...rows.map(e => helpRow(e, touch))); }
+        return rows.length > 0;
+      } };
+    },
     group(c, sec) {
       const kids = c.controls.map(k => build(k, sec)).filter(Boolean);
       return { el: h('div', { class: 'grp-box', id: ctlId(c) }, c.label ? h('span', { class: 'grp-label' }, c.label) : null, kids.map(k => k.el)),
@@ -507,7 +573,7 @@ export function initUI(api) {
       const dims = Array.isArray(o.size) ? `${o.size.map(v => Math.round(v * 100)).join('×')} см` : '';
       const price = o.price_pln != null && o.price_pln !== '' ? zl(o.price_pln) : '';
       const img = h('span', { class: `pc-img${o.thumb ? '' : ' noimg'}` }, icon('box'),
-        o.thumb ? h('img', { src: o.thumb, alt: '', loading: 'lazy', decoding: 'async', onerror: e => e.currentTarget.parentNode.classList.add('noimg') }) : null);
+        o.thumb ? h('img', { src: fileUrl(o.thumb), alt: '', loading: 'lazy', decoding: 'async', onerror: e => e.currentTarget.parentNode.classList.add('noimg') }) : null);
       const b = h('button', { type: 'button', class: 'pc-hit', role: 'radio', 'aria-checked': 'false', tabindex: '-1', 'data-id': String(o.id), onclick: pick,
         'aria-label': [o.name, o.brand, dims && `ширина, высота, глубина ${dims}`, price, o.note].filter(Boolean).join(', '),
         'data-tip': o.note ? o.name : null, 'data-tip2': o.note || null },
@@ -776,32 +842,33 @@ export function initUI(api) {
     return sec;
   }
 
-  // --- шапка: вариант, отмена, A/B, код, вкладки, поиск
+  // --- шапка: вариант, отмена, A/B, ссылка, вкладки, поиск
   const vname = h('span', { class: 'name' });
   const vbtn = h('button', { type: 'button', id: 'variant-btn', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-controls': 'variant-pop', onclick: () => (pop.hidden ? openPop() : closePop()) },
     h('span', { class: 'v-text' }, h('span', { class: 'cap' }, 'Вариант'), vname), icon('chev'));
-  const undoBtn = h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Отменить', 'data-tip': 'Отменить', 'data-tip2': `${MOD}Z`, onclick: () => undo() }, icon('undo'));
-  const redoBtn = h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Вернуть', 'data-tip': 'Вернуть', 'data-tip2': `⇧${MOD}Z`, onclick: () => redo() }, icon('redo'));
+  const undoBtn = h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Отменить', 'data-tip': 'Отменить', 'data-tip2': `${MOD} Z`, onclick: () => undo() }, icon('undo'));
+  const redoBtn = h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Вернуть', 'data-tip': 'Вернуть', 'data-tip2': `⇧ ${MOD} Z`, onclick: () => redo() }, icon('redo'));
   const abStart = h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Сравнить A/B', 'data-tip': 'Сравнить два варианта',
     'data-tip2': 'запомнить текущий как A', onclick: () => startAB() }, icon('ab'));
   const abA = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => switchAB('A') }, 'A');
   const abB = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => switchAB('B') }, 'B');
   const abPill = h('div', { class: 'ab', role: 'group', 'aria-label': 'Сравнение A/B, клавиша C', hidden: true }, abA, abB,
     h('button', { type: 'button', class: 'ab-x', 'aria-label': 'Закончить сравнение', 'data-tip': 'Закончить сравнение', onclick: () => stopAB() }, icon('close')));
+  const shareBtn = h('button', { type: 'button', class: 'ibtn', id: 'share-btn', 'aria-label': 'Скопировать ссылку на вариант',
+    'data-tip': 'Скопировать ссылку', 'data-tip2': 'по ней откроется ровно этот вариант', onclick: () => share() }, icon('link'));
   const hideBtn = h('button', { type: 'button', class: 'ibtn hide-btn', 'aria-label': 'Скрыть панель', 'data-tip': 'Скрыть панель', onclick: () => setPanelOpen(false) }, icon('side'));
-  const codeTxt = h('span');
-  const codeBtn = h('button', { type: 'button', id: 'code-btn', 'data-tip': 'Скопировать код варианта', 'data-tip2': 'по нему вариант откроется у любого', onclick: copyCode }, codeTxt, icon('copy'));
   const tabBtns = {};
   const tabBar = h('div', { id: 'tabs', role: 'tablist', 'aria-label': 'Разделы' }, TABS.map((t, i) => (tabBtns[t.id] = h('button', {
-    type: 'button', role: 'tab', id: `tab-${t.id}`, 'aria-controls': `pane-${t.id}`, 'aria-selected': 'false', 'data-tip': t.title, 'data-tip2': `клавиша ${i + 1}`,
-    onclick: () => setTab(t.id) }, icon(t.icon), h('span', {}, t.short)))));
+    type: 'button', role: 'tab', id: `tab-${t.id}`, 'aria-controls': `pane-${t.id}`, 'aria-selected': 'false',
+    class: [t.iconOnly && 'icon-only', i && TABS[i - 1].group !== t.group && 'g-start'].filter(Boolean).join(' ') || null,
+    'aria-label': t.iconOnly ? t.title : null, 'data-tip': t.title, 'data-tip2': `клавиша ${i + 1}`,
+    onclick: () => setTab(t.id) }, icon(t.icon), t.iconOnly ? null : h('span', {}, t.short)))));
   const search = h('input', { type: 'search', id: 'mat-search', placeholder: 'Найти: дуб, микроцемент, Carrea…', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Поиск материала' });
   const searchCount = h('span', { id: 'search-count', 'aria-live': 'polite' });
   const searchRow = h('div', { id: 'search-row' }, icon('search'), search, searchCount);
   const pop = h('div', { id: 'variant-pop', class: 'pop', role: 'dialog', 'aria-label': 'Сочетания и варианты', hidden: true });
   head.replaceChildren(
-    h('div', { class: 'head-row' }, vbtn, undoBtn, redoBtn, abStart, abPill, hideBtn),
-    h('div', { class: 'head-row code-row' }, codeBtn),
+    h('div', { class: 'head-row' }, vbtn, undoBtn, redoBtn, abStart, abPill, shareBtn, hideBtn),
     tabBar, searchRow, h('i', { id: 'busy-bar' }), pop);
 
   const grabTitle = h('span');
@@ -812,11 +879,174 @@ export function initUI(api) {
   toggleBtn.addEventListener('click', () => setPanelOpen(true));
   const badge = h('div', { id: 'ab-badge', hidden: true, 'aria-hidden': 'true' }, h('b'), h('span', {}, 'C — переключить'));
   const tip = h('div', { id: 'tip', role: 'tooltip' });
-  // Плашка фото-рендера: пока трассировка идёт, на экране всегда видно, что она идёт, и как её выключить
-  const photoTxt = h('span');
-  const photoBadge = h('div', { id: 'photo-badge', role: 'status', hidden: true }, h('i'), h('b', {}, 'Фото-рендер'), photoTxt,
-    h('button', { type: 'button', onclick: () => emit('photo', false) }, 'Выключить'));
-  document.body.append(badge, tip, photoBadge);
+  document.body.append(badge, tip);
+
+  // --- режимы: переключатель в карточке слева сверху; что сейчас — body[data-mode] и полоса внизу
+  const MODES = [
+    { id: 'design', title: 'Проект', icon: 'box', tip: 'Менять отделку, мебель и свет, крутить камеру' },
+    { id: 'walk', title: 'Прогулка', icon: 'walk', key: 'F', feature: 'walk', tip: 'От первого лица: ходить, сесть, ТВ и телефон, охота' },
+    { id: 'photo', title: 'Фото', icon: 'camera', feature: 'render', tip: 'Фото-рендер: свет как в жизни, кадр дособирается, пока камера стоит' },
+  ];
+  const seatsApi = () => api.seats?.() || null;
+  function currentMode() {
+    if (info.photo?.running) return 'photo';
+    if (seatsApi()?.active) return 'seat';
+    if (walkApi()?.active) return 'walk';
+    return info.furnEdit ? 'arrange' : 'design';
+  }
+  const modeGroup = m => (m === 'seat' ? 'walk' : m === 'arrange' ? 'design' : m);
+  function setInfo(key, v) { info[key] = v; emit(key, v); update(); }
+  function setMode(id) {
+    const cur = currentMode();
+    if (cur === 'arrange' && id === 'design') { setInfo('furnEdit', false); return; }
+    if (modeGroup(cur) === id) return;
+    if (cur === 'photo') emit('photo', false);
+    if (info.furnEdit) setInfo('furnEdit', false);
+    if (cur === 'seat') {
+      seatsApi().stand();
+      // встали из прогулки — прогулка доигрывает вход; выходим, как только можно
+      if (id !== 'walk') for (let i = 1; i <= 12; i++) setTimeout(() => { if (walkApi()?.walking && currentMode() === 'walk') walkApi().exit(); }, i * 150);
+    } else if (cur === 'walk' && id !== 'walk') walkApi()?.exit();
+    if (id === 'walk' && cur !== 'seat') walkApi()?.toggle();
+    if (id === 'photo') emit('photo', true);
+    scheduleUpdate();
+  }
+  const modesEl = $('#modes');
+  const modeBtns = Object.fromEntries(MODES.map(m => [m.id, h('button', { type: 'button', class: 'mode', 'aria-pressed': 'false', 'data-mode': m.id,
+    'data-tip': m.tip, 'data-tip2': m.key ? `клавиша ${m.key}` : null, onclick: () => setMode(m.id) },
+    icon(m.icon), h('span', {}, m.title), m.key ? h('kbd', {}, m.key) : null)]));
+  const helpBtn = h('button', { type: 'button', class: 'ibtn', id: 'help-btn', 'aria-label': 'Что тут можно делать', 'aria-haspopup': 'dialog',
+    'data-tip': 'Что тут можно делать', 'data-tip2': 'все клавиши и жесты · ?', onclick: () => openHelp() }, icon('help'));
+  modesEl.replaceChildren(h('div', { class: 'modes', role: 'group', 'aria-label': 'Режим' }, Object.values(modeBtns)), helpBtn);
+
+  // --- полоса режима внизу: в проекте — ракурсы и «Двигать», в прогулке — главные клавиши и выход, в фото — ход кадра
+  const ctx = $('#ctxbar');
+  const part = (id, ...kids) => h('div', { class: 'cb-part', 'data-for': id, hidden: true }, kids);
+  // Ракурсы: на широком экране — ряд кнопок; до 1100 px (index.html) тот же ряд — меню над кнопкой «Ракурс: …»
+  const viewBtns = api.views.map(v => h('button', { type: 'button', class: 'cb-view', 'data-view': v.id, 'aria-pressed': 'false',
+    onclick: () => { api.goView(v.id); markView(v.id); } }, v.name));
+  const viewsBox = h('div', { class: 'cb-views', id: 'cb-views', role: 'group', 'aria-label': 'Ракурсы' }, viewBtns);
+  const viewsName = h('span');
+  const viewsMenu = open => { viewsBox.classList.toggle('open', open); viewsBtn.setAttribute('aria-expanded', String(open)); };
+  const viewsBtn = h('button', { type: 'button', class: 'cb-btn cb-views-btn', 'aria-expanded': 'false', 'aria-controls': 'cb-views',
+    onclick: () => viewsMenu(!viewsBox.classList.contains('open')) }, h('span', { class: 'cb-k' }, 'Ракурс:'), viewsName, icon('chev'));
+  const markView = id => {
+    viewBtns.forEach(b => { const on = b.dataset.view === id; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    viewsName.textContent = api.views.find(v => v.id === id)?.name || '';
+    viewsMenu(false);
+  };
+  document.addEventListener('pointerdown', e => { if (!viewsBox.contains(e.target) && !viewsBtn.contains(e.target)) viewsMenu(false); });
+  const viewsEsc = e => { if (e.key === 'Escape' && viewsBox.classList.contains('open')) { e.stopPropagation(); viewsMenu(false); viewsBtn.focus(); } };
+  viewsBox.addEventListener('keydown', viewsEsc); viewsBtn.addEventListener('keydown', viewsEsc);
+  markView(api.view || api.views[0]?.id);
+  const arrangeBtn = h('button', { type: 'button', class: 'cb-btn', 'data-tip': 'Двигать мебель и вещи мышью', 'data-tip2': 'расстановка сохраняется в ссылке',
+    onclick: () => setInfo('furnEdit', true) }, icon('move'), h('span', {}, 'Двигать'));
+  const keysLine = mode => h('span', { class: 'cb-keys', 'data-keys': mode });
+  const seatName = h('b', { class: 'cb-title' }, 'Сидите');   // подписи мест — действия («Сесть на диван»), сюда не годятся
+  const photoDot = h('i', { class: 'cb-dot' }), photoTxt = h('span', { class: 'cb-text' }), photoFill = h('i');
+  const exitBtn = (label, key) => h('button', { type: 'button', class: 'cb-btn primary', onclick: () => setMode('design') }, h('span', {}, label), key ? h('kbd', {}, key) : null);
+  const qBtn = h('button', { type: 'button', class: 'cb-q', 'data-tip': 'Качество графики', 'data-tip2': 'ниже — плавнее', onclick: () => focusSection('graphics') });
+  const loadChip = h('span', { class: 'cb-load', role: 'status', hidden: true });
+  ctx.replaceChildren(loadChip,
+    part('design', viewsBtn, viewsBox, arrangeBtn),
+    part('arrange', icon('move'), keysLine('arrange'), exitBtn('Готово', 'Esc')),
+    part('walk', keysLine('walk'), exitBtn('Выйти', 'Esc')),
+    part('seat', seatName, keysLine('seat'), h('button', { type: 'button', class: 'cb-btn primary', onclick: () => seatsApi()?.stand() }, 'Встать')),
+    part('photo', photoDot, h('b', { class: 'cb-title' }, 'Фото'), photoTxt, h('span', { class: 'cb-bar' }, photoFill),
+      h('button', { type: 'button', class: 'cb-btn', hidden: !api.canExport, onclick: () => emit('snapshot') }, 'Снимок PNG'), exitBtn('Выключить')),
+    qBtn);
+  const parts = [...ctx.querySelectorAll('.cb-part')];
+  // Строка клавиш режима — из справки (help.js): то, что модули отметили brief
+  let keysSig = '';
+  function fillKeys() {
+    const touch = isTouch(), sig = `${touch}|${HELP.length}`;
+    if (sig === keysSig) return;
+    keysSig = sig;
+    for (const el of ctx.querySelectorAll('[data-keys]')) {
+      const mode = el.dataset.keys, rows = helpFor({ mode, brief: true, touch });
+      el.replaceChildren(...rows.flatMap((e, i) => (i ? [h('span', { class: 'sep' }, '·'), helpInline(e, touch)] : [helpInline(e, touch)])));
+    }
+  }
+  // сколько снизу занимает полоса: плавающие кнопки модулей встают выше (--hud-bottom)
+  const hudBottom = () => {
+    const r = ctx.getBoundingClientRect();
+    if (r.height) document.documentElement.style.setProperty('--hud-bottom', `${Math.round(innerHeight - r.top + 10)}px`);
+    ctx.classList.toggle('scrolls', ctx.scrollWidth > ctx.clientWidth + 1);   // не влезла — край гаснет, полоса листается
+  };
+  new ResizeObserver(hudBottom).observe(ctx);
+  addEventListener('resize', hudBottom);
+  function syncHud() {
+    const mode = currentMode();
+    document.body.dataset.mode = mode;
+    for (const m of MODES) {
+      const b = modeBtns[m.id];
+      b.hidden = !!m.feature && !has(m.feature);
+      b.setAttribute('aria-pressed', String(modeGroup(mode) === m.id));
+    }
+    fillKeys();
+    for (const el of parts) el.hidden = el.dataset.for !== mode;
+    arrangeBtn.hidden = !has('furniture');
+    const ph = info.photo;
+    if (mode === 'photo' && ph) {
+      photoDot.classList.toggle('done', ph.phase === 'done');
+      photoTxt.textContent = photoStatus(ph);
+      photoFill.style.width = ph.target ? `${Math.min(100, (ph.passes / ph.target) * 100).toFixed(1)}%` : '0%';
+    }
+    qBtn.hidden = mode === 'photo';
+    qBtn.replaceChildren(h('span', { class: 'cb-k' }, 'Графика:'), ` ${optName(QUALITY_OPTS, quality())}`);
+    renderLoad();
+    hudBottom();
+  }
+
+  // --- справка «что тут можно делать»: строки из help.js, по режимам
+  const helpBody = h('div', { class: 'help-body', tabindex: '-1' });
+  const helpClose = h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Закрыть', onclick: () => closeHelp() }, icon('close'));
+  const helpDlg = h('div', { id: 'help', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'help-title', hidden: true,
+    onclick: e => { if (e.target === helpDlg) closeHelp(); } },
+  h('div', { class: 'help-card' }, h('div', { class: 'help-head' }, h('h2', { id: 'help-title' }, 'Что тут можно делать'), helpClose), helpBody));
+  document.body.append(helpDlg);
+  let helpBack = null;
+  function openHelp() {
+    const touch = isTouch();
+    helpBody.replaceChildren(...HELP_MODES.flatMap(m => {
+      const rows = helpFor({ mode: m.id, touch });
+      return rows.length ? [h('section', {}, h('h3', {}, m.title), rows.map(e => helpRow(e, touch)))] : [];
+    }));
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    helpBack = document.activeElement;
+    helpDlg.hidden = false;
+    helpClose.focus();
+  }
+  function closeHelp() {
+    if (helpDlg.hidden) return;
+    helpDlg.hidden = true;
+    helpBack?.focus?.();
+  }
+  helpDlg.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); (document.activeElement === helpClose ? helpBody : helpClose).focus(); } });
+
+  // --- первая подсказка: как начать (один раз; «Показать подсказки снова» в настройках)
+  const coachEl = h('div', { id: 'coach', role: 'status', hidden: true });
+  document.body.append(coachEl);
+  function coach() {
+    prefs.seen ||= {};
+    if (prefs.seen.intro || !document.body.classList.contains('usable')) return;
+    const touch = isTouch();
+    const done = () => { prefs.seen.intro = true; savePrefs(); coachEl.hidden = true; };
+    coachEl.replaceChildren(h('p', {}, touch
+      ? 'Коснитесь пола, стены или вещи — в панели снизу откроются её варианты. Прогулка, фото и справка — в карточке сверху.'
+      : 'Нажмите на пол, стену или вещь — в панели откроются её варианты. Прогулка (F), фото и справка (?) — в карточке слева сверху.'),
+    h('div', { class: 'coach-btns' },
+      h('button', { type: 'button', class: 'btn', onclick: () => { done(); openHelp(); } }, 'Что ещё можно'),
+      h('button', { type: 'button', class: 'btn primary', onclick: done }, 'Понятно')));
+    coachEl.hidden = false;
+  }
+  function focusSection(id) {
+    const sec = sections.find(x => x.def.id === id);
+    if (!sec) return;
+    setTab(sec.def.tab); sec.setOpen(true);
+    if (!open) setPanelOpen(true);
+    setTimeout(() => { sec.el.scrollIntoView({ block: 'nearest' }); sec.el.querySelector('button, input')?.focus(); }, reduced() ? 0 : 240);
+  }
 
   // --- вкладки
   const panes = {}, empties = {}, scrolls = {};
@@ -853,7 +1083,7 @@ export function initUI(api) {
   let sections = [];
   function remount() {
     const byId = new Map();
-    for (const d of [...coreSections(), ...moduleSections(roomW), ...extra]) byId.set(d.id, d);
+    for (const d of [...coreSections(), ...extra]) byId.set(d.id, d);
     sections = []; focusMap.clear();
     for (const t of TABS) panes[t.id].replaceChildren();
     for (const d of [...byId.values()].sort((a, b) => (a.order ?? 50) - (b.order ?? 50))) {
@@ -872,14 +1102,11 @@ export function initUI(api) {
   function update(s = state) {
     if (!tab) return;
     const code = api.encode(s);
-    codeTxt.textContent = code;
     const p = PRESETS.find(x => presetOn(x, s));
     vname.textContent = p?.name || saved.find(v => v.code === code)?.name || 'Свой вариант';
     undoBtn.disabled = !undoStack.length; redoBtn.disabled = !redoStack.length;
     abStart.hidden = !!ab; abPill.hidden = !ab; badge.hidden = !ab;
-    const ph = info.photo;
-    photoBadge.hidden = !ph?.running;
-    if (ph?.running) { photoBadge.classList.toggle('done', ph.phase === 'done'); photoTxt.textContent = photoStatus(ph); }
+    syncHud();
     if (ab) {
       for (const [b, side] of [[abA, 'A'], [abB, 'B']]) { b.classList.toggle('on', ab.side === side); b.setAttribute('aria-pressed', String(ab.side === side)); }
       badge.firstChild.textContent = ab.side;
@@ -1003,13 +1230,27 @@ export function initUI(api) {
     if (focusBack) vbtn.focus();
   }
   document.addEventListener('pointerdown', e => { if (!pop.hidden && !pop.contains(e.target) && !vbtn.contains(e.target)) closePop(false); });
-  async function copyCode() {
-    const code = api.encode(state);
-    try { await navigator.clipboard.writeText(code); toast('Код варианта скопирован'); }
-    catch { openPop(); const inp = pop.querySelector('.mono'); inp.focus(); inp.select(); }
+  // --- ссылка на вариант: в буфер (на телефоне — системное «Поделиться»); не вышло — показать поле с кодом
+  const linkOf = () => `${location.origin}${location.pathname}#${api.encode(state)}`;
+  async function copyText(text, msg) {
+    try { await navigator.clipboard.writeText(text); toast(msg); return true; } catch { return false; }
+  }
+  let shareT = 0;
+  async function share() {
+    const url = linkOf();
+    if (isTouch() && navigator.share) {
+      try { await navigator.share({ title: document.title, url }); return; } catch (e) { if (e?.name === 'AbortError') return; }
+    }
+    if (await copyText(url, 'Ссылка скопирована: по ней откроется ровно этот вариант')) {
+      shareBtn.replaceChildren(icon('check')); shareBtn.classList.add('ok');
+      clearTimeout(shareT); shareT = setTimeout(() => { shareBtn.replaceChildren(icon('link')); shareBtn.classList.remove('ok'); }, 1800);
+      return;
+    }
+    focusSection('share');
+    toast('Буфер обмена недоступен — скопируйте код вручную');
   }
 
-  // --- подсказки: одна плашка на всю панель
+  // --- подсказки: одна плашка на всё (панель, карточка режимов, полоса внизу)
   let tipT = 0, tipFor = null;
   function showTip(el) {
     tipFor = el;
@@ -1021,16 +1262,16 @@ export function initUI(api) {
     tip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
   function hideTip() { clearTimeout(tipT); tipFor = null; tip.classList.remove('on'); }
-  panel.addEventListener('pointerover', e => {
-    const el = e.target.closest('[data-tip]');
+  document.addEventListener('pointerover', e => {
+    const el = e.target.closest?.('[data-tip]');
     if (el === tipFor) return;
     clearTimeout(tipT);
     if (!el || e.pointerType === 'touch') { hideTip(); return; }
     if (tip.classList.contains('on')) showTip(el); else tipT = setTimeout(() => showTip(el), 350);
   });
-  panel.addEventListener('pointerleave', hideTip);
-  panel.addEventListener('focusin', e => { const el = e.target.closest('[data-tip]'); if (el && e.target.matches(':focus-visible')) showTip(el); else hideTip(); });
-  panel.addEventListener('focusout', hideTip);
+  document.addEventListener('pointerleave', hideTip);
+  document.addEventListener('focusin', e => { const el = e.target.closest?.('[data-tip]'); if (el && e.target.matches(':focus-visible')) showTip(el); else hideTip(); });
+  document.addEventListener('focusout', hideTip);
   body.addEventListener('scroll', hideTip, { passive: true });
 
   // стрелки внутри групп выбора (образцы, карточки, чипы, сегменты): двигают фокус, Пробел/Enter выбирает
@@ -1112,47 +1353,33 @@ export function initUI(api) {
       return;
     }
     if (e.key === 'Escape') {
+      if (!helpDlg.hidden) { closeHelp(); e.preventDefault(); return; }
       if (walking) return;   // из прогулки выводит walk.js
-      if (!pop.hidden) closePop();
+      if (!coachEl.hidden) coachEl.querySelector('.primary')?.click();
+      else if (info.furnEdit) setMode('design');
+      else if (!pop.hidden) closePop();
       else if (e.target === search && search.value) clearSearch();
       else if (mq.matches && open) setPanelOpen(false);
       else if (panel.contains(document.activeElement)) document.activeElement.blur();
       return;
     }
-    if (typing(e.target) || mod || e.altKey || walking) return;
+    if (typing(e.target) || mod || e.altKey) return;
+    if (e.key === '?' && !e.repeat) { if (helpDlg.hidden) openHelp(); else closeHelp(); e.preventDefault(); return; }
+    if (walking || !helpDlg.hidden) return;   // цифры в прогулке — оружие (viewmodel.js)
     const n = /^[1-9]$/.test(e.key) ? TABS[e.key - 1] : null;
     if (n) { setTab(n.id); if (!open) setPanelOpen(true); e.preventDefault(); }
     else if (e.key === '/' && TAB(tab).search) { if (!open) setPanelOpen(true); search.focus(); search.select(); e.preventDefault(); }
     else if (e.code === 'KeyC' && ab && !e.repeat) switchAB(ab.side === 'A' ? 'B' : 'A');
   });
 
-  // прогулка включается и клавишей F в walk.js: следим за классом body, чтобы переключатель не отставал
+  // режим меняют и сами модули (F — walk.js, сесть — seats.js): следим за классом body, чтобы переключатель не отставал
   new MutationObserver(scheduleUpdate).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-
-  // --- ракурсы
-  const viewBar = $('#views');
-  const markView = id => viewBar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.view === id));
-  viewBar.append(...api.views.map(v => h('button', { type: 'button', 'data-view': v.id, onclick: () => { api.goView(v.id); markView(v.id); } }, v.name)));
-  markView('hall');
-  // На узком окне полоса ракурсов по центру наезжает на «Прогулку» и план слева внизу:
-  // тогда ставим её сразу правее этого блока и даём ширину до панели (лишнее прокручивается).
-  function fitViewBar() {
-    viewBar.style.transition = 'none';   // меряем конечное положение, а не середину анимации
-    viewBar.style.left = viewBar.style.maxWidth = viewBar.style.transform = '';
-    requestAnimationFrame(() => { viewBar.style.transition = ''; });
-    const dock = document.getElementById('kw-dock');
-    if (!dock || getComputedStyle(viewBar).display === 'none') return;
-    const v = viewBar.getBoundingClientRect(), d = dock.getBoundingClientRect();
-    const sameRow = d.width > 0 && d.bottom > v.top && d.top < v.bottom;
-    if (!sameRow || v.left >= d.right + 8) return;
-    const panel = $('#panel'), pr = panel && document.body.classList.contains('panel-open') ? panel.getBoundingClientRect().left : innerWidth;
-    viewBar.style.transform = 'none';
-    viewBar.style.left = Math.round(d.right + 10) + 'px';
-    viewBar.style.maxWidth = Math.max(160, Math.round(pr - d.right - 24)) + 'px';
+  onLoadChange = scheduleUpdate;
+  function renderLoad() {
+    const on = document.body.classList.contains('usable') && (LOAD.phase === 'room' || LOAD.phase === 'details');
+    loadChip.hidden = !on;
+    if (on) { const f = loadFrac(); loadChip.textContent = f == null ? 'Догружаю детали…' : `Догружаю детали · ${Math.round(f * 100)} %`; }
   }
-  addEventListener('resize', fitViewBar);
-  new MutationObserver(() => requestAnimationFrame(fitViewBar)).observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true });
-  setTimeout(fitViewBar, 300);
 
   // --- всплывающее сообщение
   const toastEl = $('#toast');
@@ -1172,9 +1399,8 @@ export function initUI(api) {
   }
 
   // --- запуск
-  if (prefs.quality === 'ultra' && !has('render')) delete prefs.quality;
   applyTheme(prefs.theme);
-  if (prefs.quality && prefs.quality !== 'high') emit('quality', prefs.quality);
+  // качество при запуске ставит main.js: handle.pref('quality') ?? DEFAULT_QUALITY (до первой загрузки текстур)
   remount();
   setTab(TAB(prefs.tab) ? prefs.tab : 'mat');
   setPanelOpen(!mq.matches && prefs.panel !== false);
@@ -1208,7 +1434,8 @@ export function initUI(api) {
       }, wasOpen || reduced() ? 0 : 240);
     },
     setBusy(b) { document.body.classList.toggle('busy', b); panel.classList.toggle('busy', b); },
-    ready() { document.body.classList.add('ready'); },
+    ready() { document.body.classList.add('ready', 'usable'); update(); setTimeout(coach, 600); },
+    setMode, openHelp,
     // для модулей
     info(patch) { Object.assign(info, patch); scheduleUpdate(); return handle; },
     on(name, fn) { (handlers[name] ||= []).push(fn); if (name !== 'open' && prefs[name] !== undefined) fn(prefs[name], state); return handle; },

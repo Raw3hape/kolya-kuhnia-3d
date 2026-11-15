@@ -33,6 +33,9 @@ import * as THREE from 'three';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import { decorPart } from './decor.js';
 import { createHandheld } from './handheld.js';
+import { addHelp } from './help.js';
+
+addHelp({ mode: 'walk', keys: [], text: 'телевизор, ноутбук в комнате 3 и телефон на острове показывают YouTube; звук ТВ — когда сидите на диване', order: 75 });
 
 const SPEC = await fetch('spec/tv.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
 const EDGE = 0.004;           // м: плеер шире экрана на 4 мм с каждой стороны (за рамкой) — без щелей по краю дыры

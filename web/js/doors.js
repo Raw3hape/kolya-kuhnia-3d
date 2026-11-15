@@ -14,6 +14,9 @@
 // и на площадку (телепорт с плана туда только через открытую дверь).
 import { subtractRect, injectStyle } from './minimap.js';
 import { WALK, areaBeyond } from './walk.js';
+import { addHelp } from './help.js';
+
+addHelp({ mode: 'walk', topic: 'walk', keys: ['E'], text: 'открыть или закрыть дверь под прицелом (или клик)', touch: 'кнопка под прицелом — открыть дверь', brief: true, order: 50 });
 
 const DUR = 0.6;      // ход полотна, с
 const REACH = 2.0;    // прицел достаёт до двери, м

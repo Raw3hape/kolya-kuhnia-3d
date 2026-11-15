@@ -17,9 +17,9 @@
 //        clearHoles() — убрать следы попаданий, holes, weapon, sound, armed (оружие в руках: клик стреляет),
 //        ammo ({ mag, reserve } у текущего), busy (null | 'reload' | 'cycle' — затвор), aiming (0–1), spread (рад),
 //        shots, dispose() }
-// registerViewmodelUI(addSection, getVM) — раздел «Оружие» во вкладке 'view' сразу после «Прогулки».
+// registerViewmodelUI(addSection, getVM) — раздел «Оружие» во вкладке 'live' после «Сесть»; клавиши — строки справки (help.js).
 // Ввод в прогулке: 1 — убрать, 2 — пистолет, 3 — автомат, 4 — винтовка, 5 — двустволка; R — перезарядка
-// (E занята: дверь, сесть; подсказку клавиш показывает walk.js). Мышь: ЛКМ — выстрел (без прицела: клик, перетаскивание —
+// (E занята: дверь, сесть; клавиши показывает ui.js из строк справки ниже). Мышь: ЛКМ — выстрел (без прицела: клик, перетаскивание —
 // взгляд), ПКМ зажать — прицел (оружие к глазу, обзор уже, мышь медленнее, перетаскивание ведёт взгляд); в прицеле и в захвате
 // мыши (двойной клик) ЛКМ стреляет сразу, автомат — очередью, пока зажата. Телефон: касания — взгляд, справа кнопки огня
 // и прицела, нажатие на счётчик патронов — перезарядка. Пустой магазин: щелчок и сама начинается перезарядка.
@@ -29,6 +29,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { createImpacts } from './impacts.js';
+import { addHelp } from './help.js';
+
+addHelp(
+  { mode: 'walk', topic: 'weapon', keys: ['2', '3', '4', '5'], text: 'пистолет, автомат, винтовка, двустволка; 1 — убрать', touch: 'оружие — во вкладке «Прогулка» → «Оружие»', order: 100 },
+  { mode: 'walk', topic: 'weapon', keys: ['клик'], text: 'выстрел, у автомата — зажать', touch: 'круглая кнопка справа — выстрел', order: 110 },
+  { mode: 'walk', topic: 'weapon', keys: ['ПКМ'], text: 'прицел: оружие к глазу, обзор уже', touch: 'кнопка с рамкой — прицел', order: 120 },
+  { mode: 'walk', topic: 'weapon', keys: ['R'], text: 'перезарядка; патроны пополняются при выходе из прогулки', touch: 'нажмите на счётчик патронов — перезарядка', order: 130 },
+);
 
 // pos — место спускового крючка (начало координат модели) в пространстве камеры рук (м): вправо, вверх, вперёд = −z;
 // yaw — доворот к центру экрана, pitch — подъём ствола, рад.
@@ -625,7 +633,7 @@ export function registerViewmodelUI(addSection, getVM) {
   const cur = () => getVM()?.weapon ?? readPref().weapon;
   const set = id => { const vm = getVM(); if (vm) vm.setWeapon(id); else writePref({ ...readPref(), weapon: id }); };
   addSection({
-    id: 'weapon', tab: 'view', title: 'Оружие в прогулке', order: 21, feature: 'walk',
+    id: 'weapon', tab: 'live', title: 'Оружие', order: 30, feature: 'walk',
     summary: () => { const w = byId(cur()); return w.id === 'none' ? '' : w.name.toLowerCase(); },
     controls: [
       { type: 'chips', key: 'vmWeapon', label: 'В руках', options: WEAPONS.map(({ id, name }) => ({ id, name })), get: cur, set },
@@ -633,8 +641,8 @@ export function registerViewmodelUI(addSection, getVM) {
         get: () => getVM()?.sound ?? readPref().sound !== false,
         set: v => { const vm = getVM(); if (vm) vm.setSound(v); else writePref({ ...readPref(), sound: !!v }); } },
       { type: 'button', key: 'vmClearHoles', label: 'Убрать следы', run: () => getVM()?.clearHoles() },
-      { type: 'readout', key: 'vmKeys', style: 'hint',
-        value: 'Видно только в прогулке. 1 — убрать, 2 — пистолет, 3 — автомат, 4 — винтовка, 5 — двустволка. Клик — выстрел, у автомата зажать. Правая кнопка — прицел (оружие к глазу, обзор уже). R — перезарядка, патроны пополняются при выходе из прогулки. Двойной клик — захват мыши. На телефоне — кнопки огня и прицела, счётчик патронов — перезарядка.' },
+      { type: 'readout', key: 'vmWhere', style: 'hint', value: 'Оружие видно только в прогулке.' },
+      { type: 'help', topic: 'weapon' },
       { type: 'readout', key: 'vmCredits', style: 'hint', visible: () => cur() !== 'none',
         value: 'Модели: руки и оружие — J-Toastie, винтовка — AdamKokrito (poly.pizza, CC-BY 3.0), обрез — Quaternius (CC0).' },
     ],
@@ -752,9 +760,9 @@ function injectStyle() {
 .kvm-fire, .kvm-aim { position: fixed; z-index: 5; display: grid; place-items: center; padding: 0; cursor: pointer; border-radius: 50%;
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; border: 1px solid var(--kw-line);
   box-shadow: var(--kw-shadow); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.kvm-fire { right: max(20px, calc(env(safe-area-inset-right, 0px) + 12px)); bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+.kvm-fire { right: max(20px, calc(env(safe-area-inset-right, 0px) + 12px)); bottom: calc(var(--hud-bottom, 76px) + 20px);
   width: 76px; height: 76px; color: var(--kw-accent-ink); background: color-mix(in srgb, var(--kw-accent) 88%, transparent); }
-.kvm-aim { right: max(108px, calc(env(safe-area-inset-right, 0px) + 100px)); bottom: calc(106px + env(safe-area-inset-bottom, 0px));
+.kvm-aim { right: max(108px, calc(env(safe-area-inset-right, 0px) + 100px)); bottom: calc(var(--hud-bottom, 76px) + 30px);
   width: 56px; height: 56px; color: var(--kw-ink); background: color-mix(in srgb, var(--kw-sheet) 88%, transparent); }
 .kvm-aim.on { color: var(--kw-accent-ink); background: var(--kw-accent); border-color: var(--kw-accent); }
 .kvm-fire:active, .kvm-aim:active { transform: scale(0.94); }
@@ -767,7 +775,7 @@ function injectStyle() {
 .kvm-cross i:nth-child(1) { bottom: var(--g); } .kvm-cross i:nth-child(2) { top: var(--g); }
 .kvm-cross i:nth-child(3) { right: var(--g); } .kvm-cross i:nth-child(4) { left: var(--g); }
 body.kvm-ads .kvm-cross { opacity: 0; }
-.kvm-hud { position: fixed; z-index: 5; right: calc(var(--shift, 0px) * 2 + max(16px, env(safe-area-inset-right, 0px))); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+.kvm-hud { position: fixed; z-index: 5; right: calc(var(--shift, 0px) * 2 + max(16px, env(safe-area-inset-right, 0px))); bottom: var(--hud-bottom, 76px);
   display: grid; justify-items: end; gap: 3px; min-width: 104px; padding: 8px 12px 10px; overflow: hidden; cursor: pointer; text-align: right;
   border: 1px solid var(--kw-line); border-radius: 4px; background: var(--kw-sheet); color: var(--kw-ink); box-shadow: var(--kw-shadow);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font: 500 11px/1.2 var(--f-body, "Inter", "Helvetica Neue", Arial, sans-serif); }
@@ -782,9 +790,8 @@ body.kvm-ads .kvm-cross { opacity: 0; }
 .kvm-hud:not(.busy) .kvm-hud-bar { display: none; }
 .kvm-hud.shake { animation: kvm-shake 0.28s ease; }
 @keyframes kvm-shake { 25% { translate: -3px 0; } 75% { translate: 3px 0; } }
-@media (min-width: 761px) and (max-width: 1099px) { .kvm-hud { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); } }
-@media (hover: none), (pointer: coarse) { .kvm-hud { right: max(20px, calc(env(safe-area-inset-right, 0px) + 12px)); bottom: calc(184px + env(safe-area-inset-bottom, 0px)); } }
-@media (max-width: 760px) { body:has(#panel.open) :is(.kvm-fire, .kvm-aim, .kvm-hud) { display: none; } }
+@media (hover: none), (pointer: coarse) { .kvm-hud { right: max(20px, calc(env(safe-area-inset-right, 0px) + 12px)); bottom: calc(var(--hud-bottom, 76px) + 172px); } }
+@media (max-width: 800px) { body:has(#panel.open) :is(.kvm-fire, .kvm-aim, .kvm-hud) { display: none; } }
 @media (prefers-reduced-motion: reduce) { .kvm-hud.shake { animation: none; } .kvm-cross { transition: none; } }`;
   document.head.appendChild(s);
 }

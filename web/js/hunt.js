@@ -10,7 +10,7 @@
 //        raycast(raycaster) -> { distance, point, normal, object, hit(weaponId, damage) } | null   ближайший зверь на луче;
 //        noise(point, loudness = 1)   выстрел: звери слышат (кабаны настораживаются и бегут, птицы взлетают);
 //        stats, enabled, setEnabled(on), openName(), dispose() }
-// registerHuntUI(addSection, getHunt) — раздел «Охота» во вкладке 'view' после «Оружия».
+// registerHuntUI(addSection, getHunt) — раздел «Охота» во вкладке 'live' после «Оружия»; как играть — строки справки (help.js).
 //
 // Звери — два InstancedMesh (кабаны и птицы, по одному вызову отрисовки) + пятна тени под кабанами. Геометрия своя,
 // процедурная (поза в вершинном шейдере: шаг, рысь, галоп, пасутся, тревога, падение; взмахи крыльев, полнота гуся) —
@@ -25,6 +25,8 @@
 // Фото-режим, снимок PNG и GLB: зверей нет (userData.rasterOnly, pipe.photo, pipe.onLive) — путевой трассировщик
 // не умеет вершинную анимацию, а в кадре квартиры звери не нужны. Лучи сцены их не задевают (raycast пустой).
 // Оси квартиры: X вдоль окон, Z от окон вглубь, Y вверх; земля y = −site.floorY; поле и луг — site.areas (spec.region).
+
+import { addHelp } from './help.js';
 
 const SPEC_URL = new URL('../spec/hunt.json', import.meta.url);
 const SITE_URL = new URL('../spec/site.json', import.meta.url);
@@ -1420,6 +1422,12 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
 // ---------- раздел панели ----------
 
+addHelp(
+  { mode: 'walk', topic: 'hunt', order: 80, text: 'охота: кабаны и птицы на поле за балконом. Выйти на балкон (дверь — E), 3 — автомат' },
+  { mode: 'walk', topic: 'hunt', order: 81, text: 'раунд идёт с первого выстрела, счёт на табло справа сверху' },
+  { mode: 'walk', topic: 'hunt', order: 82, text: 'в голову ×2, в сердце ×1,5; на бегу, влёт, издалека и сериями больше. Кабана в бок обычно с двух попаданий' },
+);
+
 export function registerHuntUI(addSection, getHunt) {
   loadSpec().catch(() => {});
   const resetMine = () => {
@@ -1428,7 +1436,7 @@ export function registerHuntUI(addSection, getHunt) {
     writePref(); refreshUI();
   };
   addSection({
-    id: 'hunt', tab: 'view', title: 'Охота', order: 22, feature: 'walk',
+    id: 'hunt', tab: 'live', title: 'Охота', order: 40, feature: 'walk',
     summary: () => (shared.pref.best ? `лучший ${fmt(shared.pref.best)}` : ''),
     controls: [
       { type: 'toggle', key: 'huntOn', label: 'Кабаны и птицы за балконом',
@@ -1440,8 +1448,7 @@ export function registerHuntUI(addSection, getHunt) {
       { type: 'readout', key: 'huntBoard', style: 'keys', value: UI_KEYS.huntBoard },
       { type: 'button', key: 'huntRefresh', label: 'Обновить таблицу', run: () => fetchBoard() },
       { type: 'button', key: 'huntReset', label: 'Сбросить мои', run: resetMine },
-      { type: 'readout', key: 'huntHint', style: 'hint',
-        value: 'Охота — 2 минуты с первого выстрела. Кабаны и птицы на поле за балконом: F — прогулка, выйти на балкон (дверь — E), 3 — автомат. В голову ×2, в сердце ×1,5; на бегу, влёт, издалека и сериями — больше. Кабана в бок — обычно два попадания.' },
+      { type: 'help', topic: 'hunt' },
     ],
   });
 }
@@ -1504,7 +1511,7 @@ body.panel-open .kh-hud { top: calc(14px + env(safe-area-inset-top, 0px)); right
 .kh-hud[hidden], .kh-pop[hidden], .kh-card[hidden] { display: none; }
 @media (max-width: 760px) {
   body.panel-open .kh-hud { right: max(14px, env(safe-area-inset-right, 0px)); }
-  .kh-hud { width: 168px; top: calc(60px + env(safe-area-inset-top, 0px)); }
+  .kh-hud { width: 168px; top: var(--kw-dock-top, calc(120px + env(safe-area-inset-top, 0px))); }   /* под карточкой заголовка, справа от плана */
   body:has(#panel.open) .kh-hud { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .kh-pop.go { animation-duration: 0.01s; } }

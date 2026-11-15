@@ -1,12 +1,22 @@
 // Сцена, свет, камеры, состояние и связь с панелью.
+//
+// Загрузка (loading.js): сначала только то, что видно с первого ракурса (холл → кухня-гостиная), в лёгком виде —
+// текстуры 512, панорама текущего режима, обстановка комнат первого вида, мебель гостиной, окружение. Как только это
+// нарисовано (шейдеры собраны, переотражения посчитаны) — заставка уходит; дальше фоном полные текстуры по качеству,
+// спальня, кабинет, ванная. Первое открытие — «Эконом» (render.js DEFAULT_QUALITY), выбор браузера сохраняет ui.js.
+// Событие для экрана загрузки (шлёт loading.js, ловит ui.js):
+//   window 'kitchen:progress'  detail { phase: 'start' | 'room' | 'details' | 'done', loaded, total }
+//   'start' — грузится первый вид (loaded / total файлов, total может расти); 'room' — первый вид нарисован, заставку
+//   убрать; 'details' — догружается остальное; 'done' — всё. Кроме события, на 'room' зовётся ui.ready().
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { createPipeline } from './render.js';
+import { createPipeline, DEFAULT_QUALITY } from './render.js';
+import { roomReady, assetUrl, track, setFirstView } from './loading.js';
 
 import { MATERIALS, OPTIONS, PRESETS, findMat, resolveItem, slotById } from './catalog.js';
-import { applyItem, makeMat, setAnisotropy } from './materials.js';
+import { applyItem, makeMat, setAnisotropy, setTextureQuality, onTexturesChanged } from './materials.js';
 import * as model from './model.js';
 import { initUI, addSection } from './ui.js';
 import { buildFurniture, placeFurniture, furnitureKey, createFurnitureEditor, registerFurnitureUI,
@@ -17,7 +27,7 @@ import { createSeats, registerSeatsUI } from './seats.js';
 import { createTV } from './tv.js';
 import { createViewmodel, registerViewmodelUI } from './viewmodel.js';
 import { createHunt, registerHuntUI } from './hunt.js';
-import { buildDecor, placeDecor, disposeDecor, normalizeMoves, decorKey, registerDecorUI, DECOR_SCHEMA, DECOR_DEFAULTS } from './decor.js';
+import { buildDecor, placeDecor, disposeDecor, updateDecor, normalizeMoves, decorKey, registerDecorUI, DECOR_SCHEMA, DECOR_DEFAULTS } from './decor.js';
 import { createNav } from './nav.js';
 import { buildLamps, LAMP_DEFAULTS, LAMP_SCHEMA, LAMP_SCHEMA_ROOMS, LAMP_ROOM_DEFAULTS, DIM, NIGHT_SCALE } from './lamps.js';
 import { createLighting, lightTimePatch } from './lighting.js';
@@ -48,8 +58,10 @@ const SCHEMA_V2 = [
   ...['light', 'floorDir', 'frames', 'handles', 'pendants', 'threshold', 'fridge'].map(k => [k, ids(OPTIONS[k])]),
   ['aisle', 'cm'], ['gapW', 'cm'], ['split', 'cm'], ['sunAz', 'deg'], ['sunEl', 'deg'], ['exposure', 'pct'],
 ];
-// v3 = v2 + светильники (lamps.js) + мебель (furniture.js); дальше сюда же в конец добавляются новые поля.
-const SCHEMA_V3 = [...SCHEMA_V2, ...LAMP_SCHEMA, ...FURN_SCHEMA, ['sunDate', 'doy'], ['sunTime', 'q15'], ...FURN_SCHEMA_2, ...LAMP_SCHEMA_ROOMS, ...DECOR_SCHEMA];
+// v3 = v2 + светильники (lamps.js) + мебель (furniture.js) + … + обстановка (DECOR_SCHEMA, decor.js) — она хвост и растёт.
+// Поэтому новое поле сцены сюда после DECOR_SCHEMA НЕ дописывать: его место — слот-поле { "id", "field": "<ключ>" }
+// в конце последней зоны (web/spec/decor/balcony.json), варианты — в FIELDS decor.js. Так сделаны balconySeason, hallGlow.
+const SCHEMA_V3 =[...SCHEMA_V2, ...LAMP_SCHEMA, ...FURN_SCHEMA, ['sunDate', 'doy'], ['sunTime', 'q15'], ...FURN_SCHEMA_2, ...LAMP_SCHEMA_ROOMS, ...DECOR_SCHEMA];
 // Дата хранится днём года (год текущий), время — шагом 15 минут.
 const pad = n => String(n).padStart(2, '0');
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -205,7 +217,7 @@ cutMeshes.push(...bath.cut);
 aboveMeshes.push(...bath.above);
 bath.ready?.then(requestRender);
 // Окружение по OpenStreetMap: свой дом (этажи выше дают тень), соседи, поле, дороги
-const context = buildContext(site, THREE, { date: state.sunDate });   // сезон (листва, трава, поле) — по дате солнца
+const context = buildContext(site, THREE, { date: state.sunDate, assetUrl, track });   // сезон (листва, трава, поле) — по дате солнца
 scene.add(context);
 context.ready.then(() => { lighting.invalidate(); requestRender(); });
 context.traverse(o => { if (o.userData.cut === 'above') aboveMeshes.push(o); });
@@ -264,10 +276,10 @@ function rebuildDecor() {
 }
 
 // Свет в ванной включается вместе с лампами и с той же яркостью
-// Ванная без окна: в режиме «Вечером» её свет горит и днём (в тёмную ванную никто не заходит без света).
+// Ванная без окна: в режиме «Авто» её свет горит и днём (в тёмную ванную никто не заходит без света).
 // Лампа ванной в масштабе остальных светильников (NIGHT_SCALE, lamps.js). Днём экспозиция «глаза» ×6
 // (lighting.js, EXPOSURE_IN) рассчитана на комнаты с окнами; ванная без окна светит только лампой,
-// поэтому днём лампа ослаблена так, чтобы кадр выглядел как вечером (0.8 / 6). «Вечером» = горит всегда.
+// поэтому днём лампа ослаблена так, чтобы кадр выглядел как вечером (0.8 / 6). «Авто» = горит всегда.
 const BATH_DAY_GAIN = 0.8 / 6;
 function syncBathLight() {
   const on = state.lampsOn === 'on' || state.lampsOn === 'auto';
@@ -318,7 +330,8 @@ async function applyMaterials() {
     const it = resolveItem(state, k);
     return applyItem(M[k], it, { rotation: (it.rotation || 0) + (it.rotate ? Math.PI / 2 : 0) + dirRot, rotate: false });
   });
-  for (const k of PLAIN_SLOTS) jobs.push(applyItem(M[k], resolveItem(state, k)));
+  // Пол ванной с первого ракурса не видно — его текстуры после заставки (materials.js later)
+  for (const k of PLAIN_SLOTS) jobs.push(applyItem(M[k], resolveItem(state, k), {}, { later: k === 'floorBath' }));
   const bs = findMat('backsplash', state.backsplash);
   if (bs.tex) jobs.push(applyItem(M.backsplash, bs));
   const metal = findMat('metal', state.metal);
@@ -396,7 +409,7 @@ export function goView(id, instant = false) {
   anim = { t0: performance.now(), dur: 900, from: { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov }, to };
   requestRender();
 }
-function fovFor(f) { const a = camera.aspect; return a < 1 ? Math.min(85, f * (1 + (1 - a) * 0.6)) : f; }
+function fovFor(f, a = camera.aspect) { return a < 1 ? Math.min(85, f * (1 + (1 - a) * 0.6)) : f; }
 
 // ---------- вырез стен перед камерой ----------
 
@@ -429,6 +442,7 @@ function frame(now) {
   if (seats?.update(dt)) needs = true;
   if (viewmodel?.update(dt, { active: !!walk?.active, moving: !!walk?.moving, running: !!walk?.running })) needs = true;
   if (hunt?.update(dt)) needs = true;
+  if (updateDecor(decor, dt)) needs = true;   // догруженные вещи вырастают на месте
   if (nav?.update()) needs = true;
   if (anim) {
     const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
@@ -450,9 +464,11 @@ function frame(now) {
   minimap?.update();
 }
 
+// Качество — и кадр (render.js), и размер ассетов: текстуры (materials.js) и панорама (lighting.js) догружаются на месте
 export function setQuality(q) {
   pipe.setQuality(q);
   lighting.setQuality(q);
+  setTextureQuality(q);
   resize();
 }
 
@@ -520,7 +536,9 @@ registerDecorUI(addSection);
 registerViewmodelUI(addSection, () => viewmodel);
 registerHuntUI(addSection, () => hunt);
 registerSeatsUI(addSection, () => seats);
-ui = initUI({ state, defaults: DEFAULT, setState, setSplit, goView, snapshot, exportGLB, setQuality, encode, decode, views: VIEWS, canExport: !isFramed, plan, kit, split: SPLIT, walk: () => walk });
+ui = initUI({ state, defaults: DEFAULT, setState, setSplit, goView, snapshot, exportGLB, setQuality, encode, decode, views: VIEWS, canExport: !isFramed, plan, kit, split: SPLIT, walk: () => walk, seats: () => seats, getQuality: () => pipe.quality });
+// Качество до первого setState: от него зависит, какого размера грузить текстуры и панораму
+setQuality(ui.pref('quality') ?? DEFAULT_QUALITY);
 
 // Прогулка WASD и мини-карта. Препятствия: кухня и остров (мебель добавится сюда же).
 walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, getObstacles: () => [...walk.boxesOf(kitchen?.group), ...(furn?.colliders || []), ...bath.colliders, ...(decor?.colliders || []), ...(doors?.colliders() || [])],
@@ -554,13 +572,34 @@ const flyTo = (x, z) => {
 };
 minimap = initMinimap({ plan, getCamera: () => camera, onTeleport: (x, z) => (walk.active ? walk.enter({ x, z }) : flyTo(x, z)) });
 
+// Первый ракурс: обстановка вне его кадра (с запасом FIRST_VIEW_MARGIN по углу) грузится после заставки (decor.js)
+const START_VIEW = 'hall', FIRST_VIEW_MARGIN = 1.15;
+{
+  const v = VIEWS.find(x => x.id === START_VIEW) || VIEWS[0], a = canvas.clientWidth / Math.max(1, canvas.clientHeight) || 1.6;
+  const cam = new THREE.PerspectiveCamera(fovFor(v.fov || 60, a) * FIRST_VIEW_MARGIN, a * FIRST_VIEW_MARGIN, 0.05, 60);
+  cam.position.set(...v.pos); cam.lookAt(...v.target); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+  const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+  const ball = new THREE.Sphere();
+  setFirstView((x, y, z, r) => fr.intersectsSphere(ball.set(ball.center.set(x, y, z), r)));
+}
 const fromHash = decode(location.hash);
-await setState({ ...(fromHash || {}) }, { push: !!fromHash });
-goView('hall', true);
+await setState({ ...(fromHash || {}) }, { push: !!fromHash });   // ждёт только маленькие текстуры (materials.js)
+goView(START_VIEW, true);
 resize();
 requestAnimationFrame(frame);
+onTexturesChanged(requestRender);   // полные текстуры и фоновые материалы доезжают сами
 
-lighting.ready.then(() => ui.ready());
+// Первый вид: всё видимое загружено, кадр нарисован, переотражения посчитаны (не дольше ROOM_GI_WAIT) — заставку убрать
+const ROOM_GI_WAIT = 4000;
+Promise.all([lighting.ready, furn?.ready, decor?.near, context.ready].map(p => p?.catch(() => {})))
+  .then(() => pipe.whenDrawn())
+  .then(() => new Promise(done => {
+    const t0 = performance.now();
+    const wait = () => (!lighting.debug.baking || performance.now() - t0 > ROOM_GI_WAIT ? done() : setTimeout(wait, 50));
+    wait();
+  }))
+  .then(() => pipe.whenDrawn())
+  .then(() => { roomReady(); ui.ready(); });
 window.addEventListener('hashchange', () => { const s = decode(location.hash); if (s) setState(s, { push: false }); });
 
 // Для автоматических проверок из консоли

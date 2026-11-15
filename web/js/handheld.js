@@ -10,6 +10,13 @@
 //   onHold(on) — взяли/положили; onStep(d) — листать (1 — следующее, −1 — предыдущее).
 //   -> { sync() — после кадра (прицел пересчитывается, только если сдвинулась камера), pick(), drop(), held, dispose() }
 import { injectStyle } from './minimap.js';
+import { addHelp } from './help.js';
+
+addHelp(
+  { mode: 'walk', topic: 'walk', keys: ['E'], text: 'взять телефон с острова — там Shorts', touch: 'кнопка «Взять телефон», когда смотрите на него', order: 60 },
+  { mode: 'phone', keys: ['колесо', '↑', '↓'], text: 'листать видео', touch: 'свайп по телефону — листать', brief: true, order: 10 },
+  { mode: 'phone', keys: ['E'], text: 'положить телефон (или Esc)', touch: 'кнопка «Положить»', brief: true, order: 20 },
+);
 
 const SWIPE = 28;        // px: короче — это не свайп
 const STEP_GAP = 320;    // мс между перелистываниями (колесо трекпада сыплет событиями)
@@ -52,6 +59,7 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestR
     btn.textContent = held ? 'Положить' : 'Взять телефон';
     // E сейчас за телефоном: подсказки и кнопки дверей и стульев (.kd-*) на том же месте прячем
     document.body.classList.toggle('khh-on', on && (held || aimed));
+    document.body.classList.toggle('khh-held', on && held);   // ui.js: режим «телефон в руке» в полосе внизу
   }
 
   function pick() {
@@ -154,7 +162,7 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestR
     removeEventListener('pointercancel', onUp, true);
     removeEventListener('wheel', onWheel, { capture: true });
     hint.remove(); btn.remove();
-    document.body.classList.remove('khh-on');
+    document.body.classList.remove('khh-on', 'khh-held');
   }
 
   return { sync, pick, drop, dispose, get held() { return held; }, get aimed() { return aimed; } };

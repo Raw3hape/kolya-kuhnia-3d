@@ -13,8 +13,10 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { applyItem, loadMeta } from './materials.js';
+import { assetUrl, track, retry } from './loading.js';
 import { islandBox } from './model.js';
 import { tvPosterTexture } from './tv.js';
+import { addHelp } from './help.js';
 import { decorOf, decorPart, placeDecor, setDecorPose, commitDecorPart, resetDecorPart, isDecorMoved } from './decor.js';
 
 // Спеки грузятся сами (как в main.js — относительно страницы). Нет файла — нет и того, что в нём; приложение живёт.
@@ -172,6 +174,15 @@ export function furnitureResetPatch() {
  * (sofa, tv, media, rug, arrange) и заменяют их. Всё, кроме furnEdit/furnReset, — поля state.
  * Действия: 'furnEdit' (toggle, src: info) → editor.enable/disable; 'furnReset' → setState(furnitureResetPatch()).
  */
+// Клавиши редактора (onKey в createFurnitureEditor): справка «?», полоса режима «Двигать» (ui.js) и раздел «Расстановка»
+addHelp(
+  { mode: 'arrange', order: 10, text: 'двигается всё: мебель и любая вещь в комнатах. Настенное едет по стене, мелочи по полке и встают на ту, куда перенесли' },
+  { mode: 'arrange', order: 20, keys: ['ЛКМ'], text: 'тянуть предмет или его стрелки', touch: 'тянуть предмет или его стрелки', brief: true },
+  { mode: 'arrange', order: 30, keys: ['R'], text: 'повернуть, T — двигать', touch: false, brief: true },
+  { mode: 'arrange', order: 40, keys: ['Shift'], text: 'без привязки', touch: false, brief: true },
+  { mode: 'arrange', order: 50, keys: ['Esc'], text: 'готово', touch: false },
+);
+
 export function registerFurnitureUI(addSection) {
   const D = FURN_DEFAULTS, cm = v => `${Math.round(v * 100)} см`, dg = v => `${Math.round(v)}°`;
   const name = (k, id) => opt(k, id)?.name ?? '';
@@ -273,9 +284,7 @@ export function registerFurnitureUI(addSection) {
   addSection({ ...base, id: 'arrange', title: 'Расстановка', order: 50, open: true,
     controls: [
       { type: 'toggle', key: 'furnEdit', src: 'info', label: 'Двигать мебель' },
-      { type: 'readout', key: 'furnHint', style: 'keys', visible: (st, _, i) => !!i?.furnEdit,
-        value: 'Двигается всё: мебель и любая вещь в комнатах. Тяните сам предмет или стрелки. Настенное едет по стене, '
-          + 'мелочи — по полке и встают на ту, куда перенесли. R — повернуть, T — двигать, Shift — без привязки, Esc — готово.' },
+      { type: 'help', mode: 'arrange', visible: (st, _, i) => !!i?.furnEdit },
       { type: 'button', key: 'furnReset', action: 'furnReset', label: 'Всё на место' },
     ] });
 }
@@ -502,7 +511,7 @@ const GLB = new Map();
 function loadGLB(url) {
   if (!gltf) { gltf = new GLTFLoader(); gltf.setMeshoptDecoder(MeshoptDecoder); }
   if (!GLB.has(url)) {
-    const p = gltf.loadAsync(url).then(r => r.scene);
+    const p = track(retry(() => gltf.loadAsync(assetUrl(url)))).then(r => r.scene);
     p.catch(() => GLB.delete(url));   // неудачную загрузку можно повторить
     GLB.set(url, p);
   }

@@ -4,7 +4,12 @@
 //   update()            — дёшево перерисовать маркер камеры (звать, когда камера сдвинулась).
 //   onTeleport(x, z)    — клик/тап по плану, метры в осях плана.
 //   onPick(roomId|null) — какая комната под кликом (вызывается до onTeleport), необязательно.
-// Ещё экспортирует ensureDock() и subtractRect() — их использует walk.js.
+// Ещё экспортирует injectStyle() и subtractRect() — их использует walk.js. План встаёт в #hud-bottom страницы
+// (низ слева, рядом с полосой режима ui.js), на телефоне — под карточку заголовка.
+
+import { addHelp } from './help.js';
+
+addHelp({ mode: 'design', keys: [], text: 'план — нажмите на комнату, чтобы перелететь туда; свернуть — стрелка в его углу', order: 70 });
 
 const LABELS = { kitchen_living: 'Кухня-гостиная', hall: 'Холл', room2: 'Комната 2', room3: 'Комната 3', bath: 'Ванная' };
 const NS = 'http://www.w3.org/2000/svg';
@@ -27,22 +32,26 @@ export function subtractRect(b, h) {
   return out;
 }
 
-// Общая «полка» в левом нижнем углу (на телефоне — под карточкой заголовка): план и кнопка прогулки.
-export function ensureDock() {
+// «Полка» плана: слева в нижней полосе страницы (#hud-bottom), без неё — в левом нижнем углу; на телефоне — под карточкой заголовка.
+function ensureDock() {
   let dock = document.getElementById('kw-dock');
   if (dock) return dock;
   injectStyle('kw-dock-style', DOCK_CSS);
   dock = document.createElement('div');
   dock.id = 'kw-dock';
-  document.body.appendChild(dock);
-  // На телефоне полка встаёт под карточку заголовка: низ экрана занят видами, шторкой и джойстиком
+  const host = document.getElementById('hud-bottom');
+  if (host) host.prepend(dock); else document.body.appendChild(dock);
+  // До 1100 px (планшет, телефон) полка встаёт под карточку заголовка: низ отдан полосе режима, шторке и джойстику.
+  // --kw-dock-top пишется в :root — под карточку встают и другие (табло охоты hunt.js)
   const place = () => {
     const tc = document.querySelector('.title-card');
     const top = tc ? Math.round(tc.getBoundingClientRect().bottom + 8) : 0;
-    if (top > 0) dock.style.setProperty('--kw-dock-top', top + 'px');
+    if (top > 0) document.documentElement.style.setProperty('--kw-dock-top', top + 'px');
   };
   addEventListener('resize', place);
-  place(); setTimeout(place, 600); document.fonts?.ready.then(place);
+  const tc = document.querySelector('.title-card');
+  if (tc) new ResizeObserver(place).observe(tc);   // карточка растёт, когда ui.js добавляет переключатель режимов
+  place(); document.fonts?.ready.then(place);
   return dock;
 }
 
@@ -64,18 +73,20 @@ const DOCK_CSS = `
   --kw-fb-line: rgba(28, 35, 38, 0.12); --kw-fb-accent: #0f4352; --kw-fb-accent-ink: #fff;
 }
 #kw-dock {
-  position: fixed; z-index: 4; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none;
+  flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none;
   font: 13px/1.3 var(--f-body, "Inter", "Helvetica Neue", Arial, sans-serif); color: var(--kw-ink);
 }
 @media (prefers-color-scheme: dark) { #kw-dock, .kw-float {
   --kw-fb-ink: #e7ebea; --kw-fb-muted: #9aa5a4; --kw-fb-sheet: rgba(22, 27, 29, 0.92);
   --kw-fb-line: rgba(231, 235, 234, 0.12); --kw-fb-accent: #7cc4d3; --kw-fb-accent-ink: #0c1a1e; } }
 #kw-dock > * { pointer-events: auto; }
-/* Между телефоном и широким экраном полоса видов по центру может доставать до угла — поднимаемся над ней */
-@media (min-width: 761px) and (max-width: 1099px) { #kw-dock { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); } }
-@media (max-width: 760px) {
-  #kw-dock { bottom: auto; top: var(--kw-dock-top, calc(80px + env(safe-area-inset-top, 0px))); left: max(12px, env(safe-area-inset-left, 0px)); gap: 6px; }
+body > #kw-dock { position: fixed; z-index: 4; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+/* Планшет и телефон: план под карточкой заголовка — полоса режима внизу получает всю ширину до панели */
+@media (max-width: 1100px) {
+  #kw-dock { position: fixed; z-index: 4; bottom: auto; top: var(--kw-dock-top, calc(120px + env(safe-area-inset-top, 0px))); left: max(16px, env(safe-area-inset-left, 0px)); }
+}
+@media (max-width: 800px) {
+  #kw-dock { left: max(12px, env(safe-area-inset-left, 0px)); gap: 6px; }
   body:has(#panel.open) #kw-dock { display: none; }
 }
 `;
@@ -103,7 +114,7 @@ const MAP_CSS = `
 .km-cone { fill: color-mix(in srgb, var(--kw-accent) 26%, transparent); stroke: var(--kw-accent); stroke-width: 0.04; stroke-linejoin: round; }
 .km-dot { fill: var(--kw-accent); stroke: var(--kw-sheet); stroke-width: 0.07; }
 .km-cam.out { opacity: 0.55; }
-@media (max-width: 760px) { .km { width: 130px; } .km-head { height: 24px; } .km-fold { width: 24px; height: 24px; } }
+@media (max-width: 800px) { .km { width: 130px; } .km-head { height: 24px; } .km-fold { width: 24px; height: 24px; } }
 @media (prefers-reduced-motion: reduce) { .km-fold svg, .km-room { transition: none; } }
 `;
 

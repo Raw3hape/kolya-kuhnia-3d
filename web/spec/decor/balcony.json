@@ -2,7 +2,7 @@
  "zone": "balcony",
  "title": "Балкон",
  "room": "balcony",
- "_note": "Генерирует tools/decor/balcony/compose.py — править раскладки там. Части с season видны только летом или зимой (decor.js). Порядок слотов и опций = код варианта: новое только в конец.",
+ "_note": "Генерирует tools/decor/balcony/compose.py — править раскладки там. Части с season видны только летом или зимой (decor.js). Порядок слотов и опций = код варианта: новое только в конец. Слоты с field — не товары, а места полей сцены в коде ссылки (decor.js, FIELDS).",
  "slots": [
   {
    "id": "deck",
@@ -766,6 +766,18 @@
      ]
     }
    ]
+  },
+  {
+   "id": "season",
+   "field": "balconySeason",
+   "label": "Сезон",
+   "_note": "По дате / Лето / Зима: какие части с season видны (decor.js, SEASON_OPTIONS)."
+  },
+  {
+   "id": "hallglow",
+   "field": "hallGlow",
+   "label": "Подсветка прихожей",
+   "_note": "Поле светильников прихожей (lamps.js, LAMP_OPTIONS.hallGlow); место — здесь, в конце кода."
   }
  ]
 }

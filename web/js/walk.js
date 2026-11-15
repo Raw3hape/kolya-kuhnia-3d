@@ -1,6 +1,7 @@
 // Прогулка от первого лица: WASD/стрелки, взгляд перетаскиванием, джойстик на телефоне, столкновения со стенами,
 // прыжок (Пробел).
-// Самодостаточный модуль: свою кнопку, подсказку, прицел и джойстик вставляет сам (стили на токенах страницы).
+// Самодостаточный модуль: прицел, джойстик и кнопку прыжка вставляет сам (стили на токенах страницы); вход и выход —
+// переключатель режимов и полоса внизу в ui.js (клавиши режима оттуда же: строки справки ниже, help.js).
 // API: initWalk({ THREE, camera, controls, canvas, plan, getObstacles, requestRender, onChange })
 //   -> { active, walking, moving, running, enter(pos?, yaw?, { orbit }?), exit({ restore }?), toggle(), update(dt?),
 //        boxesOf(object3d), setPersonHeight(cm), personHeight, eyeHeight, refreshObstacles(), setAreaGate(fn), orbitPose,
@@ -23,7 +24,20 @@
 // Ядро столкновений (buildColliders, moveCircle, findFree, roomOf, outdoorAreas, areaBeyond) — чистые функции
 // без DOM, их проверяет тест в node. Проёмы дверей в ядре открыты: закрытые полотна и глухие части рам даёт doors.js.
 
-import { ensureDock, injectStyle, subtractRect } from './minimap.js';
+import { injectStyle, subtractRect } from './minimap.js';
+import { addHelp } from './help.js';
+
+// Справка (help.js): ui.js показывает brief-строки в полосе прогулки, все — в окне «?» и в разделе «Прогулка»
+addHelp(
+  { mode: 'design', topic: 'walk', keys: ['F'], text: 'прогулка от первого лица', touch: '«Прогулка» в карточке сверху — пройтись от первого лица', order: 60 },
+  { mode: 'walk', topic: 'walk', keys: ['W', 'A', 'S', 'D'], text: 'идти (или стрелки)', touch: 'джойстик слева — идти', brief: true, order: 10 },
+  { mode: 'walk', topic: 'walk', keys: ['мышь'], text: 'тянуть — смотреть, двойной клик — захватить мышь', touch: 'ведите пальцем — смотреть', brief: true, order: 20 },
+  { mode: 'walk', topic: 'walk', keys: ['Shift'], text: 'быстрее', touch: false, order: 30 },
+  { mode: 'walk', topic: 'walk', keys: ['колесо'], text: 'шаг вперёд или назад, щипок — шире или уже обзор', touch: false, order: 35 },
+  { mode: 'walk', topic: 'walk', keys: ['Пробел'], text: 'прыжок', touch: 'кнопка со стрелкой — прыжок', brief: true, order: 40 },
+  { mode: 'walk', topic: 'walk', keys: [], text: 'план слева — нажмите на комнату, чтобы перейти туда', order: 80 },
+  { mode: 'walk', topic: 'walk', keys: ['Esc'], text: 'выйти из прогулки (или F)', touch: '«Проект» в карточке сверху — выйти', order: 90 },
+);
 
 export const WALK = {
   height: 180,        // рост по умолчанию, см; глаза = рост · 0.933 (180 см -> 1.68 м)
@@ -264,12 +278,6 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   // ---------- разметка ----------
   injectStyle('kw-style', WALK_CSS);
-  const dock = ensureDock();
-  const btn = document.createElement('button');
-  btn.type = 'button'; btn.className = 'kw-btn';
-  btn.setAttribute('aria-pressed', 'false');
-  dock.appendChild(btn);
-  const hint = div('kw-hint kw-float', document.body); hint.hidden = true; hint.setAttribute('role', 'status');
   const joyEl = div('kw-joy kw-float', document.body); joyEl.hidden = true;
   joyEl.setAttribute('aria-hidden', 'true');
   const knob = div('kw-knob', joyEl);
@@ -280,28 +288,6 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   document.body.appendChild(jumpEl);
   const cross = div('kw-cross kw-float', document.body); cross.hidden = true;
 
-  const ICON = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8.6" cy="2.5" r="1.6" fill="currentColor"/><path d="M8.2 5.4 6.6 9.5l2.2 1.6.5 3.6M8 5.9l2.6 2.2 1.8.1M6.6 9.5l-1.8 4.9M8 5.9l-2.6 1.2-.8 2.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const renderBtn = () => {
-    const on = mode !== 'off';
-    btn.classList.toggle('on', on);
-    btn.setAttribute('aria-pressed', String(on));
-    btn.title = on ? 'Выйти из прогулки (Esc)' : 'Пройтись по квартире от первого лица (F)';
-    btn.innerHTML = on ? `${ICON}<span>Выйти</span><kbd>Esc</kbd>` : `${ICON}<span>Прогулка</span><kbd>F</kbd>`;
-  };
-  renderBtn();
-  btn.addEventListener('click', () => toggle());
-
-  let hintTimer = 0;
-  const showHint = () => {
-    const touch = touchSeen || coarse();
-    hint.innerHTML = touch
-      ? 'Джойстик — идти · веди пальцем — смотреть · наведи на дверь — открыть · план — перейти · с оружием: кнопки огня и прицела справа'
-      : '<b>W A S D</b> — идти · тяни мышью — смотреть · <b>E</b> или клик — дверь · <b>Shift</b> — быстрее · <b>Пробел</b> — прыжок · <b>2</b>–<b>5</b> — оружие, <b>1</b> — убрать · <b>ПКМ</b> — прицел · <b>R</b> — перезарядка · <b>Esc</b> — выход';
-    hint.hidden = false; hint.classList.remove('fade');
-    clearTimeout(hintTimer);
-    hintTimer = setTimeout(() => { hint.classList.add('fade'); hintTimer = setTimeout(() => { hint.hidden = true; }, 450); }, 5500);
-  };
-  const hideHint = () => { clearTimeout(hintTimer); hint.hidden = true; };
   const syncFloat = () => {
     joyEl.hidden = !(mode === 'walk' || mode === 'entering') || !(touchSeen || coarse());
     jumpEl.hidden = joyEl.hidden;
@@ -350,7 +336,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
       fromQ: camera.quaternion.clone(), toQ: quatOf(yaw, pitch), fromFov: camera.fov, toFov: fov,
       end: () => { mode = 'walk'; syncFloat(); } };
     lastT = performance.now();
-    renderBtn(); syncFloat(); showHint();
+    syncFloat();
     onChange?.(true);
     requestRender?.();
     return true;
@@ -362,7 +348,6 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     keys.clear(); joyRelease(); lookRelease(); moving = running = false;
     zoom = 1; kp = ky = kpT = kyT = 0;
     if (locked) { try { document.exitPointerLock(); } catch { /* нет блокировки */ } }
-    hideHint();
     if (!restore || !saved) {
       // камера остаётся, где стоит (например, дальше её ведёт goView)
       camera.rotation.reorder(saved?.order || 'XYZ');
@@ -383,7 +368,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
         finish();
       } };
     lastT = performance.now();
-    renderBtn(); syncFloat();
+    syncFloat();
     requestRender?.();
   }
 
@@ -391,7 +376,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     mode = 'off'; anim = null;
     controls.enabled = true;
     controls.update?.();
-    renderBtn(); syncFloat();
+    syncFloat();
     onChange?.(false);
     requestRender?.();
   }
@@ -670,27 +655,13 @@ function div(cls, parent) { const d = document.createElement('div'); d.className
 
 // Токены: --kw-* задаёт #kw-dock и .kw-float (minimap.js); здесь только сами элементы.
 const WALK_CSS = `
-.kw-btn { order: 2; display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--kw-line); background: var(--kw-sheet); color: var(--kw-ink);
-  font: 500 13px/1 var(--f-body, "Inter", "Helvetica Neue", Arial, sans-serif); padding: 8px 10px 8px 9px; border-radius: 4px; box-shadow: var(--kw-shadow);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); cursor: pointer; min-height: 34px; }
-.kw-btn:hover { border-color: var(--kw-accent); }
-.kw-btn:focus-visible { outline: 2px solid var(--kw-accent); outline-offset: 2px; }
-.kw-btn.on { background: var(--kw-accent); color: var(--kw-accent-ink); border-color: var(--kw-accent); }
-.kw-btn kbd { font: 500 10.5px/1 var(--f-data, ui-monospace, Menlo, monospace); padding: 2px 4px; border: 1px solid currentColor; border-radius: 3px; opacity: 0.55; }
-@media (hover: none), (pointer: coarse) { .kw-btn kbd { display: none; } }
-.kw-hint { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom, 0px));
-  max-width: calc(100vw - 32px); box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--kw-line); border-radius: 4px;
-  background: var(--kw-sheet); color: var(--kw-ink); box-shadow: var(--kw-shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  font: 12.5px/1.45 var(--f-body, "Inter", Arial, sans-serif); text-align: center; pointer-events: none; transition: opacity 0.4s ease; }
-.kw-hint b { font-weight: 600; }
-.kw-hint.fade { opacity: 0; }
-.kw-hint[hidden], .kw-joy[hidden], .kw-cross[hidden], .kw-jump[hidden] { display: none; }
-.kw-jump { position: fixed; z-index: 5; right: max(20px, calc(env(safe-area-inset-right, 0px) + 12px)); bottom: calc(196px + env(safe-area-inset-bottom, 0px));
+.kw-joy[hidden], .kw-cross[hidden], .kw-jump[hidden] { display: none; }
+.kw-jump { position: fixed; z-index: 5; right: max(20px, calc(env(safe-area-inset-right, 0px) + 12px)); bottom: calc(var(--hud-bottom, 76px) + 104px);
   width: 56px; height: 56px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--kw-ink);
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; border: 1px solid var(--kw-line);
   background: color-mix(in srgb, var(--kw-sheet) 88%, transparent); box-shadow: var(--kw-shadow); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .kw-jump:active { transform: scale(0.94); }
-.kw-joy { position: fixed; z-index: 5; left: max(20px, calc(env(safe-area-inset-left, 0px) + 12px)); bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+.kw-joy { position: fixed; z-index: 5; left: max(20px, calc(env(safe-area-inset-left, 0px) + 12px)); bottom: var(--hud-bottom, 76px);
   width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none;
   background: color-mix(in srgb, var(--kw-sheet) 80%, transparent); border: 1px solid var(--kw-line); box-shadow: var(--kw-shadow);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
@@ -700,9 +671,6 @@ const WALK_CSS = `
 .kw-cross { position: fixed; z-index: 5; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
   background: var(--kw-sheet); box-shadow: 0 0 0 1.5px var(--kw-ink); pointer-events: none; opacity: 0.8; transition: opacity 0.12s ease; }
 body.kvm-ads .kw-cross { opacity: 0; }   /* смотрим через прицел оружия (viewmodel.js) */
-@media (max-width: 760px) {
-  .kw-hint { bottom: calc(200px + env(safe-area-inset-bottom, 0px)); }
-  body:has(#panel.open) .kw-joy, body:has(#panel.open) .kw-hint, body:has(#panel.open) .kw-jump { display: none; }
-}
-@media (prefers-reduced-motion: reduce) { .kw-hint, .kw-knob { transition: none; } }
+@media (max-width: 800px) { body:has(#panel.open) .kw-joy, body:has(#panel.open) .kw-jump { display: none; } }
+@media (prefers-reduced-motion: reduce) { .kw-knob { transition: none; } }
 `;

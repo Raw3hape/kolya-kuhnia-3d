@@ -9,13 +9,16 @@
 //                  новые зоны, слоты и опции только в КОНЕЦ, ничего не переставлять и не удалять.
 // DECOR_DEFAULTS — { key: id } из "default" слота (нет или неизвестен — первая опция, то есть «Нет») и moves: ''.
 // DECOR_ZONES    — разобранный каталог (для проверок и консоли).
-// buildDecor(state, plan, M, anchors?) -> { group, colliders: [THREE.Box3], seats, parts: Map<pkey, holder>, ready }
+// buildDecor(state, plan, M, anchors?) -> { group, colliders: [THREE.Box3], seats, parts: Map<pkey, holder>, near, ready }
 //                  GLB грузятся лениво (только выбранные) и кешируются между пересборками (клоны делят геометрию
 //                  и материалы шаблона: пересборка не парсит GLB и не создаёт материалов).
+//                  Зоны комнат первого вида (loading.js FIRST_ROOMS) грузятся сразу (near — их промис), остальные —
+//                  после первого кадра (ready — всё).
 //                  seats — [{ id, label, x, y, z, yaw, root }] места частей с полем seat, в координатах квартиры:
 //                  точка на сиденье, yaw — куда смотрит сидящий (радианы вокруг +Y, 0 = +Z), root — часть сцены.
 // placeDecor(decor, state, anchors?, { live }?) — только положения (сдвиги, опоры): без пересборки, без загрузок.
 //                  live: true — во время перетаскивания, без пересчёта столкновений и мест (их обновит setState).
+// updateDecor(decor, dt) -> bool — каждый кадр: вещи, доехавшие после первого вида, вырастают (true — нужен кадр).
 // disposeDecor(decor) — освободить своё (геометрию габаритов-заглушек); геометрию шаблонов GLB не трогает.
 // decorOf(group) -> результат buildDecor по группе 'decor'; decorPart(holder) -> сведения о части (для редактора).
 // setDecorPose(decor, holder, x, y, z, yaw) — поставить часть (редактор, во время перетаскивания); то, что на ней
@@ -25,9 +28,11 @@
 //                  не задано — как было.
 // resetDecorPart(moves, pkey) -> moves без этой части. normalizeMoves(str) -> чистая строка (для decode).
 // decorKey(state) -> строка; меняется только вместе с выбором опций — тогда main.js пересобирает обстановку.
-// decorSeason(dateISO) -> 'summer' | 'winter' — сезон частей с полем season (см. ниже).
+// decorSeason(dateISO) -> 'summer' | 'winter' — сезон по дате; sceneSeason(state) — с учётом выбора владельца
+//                  state.balconySeason ('auto' | 'summer' | 'winter', варианты SEASON_OPTIONS).
 // registerDecorUI(addSection) — по разделу на зону во вкладке «Мебель» (id decor-<zone>), в разделе по выбору
-//                  товара на слот: миниатюра, имя, бренд, цена, размер, ссылка в магазин.
+//                  товара на слот: миниатюра, имя, бренд, цена, размер, ссылка в магазин; у балкона сверху «Сезон».
+// Поля-настройки в файлах зон ({ "id", "field" }) — места в коде варианта для полей сцены, см. FIELDS ниже.
 //
 // Опоры (anchor на части): "console" | "tv" | "island" | "table" | "sofa". pos/rot части — абсолютные для положения
 // этой вещи ПО УМОЛЧАНИЮ; сдвинули вещь (ползунки, редактор, остров ползунками кухни) — часть едет следом.
@@ -38,9 +43,10 @@
 // по габаритам моделей в положении по умолчанию), едет вместе с ней. Перетащили на другую полку или вещь —
 // носитель меняется (поле on записи сдвига).
 //
-// Сезон (season на части): "summer" | "winter" — часть видна только в этот сезон сцены (decorSeason(state.sunDate):
+// Сезон (season на части): "summer" | "winter" — часть видна только в этот сезон сцены: sceneSeason(state) —
+// «Лето»/«Зима» по выбору (state.balconySeason) или «По дате» (по умолчанию, decorSeason(state.sunDate):
 // ноябрь–март — зима, апрель–октябрь — лето). Модели обоих сезонов грузятся при сборке, смена даты только
-// прячет/показывает части в placeDecor (main.js уже зовёт его из setState): без пересборки, без загрузок, без шейдеров;
+// (и смена выбора) прячет/показывает части в placeDecor (main.js уже зовёт его из setState): без пересборки, без загрузок, без шейдеров;
 // спрятанная часть не сталкивается и не даёт места. decorKey сезон не включает. Сдвиги и носители работают как обычно.
 //
 // Код сдвигов (state.moves): записи через '~', отсортированы по ключу; запись = <pkey>_<dx>_<dz>_<dy>_<dr>_<on>,
@@ -50,6 +56,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { assetUrl, track, retry, afterRoom, isRoomReady, FIRST_ROOMS, inFirstView } from './loading.js';   // сначала комнаты первого вида, остальное фоном
+import { LAMP_OPTIONS, LAMP_DEFAULTS, useDecorZones } from './lamps.js';   // поле hallGlow (FIELDS), подсветка вещей прихожей
 
 // ---------- каталог ----------
 // Файлы пишут несколько агентов одновременно: битый или отсутствующий файл зоны — зоны просто нет
@@ -78,6 +86,23 @@ export function decorSeason(dateISO) {
   const m = Number(String(dateISO ?? '').slice(5, 7)) || new Date().getMonth() + 1;
   return m >= 11 || m <= 3 ? 'winter' : 'summer';
 }
+// Выбор владельца (state.balconySeason): 'auto' — по дате сцены, 'summer' | 'winter' — всегда этот сезон.
+export const SEASON_OPTIONS = [
+  { id: 'auto', name: 'По дате' }, { id: 'summer', name: 'Лето' }, { id: 'winter', name: 'Зима' },
+];
+/** Сезон частей с полем season для этого состояния: выбор владельца или по дате сцены. */
+export const sceneSeason = state => (SEASONS.includes(state?.balconySeason) ? state.balconySeason : decorSeason(state?.sunDate));
+
+// Поля-настройки (не товары) в файлах зон: слот { "id", "field": "<ключ состояния>" } только держит МЕСТО поля
+// в коде варианта (порядок слотов = порядок полей), варианты и значение по умолчанию — здесь, у владельца поля.
+// Зачем: хвост SCHEMA_V3 — обстановка, а она растёт; новое поле сцены дописывается СЛОТОМ В КОНЕЦ ПОСЛЕДНЕЙ ЗОНЫ
+// (сейчас balcony.json, его пишет tools/decor/balcony/compose.py), тогда старые ссылки читаются как раньше.
+// Не товар: не входит в decorKey (смена не пересобирает обстановку) и не рисуется карточками.
+// Слот с полем, которого нет в FIELDS, всё равно занимает своё место (иначе съехали бы поля после него).
+const FIELDS = {
+  balconySeason: { options: SEASON_OPTIONS, def: 'auto' },
+  hallGlow: { options: LAMP_OPTIONS.hallGlow, def: LAMP_DEFAULTS.hallGlow },
+};
 
 // Место для сидения (seats.js): h — высота сиденья, depth — сдвиг от центра следа назад к спинке, label — подсказка.
 const parseSeat = s => (Number.isFinite(s?.h) ? { h: s.h, depth: Number(s.depth) || 0, label: s.label || 'Сесть' } : null);
@@ -100,27 +125,38 @@ function parseOption(o) {
 
 function parseZone(zoneId, d) {
   if (!d || !Array.isArray(d.slots)) return null;
-  const seen = new Set(), slots = [];
+  const seen = new Set(), slots = [], seq = [];   // seq — поля кода в порядке файла: слоты-товары и поля-настройки
   for (const s of d.slots) {
     if (!s?.id || typeof s.id !== 'string' || seen.has(s.id)) continue;
     seen.add(s.id);
+    if (typeof s.field === 'string') {
+      seq.push({ field: s.field, ids: (FIELDS[s.field]?.options ?? []).map(o => o.id) });
+      continue;
+    }
     const ids = new Set(), options = [];
     for (const o of (Array.isArray(s.options) ? s.options : []).map(parseOption)) {
       if (o && !ids.has(o.id)) { ids.add(o.id); options.push(o); }
     }
     if (!options.length) continue;
-    slots.push({ id: s.id, label: s.label || s.id, key: `d_${zoneId}_${s.id}`, options,
-      def: options.some(o => o.id === s.default) ? s.default : options[0].id });
+    const slot = { id: s.id, label: s.label || s.id, key: `d_${zoneId}_${s.id}`, options,
+      def: options.some(o => o.id === s.default) ? s.default : options[0].id };
+    slots.push(slot); seq.push(slot);
   }
-  return { id: zoneId, title: d.title || zoneId, room: d.room || zoneId, slots };
+  return { id: zoneId, title: d.title || zoneId, room: d.room || zoneId, slots, fields: seq.filter(e => e.field).map(e => e.field), seq };
 }
 
 export const DECOR_ZONES = (await Promise.all(ZONE_IDS.map(z => getJSON(`spec/decor/${z}.json`))))
-  .map((d, i) => parseZone(ZONE_IDS[i], d)).filter(z => z?.slots.length);
+  .map((d, i) => parseZone(ZONE_IDS[i], d)).filter(z => z?.seq.length);
 const SLOTS = DECOR_ZONES.flatMap(z => z.slots.map(s => ({ ...s, zone: z })));
-export const DECOR_SCHEMA = SLOTS.map(s => [s.key, s.options.map(o => o.id)]);
-// moves — сдвиги частей (не поле SCHEMA_V3: main.js пишет его хвостом ссылки после «~»)
-export const DECOR_DEFAULTS = { ...Object.fromEntries(SLOTS.map(s => [s.key, s.def])), moves: '' };
+useDecorZones(DECOR_ZONES);   // lamps.js: подсветка под вещами прихожей (поле glow опции) — до первой сборки светильников
+export const DECOR_SCHEMA = DECOR_ZONES.flatMap(z => z.seq.map(e => (e.field ? [e.field, e.ids] : [e.key, e.options.map(o => o.id)])));
+// moves — сдвиги частей (не поле SCHEMA_V3: main.js пишет его хвостом ссылки после «~»).
+// Поля-настройки по умолчанию — всегда (даже если слот поля пропал из файла зоны).
+export const DECOR_DEFAULTS = {
+  ...Object.fromEntries(SLOTS.map(s => [s.key, s.def])),
+  ...Object.fromEntries(Object.entries(FIELDS).map(([k, f]) => [k, f.def])),
+  moves: '',
+};
 
 const optionOf = (slot, state) => slot.options.find(o => o.id === state?.[slot.key]) ?? slot.options.find(o => o.id === slot.def);
 
@@ -177,7 +213,7 @@ const GLB = new Map();
 function loadGLB(url) {
   if (!loader) { loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder); }
   if (!GLB.has(url)) {
-    const p = loader.loadAsync(url).then(r => r.scene);
+    const p = track(retry(() => loader.loadAsync(assetUrl(url)))).then(r => r.scene);
     p.catch(() => GLB.delete(url));
     GLB.set(url, p);
   }
@@ -229,9 +265,9 @@ export const decorOf = group => (group ? RESULTS.get(group) || null : null);
 export function buildDecor(state, plan, M, anchors) {
   const group = new THREE.Group();
   group.name = 'decor';
-  const decor = { group, colliders: [], seats: [], parts: new Map(), holders: [], ready: null, pass: 0, state, anchors };
+  const decor = { group, colliders: [], seats: [], parts: new Map(), holders: [], ready: null, pass: 0, state, anchors, grow: [] };
   RESULTS.set(group, decor);
-  const loads = [];
+  const loads = [], near = [];
   for (const slot of SLOTS) {
     const o = optionOf(slot, state);
     if (!o.parts.length) continue;
@@ -268,19 +304,27 @@ export function buildDecor(state, plan, M, anchors) {
         info.box = box.isEmpty() ? null : box;
         holder.add(obj);
         updateBox(holder, info);
+        if (isRoomReady()) { decor.grow.push({ obj, s: obj.scale.clone(), t: 0 }); obj.scale.multiplyScalar(GROW_FROM); }   // после первого вида — вырастает
       };
-      loads.push(loadGLB(p.model).then(tpl => attach(tpl.clone(true))).catch(err => {
+      // В кадре первого вида (его комнаты и поле зрения стартовой камеры) — сразу, кроме мелочи (models/decor/props:
+      // книги, вазы, растения) — она после первого кадра и вырастает на месте (updateDecor); остальное — после первого кадра
+      const sz = i === 0 && o.size ? o.size : [1.2, 1.2, 1.2];
+      const first = !p.model.includes('/props/') && FIRST_ROOMS.has(slot.zone.room)
+        && inFirstView(p.pos[0], p.pos[1] + sz[1] / 2, p.pos[2], Math.hypot(...sz) / 2);
+      const load = (first ? loadGLB(p.model) : afterRoom(() => loadGLB(p.model))).then(tpl => attach(tpl.clone(true))).catch(err => {
         console.warn(`Обстановка ${slot.key}=${o.id}: модель ${p.model} не загрузилась, показан габарит`, err);
         if (i === 0) attach(stub(o));
-      }));
+      });
+      loads.push(load);
+      if (first) near.push(load);
     });
   }
   placeDecor(decor, state, anchors);
-  // Все модели на месте: найти носителей по габаритам и расставить ещё раз (с последними state и опорами)
-  decor.ready = Promise.all(loads).then(() => {
-    findCarriers(decor);
-    placeDecor(decor, decor.state, decor.anchors);
-  });
+  // Модели на месте: найти носителей по габаритам и расставить ещё раз (с последними state и опорами).
+  // near — комнаты первого вида (носители ищутся внутри зоны, поэтому их можно найти раньше остальных), ready — всё.
+  const settle = () => { findCarriers(decor); placeDecor(decor, decor.state, decor.anchors); };
+  decor.near = Promise.all(near).then(settle);
+  decor.ready = Promise.all(loads).then(settle);
   return decor;
 }
 
@@ -371,7 +415,7 @@ function applyPose(holder, i) {
 export function placeDecor(decor, state, anchors, { live = false } = {}) {
   if (!decor?.holders) return decor;
   decor.state = state;
-  decor.season = decorSeason(state?.sunDate);
+  decor.season = sceneSeason(state);   // выбор «Лето»/«Зима» или по дате: только прячет и показывает части
   if (anchors !== undefined) decor.anchors = anchors;
   const moves = parseMoves(state?.moves);
   decor.pass++;
@@ -443,6 +487,20 @@ export function commitDecorPart(decor, holder, moves, on) {
 export const isDecorMoved = (moves, pkey) => parseMoves(moves).has(pkey);
 
 /** Освободить своё: только геометрию заглушек. Шаблоны GLB общие для всех пересборок — их не трогать. */
+// Вещь, доехавшая после первого вида, вырастает за GROW_S (масштаб от GROW_FROM): без смены материалов и шейдеров.
+const GROW_S = 0.35, GROW_FROM = 0.01;
+/** Каждый кадр (main.js): true — что-то ещё растёт, нужен новый кадр. */
+export function updateDecor(decor, dt) {
+  if (!decor?.grow?.length) return false;
+  decor.grow = decor.grow.filter(g => {
+    g.t = Math.min(1, g.t + dt / GROW_S);
+    const k = 1 - Math.pow(1 - g.t, 3);
+    g.obj.scale.copy(g.s).multiplyScalar(GROW_FROM + (1 - GROW_FROM) * k);
+    return g.t < 1;
+  });
+  return true;
+}
+
 export function disposeDecor(decor) {
   decor?.group?.traverse(o => { if (o.userData.decorStub) o.geometry?.dispose(); });
 }
@@ -460,17 +518,30 @@ const productControl = slot => ({
   })),
 });
 
+// Сезон обстановки (поле balconySeason): сегмент «По дате / Лето / Зима» и строка, во что сейчас превращается «По дате».
+// Смена — обычный setState: placeDecor прячет и показывает части, без пересборки и загрузок.
+const SEASON_NAME = { summer: 'лето', winter: 'зима' };
+const seasonControls = () => [
+  { type: 'seg', key: 'balconySeason', label: 'Сезон', def: 'auto', options: SEASON_OPTIONS },
+  { type: 'readout', key: 'balconySeasonInfo', style: 'hint', value: st => ((st.balconySeason ?? 'auto') === 'auto'
+    ? `По дате · сейчас ${SEASON_NAME[decorSeason(st.sunDate)]}`
+    : `Всегда ${SEASON_NAME[st.balconySeason] ?? ''}, дата сцены не влияет`) },
+];
+
 export function registerDecorUI(addSection) {
   DECOR_ZONES.forEach((z, i) => {
+    if (!z.slots.length) return;   // зона только с полями-настройками — своего раздела нет
     const chosen = st => z.slots.map(s => optionOf(s, st)).filter(o => o.id !== 'none');
+    const season = z.fields.includes('balconySeason');
     addSection({
       id: `decor-${z.id}`, tab: 'furniture', feature: 'furniture', title: z.title, order: 60 + i,
-      focus: z.slots.map(s => s.key),
+      focus: [...(season ? ['balconySeason'] : []), ...z.slots.map(s => s.key)],
       summary: st => {
         const list = chosen(st), sum = list.reduce((a, o) => a + (Number(o.price_pln) || 0), 0);
-        return list.length ? `${list.length} шт. · ${fmtPrice(Math.round(sum))}` : 'пусто';
+        const base = list.length ? `${list.length} шт. · ${fmtPrice(Math.round(sum))}` : 'пусто';
+        return season ? `${base} · ${SEASON_NAME[sceneSeason(st)]}` : base;
       },
-      controls: z.slots.map(productControl),
+      controls: [...(season ? seasonControls() : []), ...z.slots.map(productControl)],
     });
   });
 }

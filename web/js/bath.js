@@ -9,7 +9,7 @@
 //   cut       — объекты на стенах (плитка, профили, короб, зеркало, смеситель): прятать вместе со стеной при вырезе
 //   colliders — [{ x0, x1, z0, z1 }] для прогулки: короб, унитаз, тумба, стекло
 //   light     — SpotLight светильника (выключен интенсивностью 0); setLight(on, scale) включает
-//   ready     — Promise: текстуры загружены
+//   ready     — Promise: материалы заданы (текстуры ванной догружаются после первого вида, materials.js later)
 //   seat      — wcSeat(spec): где сидит человек на унитазе
 // wcSeat(spec) -> { x, y, z, yaw } | null — точка таза на сиденье (крышка закрыта), yaw — куда смотрит сидящий
 //   (радианы вокруг +Y, 0 = +Z). Короб на стене x0, унитаз смотрит в +X. Читает seats.js.
@@ -33,8 +33,9 @@ export function buildBath(plan, spec, M, state = {}) {
   const group = new THREE.Group(); group.name = 'bath';
   const above = [], cut = [], colliders = [];
   const mat = bathMaterials(spec, state);
-  const jobs = [applyItem(mat.tile, { tex: spec.tile.texture, gen: true, rough: 1 })];
-  if (spec.vanity?.front?.tex) jobs.push(applyItem(mat.front, spec.vanity.front));
+  // Ванную с первого ракурса не видно: её текстуры грузятся после первого кадра (later, materials.js)
+  const jobs = [applyItem(mat.tile, { tex: spec.tile.texture, gen: true, rough: 1 }, {}, { later: true })];
+  if (spec.vanity?.front?.tex) jobs.push(applyItem(mat.front, spec.vanity.front, {}, { later: true }));
   const ready = Promise.all(jobs.map(j => j.catch(() => null)));
 
   const ref = v => resolveRef(v, spec, H);

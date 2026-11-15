@@ -5,8 +5,9 @@
 //   lighting.update()            — каждый кадр до рендера; true = нужен новый кадр (досчитались переотражения)
 //   lighting.invalidate()        — сцена изменилась (материалы, мебель): пересчитать переотражения
 //   SHADER_LAMP_LAYER            — слой «светильник шейдера» (см. п. 7): так помечает свои источники lamps.js
-//   lighting.ready               — Promise: дневная панорама загружена
-//   lighting.lights, .sun, .setQuality(q) — бюджет и глубина пересчёта по качеству (карты теней — render.js), .dispose()
+//   lighting.ready               — Promise: панорама текущего режима загружена и стоит (первый вид)
+//   lighting.lights, .sun, .setQuality(q) — бюджет, глубина пересчёта и размер панорамы по качеству (карты теней — render.js), .dispose()
+//   Панорамы грузятся по требованию: только режим, который сейчас выбран (HDR_TIER — размер по качеству).
 //
 // Как устроено (почему так, а не «один свет на всю сцену»):
 // 1. Зоны. Квартира делится на герметичные по свету зоны: открытое пространство (кухня-гостиная, холл, шахта),
@@ -45,6 +46,7 @@ import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUnifo
 import { sunFor, sunTimes } from './site.js';
 import { outdoorAreas } from './walk.js';
 import { rasterBusy } from './render.js';
+import { assetUrl, track, retry } from './loading.js';
 
 // ---------- настройки ----------
 
@@ -89,6 +91,8 @@ const LANDING_FILL = 0.12;
 // Ширина панорамы для карты окружения (PMREM). Размер PMREM входит в ключ шейдера three: будь панорамы разного
 // размера (вечерняя 1024, дневная 2048), переход день ↔ вечер пересобирал бы шейдеры всех материалов (секунды).
 const ENV_WIDTH = 2048;
+// Панорама по качеству (tools/make_web_assets.py): '1k' — textures/hdri/1k/ (≈1,5 МБ), 'full' — оригинал (до 6,5 МБ)
+const HDR_TIER = { eco: '1k', fast: '1k', high: 'full', ultra: 'full' };
 
 // ---------- режим и время суток ----------
 
@@ -518,25 +522,41 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     return { light: l, o, n, occEl };
   });
 
-  // --- панорамы
-  const env = {};
+  // --- панорамы: грузится только нужная сейчас (режим света) в размере по качеству (HDR_TIER), остальные — по требованию.
+  // Пока новая грузится, видна прежняя. Размер PMREM один (ENV_WIDTH): смена размера панорамы шейдеры не пересобирает.
+  const env = {};        // режим -> { tier, bg, env, … } — последняя загруженная
+  const loading = {};    // `${режим}@${размер}` -> Promise
   const pmrem = new THREE.PMREMGenerator(renderer);
-  async function loadHDR(name) {
+  let hdrTier = HDR_TIER.eco;
+  let resolveReady;
+  const ready = new Promise(r => { resolveReady = r; });
+  async function loadHDR(name, tier) {
+    const dir = `${hdriPath}${tier === '1k' ? '1k/' : ''}`;
     const [t, sunUV] = await Promise.all([
-      new RGBELoader().loadAsync(`${hdriPath}${name}.hdr`),
-      fetch(`${hdriPath}${name}.json`).then(r => r.json()),
+      track(retry(() => new RGBELoader().loadAsync(assetUrl(`${dir}${name}.hdr`)))),
+      fetch(assetUrl(`${hdriPath}${name}.json`)).then(r => r.json()),
     ]);
     t.mapping = THREE.EquirectangularReflectionMapping;
     const a = analyseHDR(THREE, t, sunUV, name === 'day');
     const src = resizeEquirect(THREE, t, ENV_WIDTH);
-    const e = { bg: t, env: pmrem.fromEquirectangular(src).texture, sunPsi: (sunUV.u - 0.5) * Math.PI * 2, ...a };
+    const e = { tier, bg: t, env: pmrem.fromEquirectangular(src).texture, sunPsi: (sunUV.u - 0.5) * Math.PI * 2, ...a };
     if (src !== t) src.dispose();
-    disposables.push(t, e.env);
     return e;
   }
-  const loads = ['day', 'evening', 'overcast'].map(n => loadHDR(n).then(e => { env[n] = e; if (current.mode) apply(current.mode, current.state); return e; })
-    .catch(err => { console.warn('lighting: нет панорамы', n, err); }));
-  const ready = loads[0];
+  // Режим нужен сейчас: загрузить в текущем размере, если такого ещё нет
+  function ensureEnv(mode) {
+    const tier = hdrTier, key = `${mode}@${tier}`;
+    if (env[mode]?.tier === tier || loading[key]) return;
+    loading[key] = loadHDR(mode, tier).then(e => {
+      if (tier !== hdrTier) { e.bg.dispose(); e.env.dispose(); return; }   // пока грузили, сменили качество
+      const old = env[mode];
+      env[mode] = e;
+      if (current.mode) apply(current.mode, current.state);
+      if (old) { old.bg.dispose(); old.env.dispose(); }
+      if (mode === current.mode) resolveReady();
+    }).catch(err => { console.warn('lighting: нет панорамы', mode, err); resolveReady(); })
+      .finally(() => { delete loading[key]; });
+  }
 
   // --- общие юниформы шейдера
   const maskData = new Float32Array(MASK_W * 5).fill(0xffff);
@@ -1021,7 +1041,8 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
 
   function apply(mode = getState?.().light ?? 'day', state = getState?.() ?? {}) {
     current.mode = mode; current.state = state;
-    const e = env[mode] ?? env.day;
+    ensureEnv(mode);
+    const e = env[mode] ?? env.day ?? Object.values(env)[0];
     const az = THREE.MathUtils.degToRad(state.sunAz ?? 25), elDeg = Math.max(0.5, state.sunEl ?? 40), el = THREE.MathUtils.degToRad(elDeg);
     let theta = 0;
     if (e) {
@@ -1075,7 +1096,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       const src = resizeEquirect(THREE, e.bg, ENV_WIDTH), old = e.env;
       e.env = pmrem.fromEquirectangular(src).texture;
       if (src !== e.bg) src.dispose();
-      disposables[disposables.indexOf(old)] = e.env;
+      old.dispose();
     }
     scene.traverse(o => { if (o.isLight && o.castShadow && o.shadow) o.shadow.needsUpdate = true; });
     bake = null;
@@ -1095,15 +1116,22 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     return changed;
   }
 
-  // Качество задаёт только бюджет и глубину пересчёта; карты теней — в render.js (одно место)
-  let quality = 'high';
-  function setQuality(q) { quality = q; }
+  // Качество задаёт бюджет и глубину пересчёта и размер панорамы; карты теней — в render.js (одно место)
+  let quality = 'eco';
+  function setQuality(q) {
+    quality = q;
+    const t = HDR_TIER[q] ?? 'full';
+    if (t === hdrTier) return;
+    hdrTier = t;
+    if (current.mode) ensureEnv(current.mode);
+  }
 
   function dispose() {
     scene.onBeforeRender = prevBefore ?? (() => {});
     renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
     scene.remove(sun, sun.target, ...windows.map(w => w.light));
     for (const d of disposables) d.dispose?.();
+    for (const e of Object.values(env)) { e.bg.dispose(); e.env.dispose(); }
     maskTex.dispose(); pmrem.dispose();
     gl.useProgram = useProgram;
   }

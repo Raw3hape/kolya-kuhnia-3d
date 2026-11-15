@@ -16,11 +16,21 @@
 //   E, Esc, Пробел или кнопка «Встать» — встать; F — встать и сразу пойти.
 //   Встаём туда, откуда сели: в прогулку на свободное место перед сиденьем или в прежний вид облёта.
 //   На диване включается звук ТВ (getTV().setAudio), встали — выключается.
-// registerSeatsUI(addSection, getSeats) — раздел «Сесть» во вкладке 'view' сразу после «Прогулки»: кнопка на каждое место.
+// registerSeatsUI(addSection, getSeats) — раздел «Сесть» во вкладке 'live' сразу после «Прогулки»: кнопка на каждое место.
 import { WALK, naturalFov, buildColliders } from './walk.js';
 import { wcSeat } from './bath.js';
 import { SOFA_CATALOG, FURN_SPEC } from './furniture.js';
 import { injectStyle } from './minimap.js';
+import { addHelp } from './help.js';
+
+// Справка (help.js): ui.js — окно «?», полоса внизу сидя (brief), раздел «Сесть»
+addHelp(
+  { mode: 'walk', topic: 'seat', keys: ['E'], text: 'сесть, когда прицел на диване, стуле или кресле (или клик)', touch: 'кнопка «Сесть» под прицелом', order: 55 },
+  { mode: 'design', topic: 'seat', keys: [], text: 'сесть можно и без прогулки: вкладка «Прогулка» → «Сесть»', order: 65 },
+  { mode: 'seat', topic: 'seat', keys: ['мышь'], text: 'осмотреться, колесо — приблизить', touch: 'ведите пальцем — осмотреться', brief: true, order: 10 },
+  { mode: 'seat', topic: 'seat', keys: ['E'], text: 'встать (или Esc, Пробел); F — встать сразу в прогулку', touch: '«Встать» внизу', brief: true, order: 20 },
+  { mode: 'seat', topic: 'seat', keys: [], text: 'на диване включается звук телевизора', order: 30 },
+);
 
 export const SEAT = {
   eyeAboveSeat: 0.72,  // глаза над сиденьем у человека ростом WALK.height (дальше — пропорционально росту из прогулки), м
@@ -165,7 +175,6 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
       }
       controls.enabled = false;
       fov = tFov = naturalFov(camera.aspect);
-      showHint();
     }
     if (seat?.id === 'sofa' && a.id !== 'sofa') getTV?.()?.setAudio(false);
     seat = a; seatKeyRef = lastKey; eye = eyeOf(a);
@@ -337,9 +346,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
   const el = (tag, cls, text) => { const d = document.createElement(tag); d.className = cls; if (text) d.textContent = text; document.body.appendChild(d); d.hidden = true; return d; };
   const aimHint = el('div', 'kd-hint kw-float'); aimHint.setAttribute('role', 'status');
   const aimBtn = el('button', 'kd-btn kw-float', 'Сесть'); aimBtn.type = 'button';
-  const standBtn = el('button', 'ks-stand kw-float', 'Встать'); standBtn.type = 'button';
-  const seatHint = el('div', 'kw-hint kw-float ks-hint'); seatHint.setAttribute('role', 'status');
-  let touchSeen = false, hintTimer = 0;
+  let touchSeen = false;
 
   // дверь под прицелом важнее: тогда своё не показываем (у двери своя подсказка на том же месте)
   const aimed = () => (target && !getDoors?.()?.target ? target : null);
@@ -351,20 +358,8 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     if (t) aimBtn.textContent = t.label;
     document.body.classList.toggle('ks-aim', !!t);
   }
-  function showHint() {
-    const touch = touchSeen || coarse();
-    seatHint.innerHTML = touch
-      ? 'Ведите пальцем — осмотреться. Встать — кнопкой внизу.'
-      : 'Мышь — осмотреться, колесо — приблизить. <b>E</b>, <b>Esc</b> или <b>Пробел</b> — встать.';
-    seatHint.hidden = false; seatHint.classList.remove('fade');
-    clearTimeout(hintTimer);
-    hintTimer = setTimeout(() => { seatHint.classList.add('fade'); hintTimer = setTimeout(() => { seatHint.hidden = true; }, 450); }, 5000);
-  }
-  function syncUI() {
-    const on = mode === 'sitting' || mode === 'seated';
-    standBtn.hidden = !on;
-    if (!on) { clearTimeout(hintTimer); seatHint.hidden = true; }
-  }
+  // сидим: ui.js по этому классу показывает полосу «сидя» с кнопкой «Встать» (seats.stand())
+  function syncUI() { document.body.classList.toggle('ks-seated', mode !== 'off'); }   // ui.js следит за классом: снимается, когда встали совсем
 
   // ---------- ввод ----------
 
@@ -421,14 +416,12 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     requestRender?.();
   };
   const onAimBtn = e => { e.preventDefault(); if (aimed()) sitOn(target.id); };
-  const onStandBtn = e => { e.preventDefault(); stand(); };
   canvas.addEventListener('pointerdown', onDown);
   canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('pointercancel', onCancel);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   aimBtn.addEventListener('click', onAimBtn);
-  standBtn.addEventListener('click', onStandBtn);
 
   function dispose() {
     if (mode !== 'off') abandon(false);
@@ -438,9 +431,8 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     canvas.removeEventListener('pointerup', onUp);
     canvas.removeEventListener('pointercancel', onCancel);
     canvas.removeEventListener('wheel', onWheel);
-    clearTimeout(hintTimer);
-    document.body.classList.remove('ks-aim');
-    for (const d of [aimHint, aimBtn, standBtn, seatHint]) d.remove();
+    document.body.classList.remove('ks-aim', 'ks-seated');
+    for (const d of [aimHint, aimBtn]) d.remove();
   }
 
   return {
@@ -458,7 +450,7 @@ export function registerSeatsUI(addSection, getSeats) {
   const list = () => getSeats()?.list() ?? [];
   const at = i => list()[i];
   addSection({
-    id: 'seats', tab: 'view', title: 'Сесть', order: 20.5,
+    id: 'seats', tab: 'live', title: 'Сесть', order: 20,
     visible: () => list().length > 0,
     summary: () => { const n = list().length; return n ? `${n} ${n === 1 ? 'место' : n < 5 ? 'места' : 'мест'}` : ''; },
     controls: [
@@ -467,21 +459,13 @@ export function registerSeatsUI(addSection, getSeats) {
         visible: () => !!at(i), label: () => at(i)?.label ?? '',
         run: () => { const s = at(i); if (s) getSeats()?.sitOn(s.id); },
       })),
-      { type: 'readout', key: 'seatKeys', style: 'hint',
-        value: 'Работает из облёта и из прогулки (там — прицел на сиденье и E). Сидя: мышь или палец — осмотреться, колесо — приблизить, E, Esc или Пробел — встать. На диване включается звук ТВ.' },
+      { type: 'help', topic: 'seat' },
     ],
   });
 }
 
-// Токены --kw-* задаёт .kw-float (minimap.js); подсказка и кнопка под прицелом — классы doors.js (.kd-hint, .kd-btn),
-// подсказка «сидя» — .kw-hint из walk.js. Здесь только кнопка «Встать» и подсветка прицела.
+// Токены --kw-* задаёт .kw-float (minimap.js); подсказка и кнопка под прицелом — классы doors.js (.kd-hint, .kd-btn);
+// «Встать» и клавиши сидя — полоса режима ui.js. Здесь только подсветка прицела.
 const SEATS_CSS = `
 .ks-aim .kw-cross { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--kw-accent); box-shadow: 0 0 0 1.5px var(--kw-sheet); opacity: 1; }
-.ks-stand { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); top: calc(16px + env(safe-area-inset-top, 0px));
-  min-height: 44px; min-width: 120px; padding: 0 18px; border: 1px solid var(--kw-accent); border-radius: 4px;
-  background: var(--kw-accent); color: var(--kw-accent-ink); box-shadow: var(--kw-shadow); cursor: pointer; touch-action: manipulation;
-  font: 500 14px/1 var(--f-body, "Inter", "Helvetica Neue", Arial, sans-serif); }
-.ks-stand:focus-visible { outline: 2px solid var(--kw-accent); outline-offset: 2px; }
-.ks-stand[hidden] { display: none; }
-@media (max-width: 760px) { .ks-stand { left: auto; right: max(12px, env(safe-area-inset-right, 0px)); transform: none; top: calc(78px + env(safe-area-inset-top, 0px)); } }
 `;

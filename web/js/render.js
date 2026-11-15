@@ -5,6 +5,8 @@
 //   pipe.render()               — каждый кадр (рисует, только если что-то изменилось: в покое кадров нет)
 //   pipe.invalidate()           — сцена или камера изменились; pipe.setQuality(q), setSize, setToneMapping
 //   pipe.enterPhoto()/exitPhoto(), capture(minSamples) -> Blob PNG, onProgress(cb), onLive(fn), setOverlay(o)
+//   pipe.whenDrawn()            — Promise: следующий растровый кадр нарисован (шейдеры собраны, текстуры залиты) — первый вид
+//   DEFAULT_QUALITY             — качество для тех, кто его ещё не выбирал (выбор хранит ui.js в браузере): «Эконом»
 //   rasterBusy(renderer)        — идёт фоновая сборка шейдеров: lighting.js в это время не снимает зонды
 //   NOTICE                      — имя события на window для всплывающих сообщений (ловит ui.js)
 //   QUALITY_REQUEST             — событие «сменить качество» (кнопка в подсказке о малом числе кадров; ловит ui.js)
@@ -47,6 +49,8 @@ export const QUALITY = {
   high:  { px: 4.5e6, pr: [1, 1.6],  msaa: 4, shadow: 4096, ao: 16, bloom: true,  pd: { radius: 6, rings: 2, samples: 16 } },
   ultra: { px: 9e6,   pr: [1.5, 2],  msaa: 4, shadow: 4096, ao: 32, bloom: true,  pd: { radius: 8, rings: 3, samples: 24 } },
 };
+// Первое открытие — самое лёгкое: и кадр, и ассеты (текстуры 1k, панорама 1k — materials.js, lighting.js)
+export const DEFAULT_QUALITY = 'eco';
 export const NOTICE = 'kitchen-notice';
 const notice = (msg, action = null, ms) => dispatchEvent(new CustomEvent(NOTICE, { detail: { msg, action, ms } }));
 // Просьба сменить качество (detail — id из QUALITY): ui.js ставит его как выбор пользователя (настройка браузера)
@@ -73,7 +77,7 @@ const busy = new WeakSet();   // рендереры, у которых идёт 
 export const rasterBusy = renderer => busy.has(renderer);
 
 // photoPixels — сколько пикселей трассировать (больше — растягивается): 1,5 Мп ≈ 1,5 прохода/с на M5 Pro
-export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 1024, autoExposure = true, photoPixels = 1.5e6 }) {
+export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 1024, autoExposure = true, photoPixels = 1.5e6, quality: startQuality = DEFAULT_QUALITY }) {
   const canvas = renderer.domElement;
   renderer.debug.checkShaderErrors = false;   // ошибки шейдеров проверяет фоновая сборка (startCompile), без журнала на каждую
   let quality = 'high', q = QUALITY.high;
@@ -297,6 +301,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   let balance = null;   // множители RGB баланса белого фото (Vector3 в шейдере вывода)
   let progressCb = null, lastReport = '';
   const waiters = [];
+  const drawnWaiters = [];   // whenDrawn()
   // Слой поверх растра (руки с оружием в прогулке, viewmodel.js): { active() -> bool, draw() }.
   // Рисуется только в живом растре: не в фото-режиме, не в capture() и не в трассировщике.
   let overlay = null;
@@ -330,7 +335,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     const want = explicit && !ptFailed && !broken;
     if (want && !pt) loadTracer();
     if (!want || !pt || building || quiet < SETTLE) {
-      if (rasterDirty) { rasterDirty = false; refreshShadows(); drawRaster(); if (ov) overlay.draw(); if (!explicit) watchFrameRate(now); }
+      if (rasterDirty) { rasterDirty = false; refreshShadows(); drawRaster(); if (ov) overlay.draw(); if (!explicit) watchFrameRate(now); drawnWaiters.splice(0).forEach(f => f()); }
       report(0, want ? (pt && !building ? 'waiting' : building ? 'building' : 'loading') : 'idle');
       return;
     }
@@ -565,7 +570,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   }
 
   function setQuality(name) {
-    quality = QUALITY[name] ? name : 'high';
+    quality = QUALITY[name] ? name : DEFAULT_QUALITY;
     q = QUALITY[quality];
     configureComposer();
     renderer.shadowMap.needsUpdate = true;
@@ -579,7 +584,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   }
 
   setToneMapping('neutral');   // Khronos PBR Neutral: цвета материалов до ~0.8 не сдвигаются, мягкое плечо в светах
-  setQuality('high');
+  setQuality(startQuality);
 
   return {
     render,
@@ -593,6 +598,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     onLive(fn) { liveFns.add(fn); return () => liveFns.delete(fn); },   // см. capture() — tv.js
     dispose,
     onProgress(cb) { progressCb = cb; },
+    whenDrawn() { rasterDirty = true; return new Promise(r => drawnWaiters.push(r)); },
     setOverlay(o) { overlay = o; rasterDirty = true; },   // см. overlay выше; null — снять
     get quality() { return quality; },
     get photo() { return explicit; },
