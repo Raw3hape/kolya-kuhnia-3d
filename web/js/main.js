@@ -532,7 +532,7 @@ doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, wa
 hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site });
 viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getWalk: () => walk, getHunt: () => hunt });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
-tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender });
+tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel });   // ТВ, ноутбук, телефон (в руке — handheld.js)
 seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender, getState: () => state,
   getFurniture: () => furn, getDecor: () => decor, getDoors: () => doors, getTV: () => tv });
 
