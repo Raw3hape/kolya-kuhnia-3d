@@ -25,6 +25,7 @@
 //                  не задано — как было.
 // resetDecorPart(moves, pkey) -> moves без этой части. normalizeMoves(str) -> чистая строка (для decode).
 // decorKey(state) -> строка; меняется только вместе с выбором опций — тогда main.js пересобирает обстановку.
+// decorSeason(dateISO) -> 'summer' | 'winter' — сезон частей с полем season (см. ниже).
 // registerDecorUI(addSection) — по разделу на зону во вкладке «Мебель» (id decor-<zone>), в разделе по выбору
 //                  товара на слот: миниатюра, имя, бренд, цена, размер, ссылка в магазин.
 //
@@ -36,6 +37,11 @@
 // Носитель: часть, стоящая на другой части или в ней (книги в стеллаже, постель на матрасе, лампа на тумбочке —
 // по габаритам моделей в положении по умолчанию), едет вместе с ней. Перетащили на другую полку или вещь —
 // носитель меняется (поле on записи сдвига).
+//
+// Сезон (season на части): "summer" | "winter" — часть видна только в этот сезон сцены (decorSeason(state.sunDate):
+// ноябрь–март — зима, апрель–октябрь — лето). Модели обоих сезонов грузятся при сборке, смена даты только
+// прячет/показывает части в placeDecor (main.js уже зовёт его из setState): без пересборки, без загрузок, без шейдеров;
+// спрятанная часть не сталкивается и не даёт места. decorKey сезон не включает. Сдвиги и носители работают как обычно.
 //
 // Код сдвигов (state.moves): записи через '~', отсортированы по ключу; запись = <pkey>_<dx>_<dz>_<dy>_<dr>_<on>,
 // pkey = <zone>.<slot>.<option>.<номер части>; dx, dz, dy — мм, dr — градусы, целые в base36 со знаком;
@@ -66,6 +72,12 @@ const vec = (v, n) => (Array.isArray(v) && v.length === n && v.every(Number.isFi
 
 export const ANCHORS = ['console', 'tv', 'island', 'table', 'sofa'];
 const MOUNTS = ['floor', 'wall', 'surface'];
+// Сезон части по дате сцены: ноябрь–март — 'winter', апрель–октябрь — 'summer' (нет даты — по сегодняшней).
+const SEASONS = ['summer', 'winter'];
+export function decorSeason(dateISO) {
+  const m = Number(String(dateISO ?? '').slice(5, 7)) || new Date().getMonth() + 1;
+  return m >= 11 || m <= 3 ? 'winter' : 'summer';
+}
 
 // Место для сидения (seats.js): h — высота сиденья, depth — сдвиг от центра следа назад к спинке, label — подсказка.
 const parseSeat = s => (Number.isFinite(s?.h) ? { h: s.h, depth: Number(s.depth) || 0, label: s.label || 'Сесть' } : null);
@@ -76,7 +88,8 @@ function parseOption(o) {
   const parts = (Array.isArray(o.parts) ? o.parts : [])
     .map(p => (p?.model && vec(p.pos, 3)
       ? { model: p.model, pos: p.pos, rot: Number(p.rot) || 0, seat: parseSeat(p.seat), on: typeof p.on === 'string' ? p.on : null,
-        anchor: ANCHORS.includes(p.anchor) ? p.anchor : null, mount: MOUNTS.includes(p.mount) ? p.mount : null }
+        anchor: ANCHORS.includes(p.anchor) ? p.anchor : null, mount: MOUNTS.includes(p.mount) ? p.mount : null,
+        season: SEASONS.includes(p.season) ? p.season : null }
       : null)).filter(Boolean);
   // seat на опции — это место первой части (если у части нет своего)
   if (parts[0] && !parts[0].seat) parts[0].seat = parseSeat(o.seat);
@@ -234,7 +247,7 @@ export function buildDecor(state, plan, M, anchors) {
         pkey, slot, option: o, index: i, onSlot: base ? base.id : null,
         label: `${slot.label}: ${o.name}${o.parts.length > 1 ? ` · часть ${i + 1}` : ''}`,
         base: { x: p.pos[0], y: p.pos[1], z: p.pos[2], r: rad(p.rot) },
-        anchor: p.anchor, mount: p.mount ?? (p.pos[1] < 0.02 ? 'floor' : null), seat: p.seat,
+        anchor: p.anchor, mount: p.mount ?? (p.pos[1] < 0.02 ? 'floor' : null), seat: p.seat, season: p.season,
         collide: o.collide, box: null, wbox: new THREE.Box3(),
         defOn: p.anchor ?? undefined,          // носитель по умолчанию: часть (pkey) или опора; уточняется после загрузки
         L: frame(), cur: frame(), carrier: null, deps: [], pass: -1, busy: false, hidden: false,
@@ -273,6 +286,7 @@ export function buildDecor(state, plan, M, anchors) {
 
 // Носитель по умолчанию: самая маленькая часть, в чьём габарите (в положении по умолчанию) стоит основание этой.
 // Кандидаты — части той же опции и слота из on; без своей опоры — любые части зоны. Основание носителя строго ниже.
+// Сезонная часть носит только части своего сезона.
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _up = new THREE.Vector3(0, 1, 0);
 function findCarriers(decor) {
   const defBox = new Map();
@@ -290,6 +304,7 @@ function findCarriers(decor) {
     for (const [c, box] of defBox) {
       const ci = PART.get(c);
       if (c === h || ci.base.y >= b.y - 0.005 || ci.slot.zone !== i.slot.zone) continue;
+      if (ci.season && ci.season !== i.season) continue;   // летняя вещь не носит зимнюю: спрятана — спрятала бы и её
       const near = ci.option === i.option || (i.onSlot && ci.slot.id === i.onSlot);
       if (!near && i.anchor) continue;
       if (b.x < box.min.x - 0.01 || b.x > box.max.x + 0.01 || b.z < box.min.z - 0.01 || b.z > box.max.z + 0.01) continue;
@@ -332,6 +347,7 @@ function resolve(decor, holder, moves, anchors) {
     else if (a?.cur && a?.def) { toFrame(i.cur, L, a.cur, a.def); placed = true; if (a.span && outOfSpan(i, a.span)) i.hidden = true; }
   }
   if (!placed) { i.cur.x = L.x; i.cur.y = L.y; i.cur.z = L.z; i.cur.r = L.r; }
+  if (i.season && i.season !== decor.season) i.hidden = true;   // не тот сезон — и то, что на ней, тоже
   i.busy = false; i.pass = decor.pass;
   return i;
 }
@@ -355,6 +371,7 @@ function applyPose(holder, i) {
 export function placeDecor(decor, state, anchors, { live = false } = {}) {
   if (!decor?.holders) return decor;
   decor.state = state;
+  decor.season = decorSeason(state?.sunDate);
   if (anchors !== undefined) decor.anchors = anchors;
   const moves = parseMoves(state?.moves);
   decor.pass++;

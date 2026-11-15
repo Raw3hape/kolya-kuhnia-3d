@@ -1,0 +1,278 @@
+{
+ "asparen": {
+  "dest": "balcony",
+  "size": [
+   0.899,
+   0.401,
+   0.383
+  ],
+  "tris": 3000,
+  "top": 0.11
+ },
+ "cushion-tofto-50": {
+  "dest": "props",
+  "size": [
+   0.48,
+   0.444,
+   0.197
+  ],
+  "tris": 672
+ },
+ "fejka-lavender": {
+  "dest": "props",
+  "size": [
+   0.352,
+   0.401,
+   0.166
+  ],
+  "tris": 9216
+ },
+ "getkal-railing": {
+  "dest": "balcony",
+  "size": [
+   8.181,
+   0.074,
+   0.074
+  ],
+  "tris": 6192,
+  "wrap": 0.032,
+  "axisY": 0.033
+ },
+ "lantern-berggran-34": {
+  "dest": "props",
+  "size": [
+   0.135,
+   0.468,
+   0.126
+  ],
+  "tris": 3139,
+  "candle": [
+   0.19,
+   0.037
+  ]
+ },
+ "lantern-borrby-20": {
+  "dest": "props",
+  "size": [
+   0.111,
+   0.199,
+   0.113
+  ],
+  "tris": 3140,
+  "candle": [
+   0.09,
+   0.03
+  ]
+ },
+ "lantern-borrby-28": {
+  "dest": "props",
+  "size": [
+   0.152,
+   0.277,
+   0.152
+  ],
+  "tris": 3139,
+  "candle": [
+   0.14,
+   0.037
+  ]
+ },
+ "lattbetong-160": {
+  "dest": "balcony",
+  "size": [
+   1.6,
+   0.004,
+   2.301
+  ],
+  "tris": 400,
+  "top": 0.004
+ },
+ "lydersholm-160": {
+  "dest": "balcony",
+  "size": [
+   1.602,
+   0.005,
+   2.302
+  ],
+  "tris": 186,
+  "top": 0.003
+ },
+ "morum-160": {
+  "dest": "balcony",
+  "size": [
+   1.596,
+   0.005,
+   2.335
+  ],
+  "tris": 400,
+  "top": 0.001
+ },
+ "nammaro-armchair": {
+  "dest": "balcony",
+  "size": [
+   0.562,
+   0.786,
+   0.634
+  ],
+  "tris": 8500,
+  "seat": 0.481,
+  "seatFront": 0.247,
+  "backFront": -0.236
+ },
+ "nammaro-bench": {
+  "dest": "balcony",
+  "size": [
+   1.06,
+   0.785,
+   0.633
+  ],
+  "tris": 10999,
+  "seat": 0.48,
+  "seatFront": 0.247,
+  "backFront": -0.237
+ },
+ "nammaro-module": {
+  "dest": "balcony",
+  "size": [
+   0.635,
+   0.791,
+   0.752
+  ],
+  "tris": 13107,
+  "seat": 0.394,
+  "seatFront": 0.347,
+  "backFront": -0.088
+ },
+ "nammaro-stool": {
+  "dest": "balcony",
+  "size": [
+   0.365,
+   0.45,
+   0.365
+  ],
+  "tris": 4999,
+  "top": 0
+ },
+ "nammaro-table-75": {
+  "dest": "balcony",
+  "size": [
+   0.75,
+   0.752,
+   0.63
+  ],
+  "tris": 7000,
+  "top": 0.734
+ },
+ "nypon-32": {
+  "dest": "balcony",
+  "size": [
+   0.339,
+   0.315,
+   0.339
+  ],
+  "tris": 3000,
+  "top": 0.01
+ },
+ "runnen-akacja": {
+  "dest": "balcony",
+  "size": [
+   8.149,
+   0.02,
+   1.851
+  ],
+  "tris": 12,
+  "tile": 0.3
+ },
+ "runnen-trawa": {
+  "dest": "balcony",
+  "size": [
+   8.149,
+   0.02,
+   1.851
+  ],
+  "tris": 12,
+  "tile": 0.3
+ },
+ "sheepskin-toftlund-drape": {
+  "dest": "props",
+  "size": [
+   0.55,
+   0.406,
+   0.541
+  ],
+  "tris": 3226,
+  "edge": [
+   0.251,
+   0.06
+  ],
+  "flat": 0.435
+ },
+ "svartra-festoon": {
+  "dest": "balcony",
+  "size": [
+   4.41,
+   0.245,
+   0.06
+  ],
+  "tris": 2728,
+  "span": 4.4
+ },
+ "tarno-chair": {
+  "dest": "balcony",
+  "size": [
+   0.39,
+   0.784,
+   0.447
+  ],
+  "tris": 6000,
+  "seat": 0.44,
+  "seatFront": -0.02,
+  "backFront": null
+ },
+ "tarno-table": {
+  "dest": "balcony",
+  "size": [
+   0.55,
+   0.705,
+   0.54
+  ],
+  "tris": 5000,
+  "top": 0.704
+ },
+ "throw-klippoxel": {
+  "dest": "props",
+  "size": [
+   0.42,
+   0.06,
+   0.3
+  ],
+  "tris": 324
+ },
+ "vinterfint-fir-150": {
+  "dest": "balcony",
+  "size": [
+   0.563,
+   1.5,
+   0.567
+  ],
+  "tris": 8392
+ },
+ "vinterfint-fir-84": {
+  "dest": "props",
+  "size": [
+   0.391,
+   0.94,
+   0.387
+  ],
+  "tris": 5284
+ },
+ "vinterfint-pine-bunch": {
+  "dest": "props",
+  "size": [
+   0.54,
+   0.765,
+   0.339
+  ],
+  "tris": 9876
+ }
+}

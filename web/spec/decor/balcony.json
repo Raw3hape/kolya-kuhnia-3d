@@ -1,0 +1,771 @@
+{
+ "zone": "balcony",
+ "title": "Балкон",
+ "room": "balcony",
+ "_note": "Генерирует tools/decor/balcony/compose.py — править раскладки там. Части с season видны только летом или зимой (decor.js). Порядок слотов и опций = код варианта: новое только в конец.",
+ "slots": [
+  {
+   "id": "deck",
+   "label": "Пол: настил",
+   "default": "runnen-akacja",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "runnen-akacja",
+     "name": "RUNNEN akacja — настил на весь балкон, 8.15 × 1.85 м",
+     "brand": "IKEA",
+     "article": "605.184.86",
+     "url": "https://www.ikea.com/pl/pl/p/runnen-plyta-podlogowa-ogrodowa-akacja-60518486/",
+     "price_pln": 1519.81,
+     "finish": "akacja",
+     "note": "Плиты 30 × 30 × 2 см на всю площадь (15.1 м², 19 упаковок по 0,81 м²): пол балкона встаёт вровень с квартирой. Края у ограждения подрезаются по месту. Состав: RUNNEN Płyta podłogowa, ogrodowa, 0.81 m² (9 szt. 30x30 cm, grubość 2 cm), akacja ×19 — 79.99 zł.",
+     "size": [
+      8.149,
+      0.02,
+      1.851
+     ],
+     "thumb": "models/decor/balcony/thumbs/deck-runnen-akacja.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/balcony/runnen-akacja/model.glb",
+       "pos": [
+        1.672,
+        -0.02,
+        -1.311
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "runnen-trawa",
+     "name": "RUNNEN sztuczna trawa — настил на весь балкон, 8.15 × 1.85 м",
+     "brand": "IKEA",
+     "article": "503.131.31",
+     "url": "https://www.ikea.com/pl/pl/p/runnen-plyta-podlogowa-ogrodowa-sztuczna-trawa-50313131/",
+     "price_pln": 3401.0,
+     "finish": "sztuczna trawa",
+     "note": "Плиты 30 × 30 × 2 см на всю площадь (15.1 м², 19 упаковок по 0,81 м²): пол балкона встаёт вровень с квартирой. Края у ограждения подрезаются по месту. Состав: RUNNEN Płyta podłogowa, ogrodowa, 0.81 m² (9 szt. 30x30 cm, grubość 2 cm), sztuczna trawa ×19 — 179 zł.",
+     "size": [
+      8.149,
+      0.02,
+      1.851
+     ],
+     "thumb": "models/decor/balcony/thumbs/deck-runnen-trawa.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/balcony/runnen-trawa/model.glb",
+       "pos": [
+        1.672,
+        -0.02,
+        -1.311
+       ],
+       "rot": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sofa",
+   "label": "Диван у стены",
+   "default": "nammaro-sofa2",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "nammaro-sofa2",
+     "name": "NÄMMARÖ диван 2-местный 126 см + подушки KUDDARNA, сезонный текстиль",
+     "brand": "IKEA",
+     "article": "105.102.99",
+     "url": "https://www.ikea.com/pl/pl/p/naemmaroe-sekcja-siedz-sofy-modulowej-ogr-bejca-jasnobrazowa-10510299/",
+     "price_pln": 1149.95,
+     "finish": "bejca jasnobrązowa",
+     "note": "Модульный диван из акации под кухонным окном, спиной к фасаду, лицом к полю; 2 места. Меняется само по дате сцены: летом (апрель–октябрь) — подушки TOFTÖ, зимой (ноябрь–март) — шкуры TOFTLUND и плед KLIPPOXEL. Состав: NÄMMARÖ Sekcja siedz sofy modułowej, ogr, 63x63 cm, bejca jasnobrązowa ×2 — 220 zł · NÄMMARÖ Oparcie sofy modułowej, zewnętrzne, 60x56 cm, bejca jasnobrązowa ×2 — 90 zł · KUDDARNA Poducha siedziska, ogrodowa, 62x62 cm, jasny szarobeżowy ×2 — 75 zł · KUDDARNA Poduszka oparcia, na zewnątrz, 62x44 cm, jasny szarobeżowy ×2 — 45 zł · TOFTÖ Poszewka, 50x50 cm, ciemny szarozielony, na zewnątrz ×2 — 49.99 zł · INNER Poduszka wewnętrzna, 50x50 cm, biały, do wewnątrz/na zewnątrz ×2 — 15 zł · TOFTLUND Dywan (imitacja skóry owczej), 55x85 cm, biały ×2 — 39.99 zł · KLIPPOXEL Pled, 130x170 cm, ciemnozielony — 79.99 zł.",
+     "size": [
+      1.335,
+      0.818,
+      0.752
+     ],
+     "thumb": "models/decor/balcony/thumbs/sofa-nammaro-sofa2.jpg",
+     "parts": [
+      {
+       "model": "models/decor/balcony/nammaro-module/model.glb",
+       "pos": [
+        0.968,
+        -0.02,
+        -0.781
+       ],
+       "rot": 180,
+       "seat": {
+        "h": 0.394,
+        "depth": -0.13,
+        "label": "Сесть на диван"
+       }
+      },
+      {
+       "model": "models/decor/balcony/nammaro-module/model.glb",
+       "pos": [
+        1.603,
+        -0.02,
+        -0.781
+       ],
+       "rot": 180,
+       "seat": {
+        "h": 0.394,
+        "depth": -0.13,
+        "label": "Сесть на диван"
+       }
+      },
+      {
+       "model": "models/decor/props/cushion-tofto-50/model.glb",
+       "pos": [
+        0.868,
+        0.354,
+        -0.796
+       ],
+       "rot": 187,
+       "season": "summer"
+      },
+      {
+       "model": "models/decor/props/cushion-tofto-50/model.glb",
+       "pos": [
+        1.703,
+        0.354,
+        -0.796
+       ],
+       "rot": 173,
+       "season": "summer"
+      },
+      {
+       "model": "models/decor/props/sheepskin-toftlund-drape/model.glb",
+       "pos": [
+        0.968,
+        0.318,
+        -0.877
+       ],
+       "rot": 180,
+       "season": "winter"
+      },
+      {
+       "model": "models/decor/props/sheepskin-toftlund-drape/model.glb",
+       "pos": [
+        1.603,
+        0.318,
+        -0.877
+       ],
+       "rot": 180,
+       "season": "winter"
+      },
+      {
+       "model": "models/decor/props/throw-klippoxel/model.glb",
+       "pos": [
+        1.653,
+        0.394,
+        -0.928
+       ],
+       "rot": 192,
+       "season": "winter"
+      }
+     ]
+    },
+    {
+     "id": "nammaro-bench",
+     "name": "NÄMMARÖ скамья со спинкой 106 см + подушки KUDDARNA, сезонный текстиль",
+     "brand": "IKEA",
+     "article": "305.103.02",
+     "url": "https://www.ikea.com/pl/pl/p/naemmaroe-lawka-z-oparciem-na-zewnatrz-bejca-jasnobrazowa-30510302/",
+     "price_pln": 693.97,
+     "finish": "bejca jasnobrązowa",
+     "note": "Скамья вместо дивана — легче и уже. Меняется само по дате сцены: летом (апрель–октябрь) — подушки TOFTÖ, зимой (ноябрь–март) — шкуры TOFTLUND и плед KLIPPOXEL. Состав: NÄMMARÖ Ławka z oparciem, na zewnątrz, 106x62x78 cm, bejca jasnobrązowa — 449 zł · KUDDARNA Poduszka na krzesło, ogrodowa, 44x44 cm, jasny szarobeżowy ×2 — 30 zł · TOFTÖ Poszewka, 50x50 cm, ciemny szarozielony, na zewnątrz — 49.99 zł · INNER Poduszka wewnętrzna, 50x50 cm, biały, do wewnątrz/na zewnątrz — 15 zł · TOFTLUND Dywan (imitacja skóry owczej), 55x85 cm, biały — 39.99 zł · KLIPPOXEL Pled, 130x170 cm, ciemnozielony — 79.99 zł.",
+     "size": [
+      1.08,
+      0.904,
+      0.633
+     ],
+     "thumb": "models/decor/balcony/thumbs/sofa-nammaro-bench.jpg",
+     "parts": [
+      {
+       "model": "models/decor/balcony/nammaro-bench/model.glb",
+       "pos": [
+        1.285,
+        -0.02,
+        -0.721
+       ],
+       "rot": 180,
+       "seat": {
+        "h": 0.48,
+        "depth": -0.005,
+        "label": "Сесть на скамью"
+       }
+      },
+      {
+       "model": "models/decor/props/cushion-tofto-50/model.glb",
+       "pos": [
+        0.985,
+        0.44,
+        -0.588
+       ],
+       "rot": 187,
+       "season": "summer"
+      },
+      {
+       "model": "models/decor/props/sheepskin-toftlund-drape/model.glb",
+       "pos": [
+        1.525,
+        0.404,
+        -0.717
+       ],
+       "rot": 180,
+       "season": "winter"
+      },
+      {
+       "model": "models/decor/props/throw-klippoxel/model.glb",
+       "pos": [
+        1.045,
+        0.48,
+        -0.768
+       ],
+       "rot": 192,
+       "season": "winter"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "side",
+   "label": "Столик у дивана",
+   "default": "nammaro-stool",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "nammaro-stool",
+     "name": "NÄMMARÖ складной табурет как столик у дивана",
+     "brand": "IKEA",
+     "article": "705.103.00",
+     "url": "https://www.ikea.com/pl/pl/p/naemmaroe-stolek-ogrodowy-skladany-bejca-jasnobrazowa-70510300/",
+     "price_pln": 79.99,
+     "finish": "składany, bejca jasnobrązowa",
+     "note": "Под чашку и фонарь справа от дивана; складывается на зиму, если нужно место. Состав: NÄMMARÖ Stołek, ogrodowy, 37x45 cm, składany, bejca jasnobrązowa — 79.99 zł.",
+     "size": [
+      0.365,
+      0.45,
+      0.365
+     ],
+     "thumb": "models/decor/balcony/nammaro-stool/thumb.jpg",
+     "parts": [
+      {
+       "model": "models/decor/balcony/nammaro-stool/model.glb",
+       "pos": [
+        2.163,
+        -0.02,
+        -0.737
+       ],
+       "rot": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "bistro",
+   "label": "Столик на двоих",
+   "default": "nammaro-75",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "nammaro-75",
+     "name": "NÄMMARÖ стол 75×63 + 2 кресла с подлокотниками и подушками KUDDARNA",
+     "brand": "IKEA",
+     "article": "005.103.08",
+     "url": "https://www.ikea.com/pl/pl/p/naemmaroe-stol-ogrodowy-bejca-jasnobrazowa-00510308/",
+     "price_pln": 807.0,
+     "finish": "bejca jasnobrązowa",
+     "note": "Завтрак на двоих у глухой части двери гостиной; правое кресло кончается за 15 см до открывающейся створки. Состав: NÄMMARÖ Stół, ogrodowy, 75x63 cm, bejca jasnobrązowa — 249 zł · NÄMMARÖ Krzesło z podłokietnikami, ogr., 56x62x78 cm, bejca jasnobrązowa ×2 — 249 zł · KUDDARNA Poduszka na krzesło, ogrodowa, 44x44 cm, jasny szarobeżowy ×2 — 30 zł.",
+     "size": [
+      1.878,
+      0.786,
+      0.63
+     ],
+     "thumb": "models/decor/balcony/thumbs/bistro-nammaro-75.jpg",
+     "parts": [
+      {
+       "model": "models/decor/balcony/nammaro-table-75/model.glb",
+       "pos": [
+        3.487,
+        -0.02,
+        -0.72
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/balcony/nammaro-armchair/model.glb",
+       "pos": [
+        2.865,
+        -0.02,
+        -0.75
+       ],
+       "rot": 90,
+       "seat": {
+        "h": 0.481,
+        "depth": -0.006,
+        "label": "Сесть за столик"
+       }
+      },
+      {
+       "model": "models/decor/balcony/nammaro-armchair/model.glb",
+       "pos": [
+        4.109,
+        -0.02,
+        -0.75
+       ],
+       "rot": -90,
+       "seat": {
+        "h": 0.481,
+        "depth": -0.006,
+        "label": "Сесть за столик"
+       }
+      }
+     ]
+    },
+    {
+     "id": "tarno",
+     "name": "TÄRNÖ стол 55×54 + 2 складных стула",
+     "brand": "IKEA",
+     "article": "700.954.29",
+     "url": "https://www.ikea.com/pl/pl/p/taernoe-stol-ogrodowy-czarny-bejca-jasnobrazowa-70095429/",
+     "price_pln": 238.98,
+     "finish": "czarny/bejca jasnobrązowa",
+     "note": "Лёгкий складной комплект: акация и чёрная сталь, на зиму убирается. Состав: TÄRNÖ Stół, ogrodowy, 55x54 cm, czarny/bejca jasnobrązowa — 99 zł · TÄRNÖ Krzesło, ogrodowe, 39x40x79 cm, składany, czarny/bejca jasnobrązowa ×2 — 69.99 zł.",
+     "size": [
+      1.344,
+      0.784,
+      0.54
+     ],
+     "thumb": "models/decor/balcony/thumbs/bistro-tarno.jpg",
+     "parts": [
+      {
+       "model": "models/decor/balcony/tarno-table/model.glb",
+       "pos": [
+        3.754,
+        -0.02,
+        -0.675
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/balcony/tarno-chair/model.glb",
+       "pos": [
+        3.305,
+        -0.02,
+        -0.705
+       ],
+       "rot": 90,
+       "seat": {
+        "h": 0.44,
+        "depth": 0.06,
+        "label": "Сесть за столик"
+       }
+      },
+      {
+       "model": "models/decor/balcony/tarno-chair/model.glb",
+       "pos": [
+        4.202,
+        -0.02,
+        -0.705
+       ],
+       "rot": -90,
+       "seat": {
+        "h": 0.44,
+        "depth": 0.06,
+        "label": "Сесть за столик"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "planter",
+   "label": "Зелень у стены",
+   "default": "asparen-seasonal",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "asparen-seasonal",
+     "name": "ASPAREN длинная доница 89 см: летом лаванда, зимой ёлочка и сосновые ветки",
+     "brand": "IKEA",
+     "article": "105.392.69",
+     "url": "https://www.ikea.com/pl/pl/p/asparen-donica-szary-na-zewnatrz-10539269/",
+     "price_pln": 476.91,
+     "finish": "szary, na zewnątrz",
+     "note": "Между дверью комнаты 3 и диваном. Меняется само по дате сцены: летом — две лаванды FEJKA в белых горшках, зимой — ёлочка VINTERFINT 84 см и шесть сосновых веток. Всё искусственное, для улицы. Состав: ASPAREN Donica, 89x38 cm, szary, na zewnątrz — 179 zł · FEJKA Sztuczna roślina w doniczce, 35x42 cm, lawenda ×2 — 79.99 zł · VINTERFINT Sztuczna roślina doniczkowa (choinka), doniczka 15 cm, wysokość 84 cm, do wewnątrz/na zewnątrz, zielony — 59.99 zł · VINTERFINT Sztuczna gałązka, 70 cm, sosna, zielony ×6 — 12.99 zł.",
+     "size": [
+      0.899,
+      0.611,
+      0.383
+     ],
+     "thumb": "models/decor/balcony/thumbs/planter-asparen-seasonal.jpg",
+     "parts": [
+      {
+       "model": "models/decor/balcony/asparen/model.glb",
+       "pos": [
+        0.121,
+        -0.02,
+        -0.596
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/fejka-lavender/model.glb",
+       "pos": [
+        0.321,
+        0.19,
+        -0.596
+       ],
+       "rot": 180,
+       "season": "summer"
+      },
+      {
+       "model": "models/decor/props/fejka-lavender/model.glb",
+       "pos": [
+        -0.079,
+        0.19,
+        -0.596
+       ],
+       "rot": 180,
+       "season": "summer"
+      },
+      {
+       "model": "models/decor/props/vinterfint-fir-84/model.glb",
+       "pos": [
+        0.121,
+        0.25,
+        -0.596
+       ],
+       "rot": 180,
+       "season": "winter"
+      },
+      {
+       "model": "models/decor/props/vinterfint-pine-bunch/model.glb",
+       "pos": [
+        0.361,
+        0.1,
+        -0.596
+       ],
+       "rot": 180,
+       "season": "winter"
+      },
+      {
+       "model": "models/decor/props/vinterfint-pine-bunch/model.glb",
+       "pos": [
+        -0.119,
+        0.1,
+        -0.596
+       ],
+       "rot": 360,
+       "season": "winter"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "corner",
+   "label": "Угол у фасада",
+   "default": "seasonal",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "seasonal",
+     "name": "NYPON кашпо 32: летом бамбук FEJKA, зимой ёлка VINTERFINT 150 с огоньками STRÅLA",
+     "brand": "IKEA",
+     "article": "303.956.32",
+     "url": "https://www.ikea.com/pl/pl/p/nypon-oslonka-doniczki-do-wewnatrz-na-zewnatrz-szary-30395632/",
+     "price_pln": 382.98,
+     "finish": "szary, do wewnątrz/na zewnątrz",
+     "note": "Высокая зелень — только в углу у фасада, далеко от перил и прохода. Меняется само по дате сцены: летом бамбук 170 см, зимой ёлка 150 см (Ø 51) с тёплыми микро-огоньками на батарейках. Состав: NYPON Osłonka doniczki, 32 cm, szary, do wewnątrz/na zewnątrz — 49.99 zł · FEJKA Sztuczna roślina doniczkowa, bambus, 21 cm (wys. 170 cm) — 199 zł · VINTERFINT Choinka sztuczna, 150 cm, średnica 51 cm, do wewnątrz/na zewnątrz, zielony — 99 zł · STRÅLA Łańcuch świetlny LED, mikro, na baterie — 34.99 zł.",
+     "size": [
+      0.725,
+      1.84,
+      0.901
+     ],
+     "thumb": "models/decor/balcony/thumbs/corner-seasonal.jpg",
+     "parts": [
+      {
+       "model": "models/decor/balcony/nypon-32/model.glb",
+       "pos": [
+        -2.073,
+        -0.02,
+        -0.855
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/props/fejka-bamboo/model.glb",
+       "pos": [
+        -2.073,
+        0.12,
+        -0.855
+       ],
+       "rot": 90,
+       "season": "summer"
+      },
+      {
+       "model": "models/decor/balcony/vinterfint-fir-150/model.glb",
+       "pos": [
+        -2.073,
+        0.025,
+        -0.855
+       ],
+       "rot": 0,
+       "season": "winter"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lights",
+   "label": "Гирлянда",
+   "default": "svartra",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "svartra",
+     "name": "SVARTRÅ 12 ламп-шаров под потолком балкона",
+     "brand": "IKEA",
+     "article": "006.105.86",
+     "url": "https://www.ikea.com/pl/pl/p/svartra-lancuch-swietlny-led-12-lampek-na-zewnatrz-czarny-00610586/",
+     "price_pln": 99.99,
+     "finish": "na zewnątrz, czarny",
+     "note": "Провисает между крючками под балконом сверху над диваном и столиком (низ ламп ~2,6 м — над головой). В кадре светится всегда; источника света не добавляет (без лишних теней и шейдеров). Состав: SVARTRÅ Łańcuch świetlny LED, 12 lampek, 9 m całości, 4.6 m do 1. lampy, na zewnątrz, czarny — 99.99 zł.",
+     "size": [
+      4.41,
+      0.245,
+      0.06
+     ],
+     "thumb": "models/decor/balcony/svartra-festoon/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/balcony/svartra-festoon/model.glb",
+       "pos": [
+        2.453,
+        2.625,
+        -0.705
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "getkal",
+     "name": "GETKÅL 15 м микро-огоньков вокруг поручня",
+     "brand": "IKEA",
+     "article": "306.028.77",
+     "url": "https://www.ikea.com/pl/pl/p/getkal-lancuch-swietlny-led-na-zewnatrz-30602877/",
+     "price_pln": 49.99,
+     "finish": "na zewnątrz",
+     "note": "Обвивает поручень по всей длине: на высоте перил, вид на поле не заслоняет. Состав: GETKÅL Łańcuch świetlny LED, 15 m całości, 5.1 m do 1. lampy, co 10 cm, na zewnątrz — 49.99 zł.",
+     "size": [
+      8.181,
+      0.074,
+      0.074
+     ],
+     "thumb": "models/decor/balcony/getkal-railing/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/balcony/getkal-railing/model.glb",
+       "pos": [
+        1.672,
+        1.027,
+        -2.261
+       ],
+       "rot": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lanterns",
+   "label": "Фонари со свечами",
+   "default": "lanterns",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "lanterns",
+     "name": "BORRBY и BERGGRAN со свечами SMÅLOM LED: весь год на столике, зимой ещё два у доницы",
+     "brand": "IKEA",
+     "article": "101.561.09",
+     "url": "https://www.ikea.com/pl/pl/p/borrby-lampion-do-wewnatrz-na-zewnatrz-czarny-10156109/",
+     "price_pln": 130.94,
+     "finish": "czarny, do wewnątrz/na zewnątrz",
+     "note": "Свечи на батарейках — безопасно на улице. Фонарь на табурете — круглый год (нет табурета — нет и фонаря); зимой (ноябрь–март) к нему добавляются BERGGRAN 34 см и BORRBY 20 см на полу у доницы. Состав: BORRBY Lampion, 28 cm, czarny, do wewnątrz/na zewnątrz — 19.99 zł · SMÅLOM Świeca kolumnowa LED, 14 cm, na baterie, biały — 14.99 zł · BERGGRAN Latarenka na świece kolumnowe, 34 cm, antracyt, do wewnątrz/na zewnątrz — 49.99 zł · SMÅLOM Świeca kolumnowa LED, 19 cm, na baterie, biały — 17.99 zł · BORRBY Latarenka, 20 cm, czarny, do wewnątrz/na zewnątrz — 14.99 zł · SMÅLOM Świeca kolumnowa LED, 9 cm, na baterie, biały — 12.99 zł.",
+     "size": [
+      0.186,
+      0.277,
+      0.186
+     ],
+     "thumb": "models/decor/balcony/thumbs/lanterns-lanterns.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/lantern-borrby-28/model.glb",
+       "pos": [
+        2.163,
+        0.43,
+        -0.737
+       ],
+       "rot": 15,
+       "on": "side"
+      },
+      {
+       "model": "models/decor/props/lantern-berggran-34/model.glb",
+       "pos": [
+        0.381,
+        -0.02,
+        -0.908
+       ],
+       "rot": 20,
+       "season": "winter"
+      },
+      {
+       "model": "models/decor/props/lantern-borrby-20/model.glb",
+       "pos": [
+        0.541,
+        -0.02,
+        -0.888
+       ],
+       "rot": -10,
+       "season": "winter"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rug",
+   "label": "Уличный ковёр",
+   "default": "morum",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "morum",
+     "name": "MORUM 160x230 cm, beżowy — безворсовый, для улицы",
+     "brand": "IKEA",
+     "article": "202.035.63",
+     "url": "https://www.ikea.com/pl/pl/p/morum-dywan-tkany-na-plasko-wewn-zewn-bezowy-20203563/",
+     "price_pln": 249.0,
+     "finish": "beżowy",
+     "note": "Лежит на настиле под передними ножками дивана, 230 см вдоль фасада. Без настила — на 2 см выше плиты. Состав: MORUM Dywan tkany na płasko wewn/zewn, 160x230 cm, beżowy — 249 zł.",
+     "size": [
+      2.335,
+      0.005,
+      1.596
+     ],
+     "thumb": "models/decor/balcony/morum-160/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/balcony/morum-160/model.glb",
+       "pos": [
+        1.74,
+        0.0,
+        -1.205
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "lydersholm",
+     "name": "LYDERSHOLM 160x230 cm, średniobrązowy — безворсовый, для улицы",
+     "brand": "IKEA",
+     "article": "204.954.15",
+     "url": "https://www.ikea.com/pl/pl/p/lydersholm-dywan-tkany-na-plasko-wewn-zewn-sredniobrazowy-20495415/",
+     "price_pln": 299.0,
+     "finish": "średniobrązowy",
+     "note": "Лежит на настиле под передними ножками дивана, 230 см вдоль фасада. Без настила — на 2 см выше плиты. Состав: LYDERSHOLM Dywan tkany na płasko wewn/zewn, 160x230 cm, średniobrązowy — 299 zł.",
+     "size": [
+      2.302,
+      0.005,
+      1.602
+     ],
+     "thumb": "models/decor/balcony/lydersholm-160/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/balcony/lydersholm-160/model.glb",
+       "pos": [
+        1.74,
+        0.0,
+        -1.205
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "lattbetong",
+     "name": "LÄTTBETONG 160x230 cm, beżowy/jasnobrązowy — безворсовый, для улицы",
+     "brand": "IKEA",
+     "article": "105.957.12",
+     "url": "https://www.ikea.com/pl/pl/p/laettbetong-dywan-tkany-na-plasko-wewn-zewn-bezowy-jasnobrazowy-10595712/",
+     "price_pln": 349.0,
+     "finish": "beżowy/jasnobrązowy",
+     "note": "Лежит на настиле под передними ножками дивана, 230 см вдоль фасада. Без настила — на 2 см выше плиты. Состав: LÄTTBETONG Dywan tkany na płasko wewn/zewn, 160x230 cm, beżowy/jasnobrązowy — 349 zł.",
+     "size": [
+      2.301,
+      0.004,
+      1.6
+     ],
+     "thumb": "models/decor/balcony/lattbetong-160/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/balcony/lattbetong-160/model.glb",
+       "pos": [
+        1.74,
+        0.0,
+        -1.205
+       ],
+       "rot": 90
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
