@@ -16,6 +16,7 @@ import { initDoors } from './doors.js';
 import { createSeats, registerSeatsUI } from './seats.js';
 import { createTV } from './tv.js';
 import { createViewmodel, registerViewmodelUI } from './viewmodel.js';
+import { createHunt, registerHuntUI } from './hunt.js';
 import { buildDecor, decorKey, registerDecorUI, DECOR_SCHEMA, DECOR_DEFAULTS } from './decor.js';
 import { createNav } from './nav.js';
 import { buildLamps, LAMP_DEFAULTS, LAMP_SCHEMA, LAMP_SCHEMA_ROOMS, LAMP_ROOM_DEFAULTS, DIM, NIGHT_SCALE } from './lamps.js';
@@ -423,6 +424,7 @@ function frame(now) {
   if (doors?.update(dt)) needs = true;
   if (seats?.update(dt)) needs = true;
   if (viewmodel?.update(dt, { active: !!walk?.active, moving: !!walk?.moving, running: !!walk?.running })) needs = true;
+  if (hunt?.update(dt)) needs = true;
   if (nav?.update()) needs = true;
   if (anim) {
     const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
@@ -508,10 +510,11 @@ export async function exportGLB() {
 
 // ---------- запуск ----------
 
-let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null;
+let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null;
 registerFurnitureUI(addSection);
 registerDecorUI(addSection);
 registerViewmodelUI(addSection, () => viewmodel);
+registerHuntUI(addSection, () => hunt);
 registerSeatsUI(addSection, () => seats);
 ui = initUI({ state, defaults: DEFAULT, setState, setSplit, goView, snapshot, exportGLB, setQuality, encode, decode, views: VIEWS, canExport: !isFramed, plan, kit, split: SPLIT, walk: () => walk });
 
@@ -521,7 +524,9 @@ walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, getObsta
 
 // Двери открываются взглядом + E / кликом (doors.js); руки с оружием в прогулке (viewmodel.js)
 doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, walk, requestRender, onChange: () => { cutaway.rebuild(); lighting.invalidate(); } });   // дверь открыта или закрыта — свет из соседних зон пересчитать
-viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats });
+// Охота: кабаны и птицы на поле за балконом, очки и таблица рекордов (hunt.js, spec/hunt.json)
+hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site });
+viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getHunt: () => hunt });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
 tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender });
 seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender, getState: () => state,
@@ -555,4 +560,4 @@ lighting.ready.then(() => ui.ready());
 window.addEventListener('hashchange', () => { const s = decode(location.hash); if (s) setState(s, { push: false }); });
 
 // Для автоматических проверок из консоли
-window.__kitchen = { state, setState, setSplit, goView, snapshot, exportGLB, encode, decode, scene, camera, controls, renderer, shell, M, get floors() { return floors; }, requestRender, lighting, cutaway, pipe, get furnEditor() { return furnEditor; }, get decor() { return decor; }, get doors() { return doors; }, get viewmodel() { return viewmodel; }, get walk() { return walk; }, get seats() { return seats; }, get tv() { return tv; } };
+window.__kitchen = { state, setState, setSplit, goView, snapshot, exportGLB, encode, decode, scene, camera, controls, renderer, shell, M, get floors() { return floors; }, requestRender, lighting, cutaway, pipe, get furnEditor() { return furnEditor; }, get decor() { return decor; }, get doors() { return doors; }, get viewmodel() { return viewmodel; }, get walk() { return walk; }, get seats() { return seats; }, get tv() { return tv; }, get hunt() { return hunt; } };

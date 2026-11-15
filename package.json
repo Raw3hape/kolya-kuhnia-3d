@@ -1,0 +1,12 @@
+{
+  "name": "kolya-kuhnia-3d",
+  "private": true,
+  "type": "module",
+  "description": "Конфигуратор квартиры AA0304: статический сайт (tools/build_static.mjs -> dist/) и функция таблицы рекордов охоты (api/scores.js).",
+  "dependencies": {
+    "@vercel/blob": "2.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
