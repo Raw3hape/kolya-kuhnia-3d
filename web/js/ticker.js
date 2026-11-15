@@ -29,7 +29,7 @@ const SCREEN_MAT = 'screen';
 const FPS = 6;                 // кадров биржи в секунду
 const MAX_DIST = 6.5;          // м: дальше экран не оживает
 const W = 1280, H = 720;       // холст (экран 16:9)
-const BRIGHT = 0.85;           // видимая яркость экрана (делится на экспозицию)
+const BRIGHT = 2.2;            // видимая яркость экрана (делится на экспозицию): как видео на ноутбуке рядом
 const TICKS_PER_CANDLE = 7;    // свеча закрывается каждые ~1,2 с
 const SHOW = 64;               // свечей в окне графика
 const KEEP = 96;               // свечей в памяти
@@ -109,7 +109,7 @@ export function createTicker({ THREE, scene, camera, renderer, pipe, requestRend
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const mat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.22, metalness: 0, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: BRIGHT });
+  const mat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.5, metalness: 0, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: BRIGHT });
   mat.name = 'ticker_screen';
 
   // ---------- экраны в сцене ----------
