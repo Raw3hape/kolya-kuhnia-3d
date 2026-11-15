@@ -526,7 +526,7 @@ walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, getObsta
 doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, walk, requestRender, onChange: () => { cutaway.rebuild(); lighting.invalidate(); } });   // дверь открыта или закрыта — свет из соседних зон пересчитать
 // Охота: кабаны и птицы на поле за балконом, очки и таблица рекордов (hunt.js, spec/hunt.json)
 hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site });
-viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getHunt: () => hunt });
+viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getWalk: () => walk, getHunt: () => hunt });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
 tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender });
 seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender, getState: () => state,

@@ -2,7 +2,10 @@
 // Зовёт viewmodel.js на каждый выстрел; в код варианта не входит, живёт до «Убрать следы» или перезагрузки.
 //
 // createImpacts({ THREE, scene, camera, renderer, pipe, requestRender })
-//   -> { shoot(spread) -> { object, point } | null   луч из центра экрана (прицел), spread — разброс, рад;
+//   -> { shoot({ spread, pellets, range, hunt, weapon, damage }) -> сколько пуль попало в зверей (hunt.js)
+//          лучи из центра экрана (прицел): pellets штук (дробь — много), каждый со своим отклонением в конусе spread (рад),
+//          дальность range, м; hunt — объект охоты или null: hunt.raycast(raycaster) -> { distance, point, normal,
+//          hit(weapon, damage) } | null; зверь ближе стены — hit(weapon, damage) и брызги без следа, иначе след как обычно;
 //        update(dt) -> bool   true, пока летят частицы или меняется видимость следов (в покое — false, ноль работы);
 //        clear(), holes (сколько следов сейчас), dispose() }
 //
@@ -26,7 +29,6 @@ const IMP = {
   size: [0.05, 0.065],    // сторона квадрата следа, м (дыра ~1,5 см, сколотый край ~2,5–3 см, копоть шире)
   minSize: 0.012,         // на узком (корешок книги, кромка, рама) след уменьшается шагами ×0.7, пока не влезет, но не мельче этого
   lift: 0.0004,           // над поверхностью, м
-  far: 80,                // дальность луча, м
   life: 0.6,              // самая долгая частица, с
   gravity: 9.8,
   pool: { chips: 160, dust: 96, sparks: 96 },
@@ -41,7 +43,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   const V3 = () => new THREE.Vector3();
   const ray = new THREE.Raycaster();
   ray.layers.set(0);
-  ray.near = 0.02; ray.far = IMP.far;
+  ray.near = 0.02;
   const noRaycast = () => {};
 
   // ---------- следы ----------
@@ -224,7 +226,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   const rnd = V3(), refl = V3();
   const randomUnit = v => v.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
 
-  function burst(point, n, dir, { albedo, metal, solid }) {
+  function burst(point, n, dir, { albedo, metal, solid, flesh = false }) {
     refl.copy(dir).addScaledVector(n, -2 * dir.dot(n));
     const floor = point.y > -0.1 ? Math.min(point.y, 0) + 0.003 : -Infinity;   // внутри квартиры пол — y = 0
     const chipC = rimTint(albedo).lerp(albedo, 0.4);
@@ -240,6 +242,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
       e.life = rand(0.4, IMP.life); e.size = rand(0.02, 0.035); e.c.copy(albedo).lerp(new THREE.Color(0.55, 0.53, 0.5), 0.3);
       e.spin = rand(-2, 2); e.drag = 5; e.g = 0.5; e.floor = -Infinity;
     });
+    if (flesh) return;   // зверь: только капли и облачко, без искр и вспышки
     for (let i = 0, k = metal ? 8 : 3; i < k; i++) emit('sparks', e => {
       e.p.copy(point).addScaledVector(n, 0.003);
       e.v.copy(refl).multiplyScalar(rand(1, 3)).addScaledVector(n, rand(0.5, 2)).addScaledVector(randomUnit(rnd), 1.5);
@@ -251,35 +254,52 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   }
 
   // ---------- выстрел ----------
-  const centre = new THREE.Vector2(0, 0), nrm = V3();
-  function shoot(spread = 0) {
-    ray.setFromCamera(centre, camera);
-    if (spread > 0) {
-      const d = ray.ray.direction;
-      d.addScaledVector(randomUnit(rnd), Math.tan(spread) * Math.sqrt(Math.random())).normalize();
+  // списки переиспользуются: на выстрел — ни одного нового массива, кроме того, что создаёт сам three.js на попадание
+  const centre = new THREE.Vector2(0, 0), nrm = V3(), list = [], hits = [];
+  const FLESH = { albedo: new THREE.Color(0.32, 0.04, 0.03), metal: false, solid: true, flesh: true };
+  const collect = o => {
+    if (!o.isMesh || o.userData.impact || o.userData.shadowOnly) return;
+    const m = o.material, m0 = Array.isArray(m) ? m[0] : m;
+    if (!m0 || m0.visible === false || m0.colorWrite === false || (m0.transparent && m0.opacity < 0.05 && !o.userData.glass)) return;
+    list.push(o);
+  };
+  function shoot({ spread = 0, pellets = 1, range = 100, hunt = null, weapon = '', damage = 0 } = {}) {
+    list.length = 0;
+    scene.traverseVisible(collect);
+    ray.far = range;
+    let struck = 0;
+    for (let i = 0; i < pellets; i++) {
+      ray.setFromCamera(centre, camera);
+      if (spread > 0) ray.ray.direction.addScaledVector(randomUnit(rnd), Math.tan(spread) * Math.sqrt(Math.random())).normalize();
+      hits.length = 0;
+      ray.intersectObjects(list, false, hits);
+      let hit = null;
+      for (const h of hits) if (!h.object.userData.glass) { hit = h; break; }
+      const beast = hunt?.raycast?.(ray) ?? null;
+      if (beast && beast.distance < (hit ? hit.distance : Infinity)) {
+        beast.hit?.(weapon, damage);
+        struck++;
+        nrm.copy(beast.normal ?? ray.ray.direction).normalize();
+        if (nrm.dot(ray.ray.direction) > 0) nrm.negate();
+        burst(beast.point, nrm, ray.ray.direction, FLESH);
+        continue;
+      }
+      if (!hit) continue;
+      // нормаль в мире (неравномерный масштаб — через матрицу нормалей), к стрелку
+      const o = hit.object;
+      if (hit.face) {
+        mtx.copy(o.matrixWorld);
+        if (o.isInstancedMesh && hit.instanceId != null) { o.getMatrixAt(hit.instanceId, inv); mtx.multiply(inv); }
+        nrm.copy(hit.face.normal).applyMatrix3(nm.getNormalMatrix(mtx)).normalize();
+      } else nrm.copy(ray.ray.direction).negate();
+      if (nrm.dot(ray.ray.direction) > 0) nrm.negate();
+      const surf = surface(hit), decal = !o.userData.tvScreen && !surf.cutout;
+      if (decal) addHole(hit, nrm, surf.albedo);
+      burst(hit.point, nrm, ray.ray.direction, { ...surf, solid: !o.userData.tvScreen });
     }
-    const list = [];
-    scene.traverseVisible(o => {
-      if (!o.isMesh || o.userData.impact || o.userData.shadowOnly) return;
-      const m = o.material, m0 = Array.isArray(m) ? m[0] : m;
-      if (!m0 || m0.visible === false || m0.colorWrite === false || (m0.transparent && m0.opacity < 0.05 && !o.userData.glass)) return;
-      list.push(o);
-    });
-    const hit = ray.intersectObjects(list, false).find(h => !h.object.userData.glass);
-    if (!hit) return null;
-    // нормаль в мире (неравномерный масштаб — через матрицу нормалей), к стрелку
-    const o = hit.object;
-    if (hit.face) {
-      mtx.copy(o.matrixWorld);
-      if (o.isInstancedMesh && hit.instanceId != null) { o.getMatrixAt(hit.instanceId, inv); mtx.multiply(inv); }
-      nrm.copy(hit.face.normal).applyMatrix3(nm.getNormalMatrix(mtx)).normalize();
-    } else nrm.copy(ray.ray.direction).negate();
-    if (nrm.dot(ray.ray.direction) > 0) nrm.negate();
-    const surf = surface(hit), decal = !o.userData.tvScreen && !surf.cutout;
-    if (decal) addHole(hit, nrm, surf.albedo);
-    burst(hit.point, nrm, ray.ray.direction, { ...surf, solid: !o.userData.tvScreen });
+    list.length = 0;   // не держим ссылки на меши до следующего выстрела
     requestRender?.();
-    return { object: o, point: hit.point.clone() };
+    return struck;
   }
 
   // ---------- кадр ----------

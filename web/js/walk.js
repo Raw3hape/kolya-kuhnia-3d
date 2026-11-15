@@ -2,12 +2,17 @@
 // Самодостаточный модуль: свою кнопку, подсказку, прицел и джойстик вставляет сам (стили на токенах страницы).
 // API: initWalk({ THREE, camera, controls, canvas, plan, getObstacles, requestRender, onChange })
 //   -> { active, walking, moving, running, enter(pos?, yaw?, { orbit }?), exit({ restore }?), toggle(), update(dt?),
-//        boxesOf(object3d), setPersonHeight(cm), personHeight, eyeHeight, refreshObstacles(), setAreaGate(fn), orbitPose }
+//        boxesOf(object3d), setPersonHeight(cm), personHeight, eyeHeight, refreshObstacles(), setAreaGate(fn), orbitPose,
+//        setZoom(k), kick(up, side, keep) }
 //   orbitPose — куда вернёт облёт выход из прогулки ({ pos, target, fov, order } | null); enter(…, { orbit }) задаёт его
 //     явно (seats.js: встал с дивана в прогулку — выход вернёт облёт, каким он был до посадки, а не точку сиденья).
 //   рост по умолчанию 180 см -> глаза 1.68 м.
 //   update(dt) звать каждый кадр; true — камера сдвинулась, нужен кадр. dt в секундах (можно не передавать).
 //   moving — игрок в этом кадре идёт; running — идёт с Shift (для покачивания рук в viewmodel.js).
+//   setZoom(k) — прицеливание (viewmodel.js): угол обзора уже в k раз (по тангенсу), чувствительность взгляда падает вместе
+//     с ним; 1 — без увеличения. Вход и выход сбрасывают в 1.
+//   kick(up, side, keep) — отдача: взгляд вверх на up и вбок на side, рад; доля keep остаётся (ствол «уводит»),
+//     остальное плавно возвращается. Мышь: ЛКМ или ПКМ тянуть — смотреть (ПКМ в прогулке — прицел, меню не открывается).
 //   getObstacles() -> [{ x0, x1, z0, z1 } | THREE.Box3 | { ax, az, bx, bz, h }]: мебель в плане XZ и полотна дверей
 //     (толстый отрезок от петли до края полотна, h — половина толщины; их даёт doors.js).
 //   refreshObstacles() — перечитать препятствия сейчас (дверь двигается), иначе раз в 0.75 с.
@@ -232,6 +237,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   const p = { x: 0, z: 0 };
   const vel = { x: 0, z: 0 };
   let yaw = 0, pitch = 0, tYaw = 0, tPitch = 0, turnVel = 0, fov = WALK.fovV, tFov = WALK.fovV, fovAdj = 0, step = 0;
+  let zoom = 1, kp = 0, ky = 0, kpT = 0, kyT = 0;   // прицел (во сколько раз уже обзор) и отдача: текущая и целевая добавка к взгляду
   let heightCm = WALK.height, eye = (WALK.height * WALK.eyeRatio) / 100;
   let saved = null, anim = null, lastT = 0, touchSeen = false, locked = false, unlockedAt = 0;
   let moving = false, running = false, areaGate = () => false;
@@ -278,8 +284,8 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   const showHint = () => {
     const touch = touchSeen || coarse();
     hint.innerHTML = touch
-      ? 'Джойстик — идти · веди пальцем — смотреть · наведи на дверь — открыть · план — перейти'
-      : '<b>W A S D</b> — идти · тяни мышью — смотреть · <b>E</b> или клик — дверь · <b>Shift</b> — быстрее · <b>2</b>/<b>3</b> — пистолет/автомат, <b>1</b> — убрать · <b>Esc</b> — выход';
+      ? 'Джойстик — идти · веди пальцем — смотреть · наведи на дверь — открыть · план — перейти · с оружием: кнопки огня и прицела справа'
+      : '<b>W A S D</b> — идти · тяни мышью — смотреть · <b>E</b> или клик — дверь · <b>Shift</b> — быстрее · <b>2</b>–<b>5</b> — оружие, <b>1</b> — убрать · <b>ПКМ</b> — прицел · <b>R</b> — перезарядка · <b>Esc</b> — выход';
     hint.hidden = false; hint.classList.remove('fade');
     clearTimeout(hintTimer);
     hintTimer = setTimeout(() => { hint.classList.add('fade'); hintTimer = setTimeout(() => { hint.hidden = true; }, 450); }, 5500);
@@ -322,7 +328,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     p.x = start.x; p.z = start.z;
     vel.x = vel.z = 0; step = 0; turnVel = 0;
     yaw = tYaw = y0; pitch = tPitch = (WALK.pitch0 * Math.PI) / 180;
-    fovAdj = 0; fov = tFov = naturalFov(camera.aspect);
+    fovAdj = 0; zoom = 1; kp = ky = kpT = kyT = 0; fov = tFov = naturalFov(camera.aspect);
     controls.enabled = false;
     camera.rotation.reorder('YXZ');   // reorder сохраняет поворот (а присвоение .order — нет)
     mode = 'entering';
@@ -340,6 +346,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   function exit({ restore = true } = {}) {
     if (mode === 'off' || mode === 'exiting') return;
     keys.clear(); joyRelease(); lookRelease(); moving = running = false;
+    zoom = 1; kp = ky = kpT = kyT = 0;
     if (locked) { try { document.exitPointerLock(); } catch { /* нет блокировки */ } }
     hideHint();
     if (!restore || !saved) {
@@ -382,7 +389,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   let applied = '';
   function apply() {
     camera.position.set(p.x, eye, p.z);
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    camera.rotation.set(clamp(pitch + kp, -PITCH, PITCH), yaw + ky, 0, 'YXZ');
     if (Math.abs(camera.fov - fov) > 1e-3) { camera.fov = fov; camera.updateProjectionMatrix(); }
     // цель орбиты держим на сантиметр впереди: если кто-то вызовет controls.update(), взгляд не собьётся
     const f = fwd(), cp = Math.cos(pitch);
@@ -460,14 +467,22 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
     // взгляд и угол обзора — с лёгким сглаживанием; обзор следует за пропорциями окна (поворот телефона)
     tFov = clamp(naturalFov(camera.aspect) + fovAdj, WALK.fovMin, WALK.fovMax);
+    if (zoom > 1) tFov = (2 * Math.atan(Math.tan((tFov * Math.PI) / 360) / zoom) * 180) / Math.PI;
     tPitch = clamp(tPitch, -PITCH, PITCH);
     const lk = 1 - Math.exp(-24 * dt);
     yaw += (tYaw - yaw) * lk; pitch += (tPitch - pitch) * lk; fov += (tFov - fov) * lk;
     if (Math.abs(tYaw - yaw) < 1e-4) yaw = tYaw;
     if (Math.abs(tPitch - pitch) < 1e-4) pitch = tPitch;
     if (Math.abs(tFov - fov) < 1e-3) fov = tFov;
+    // отдача: цель гаснет, взгляд догоняет её — быстрый подброс и плавный возврат
+    if (kpT || kyT || kp || ky) {
+      kpT *= Math.exp(-7 * dt); kyT *= Math.exp(-7 * dt);
+      const kk = 1 - Math.exp(-45 * dt);
+      kp += (kpT - kp) * kk; ky += (kyT - ky) * kk;
+      if (Math.abs(kp) + Math.abs(ky) + Math.abs(kpT) + Math.abs(kyT) < 2e-5) kp = ky = kpT = kyT = 0;
+    }
 
-    const key = `${p.x.toFixed(4)}|${p.z.toFixed(4)}|${yaw.toFixed(5)}|${pitch.toFixed(5)}|${fov.toFixed(3)}`;
+    const key = `${p.x.toFixed(4)}|${p.z.toFixed(4)}|${yaw.toFixed(5)}|${pitch.toFixed(5)}|${fov.toFixed(3)}|${kp.toFixed(5)}|${ky.toFixed(5)}`;
     if (key === applied) return false;
     applied = key;
     apply();
@@ -496,7 +511,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   canvas.addEventListener('pointerdown', e => {
     if (e.pointerType === 'touch') { touchSeen = true; syncFloat(); }
     if (mode !== 'walk' || locked || look) return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;   // ПКМ — прицел, взгляд тоже ведёт
     look = { id: e.pointerId, x: e.clientX, y: e.clientY, k: (e.pointerType === 'touch' ? 0.0065 : 0.0042) };
     try { canvas.setPointerCapture(e.pointerId); } catch { /* не критично */ }
   });
@@ -510,6 +525,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     requestRender?.();
   });
   canvas.addEventListener('pointerup', e => { if (look && e.pointerId === look.id) lookRelease(); });
+  canvas.addEventListener('contextmenu', e => { if (mode !== 'off') e.preventDefault(); });
   canvas.addEventListener('pointercancel', e => { if (look && e.pointerId === look.id) lookRelease(); });
 
   // колесо: шаг вперёд/назад; щипок на трекпаде (ctrl+колесо) — угол обзора
@@ -594,6 +610,19 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     return heightCm;
   }
 
+  function setZoom(k) {
+    const z = Math.max(1, Number(k) || 1);
+    if (Math.abs(z - zoom) < 1e-4) return;
+    zoom = mode === 'walk' ? z : 1;
+    requestRender?.();
+  }
+  function kick(up = 0, side = 0, keep = 0.3) {
+    if (mode !== 'walk') return;
+    tPitch = clamp(tPitch + up * keep, -PITCH, PITCH); tYaw += side * keep;
+    kpT += up * (1 - keep); kyT += side * (1 - keep);
+    requestRender?.();
+  }
+
   return {
     get active() { return mode !== 'off'; },
     get walking() { return mode === 'walk'; },
@@ -604,7 +633,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     get personHeight() { return heightCm; },
     get orbitPose() { return saved && { pos: saved.pos.clone(), target: saved.target.clone(), fov: saved.fov, order: saved.order }; },
     get eyeHeight() { return eye; },
-    setPersonHeight,
+    setPersonHeight, setZoom, kick,
     enter, exit, toggle, update, boxesOf,
     colliders: col,
   };
@@ -637,7 +666,8 @@ const WALK_CSS = `
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22); transition: transform 0.14s ease-out; }
 .kw-joy.drag .kw-knob { transition: none; }
 .kw-cross { position: fixed; z-index: 5; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
-  background: var(--kw-sheet); box-shadow: 0 0 0 1.5px var(--kw-ink); pointer-events: none; opacity: 0.8; }
+  background: var(--kw-sheet); box-shadow: 0 0 0 1.5px var(--kw-ink); pointer-events: none; opacity: 0.8; transition: opacity 0.12s ease; }
+body.kvm-ads .kw-cross { opacity: 0; }   /* смотрим через прицел оружия (viewmodel.js) */
 @media (max-width: 760px) {
   .kw-hint { bottom: calc(200px + env(safe-area-inset-bottom, 0px)); }
   body:has(#panel.open) .kw-joy, body:has(#panel.open) .kw-hint { display: none; }

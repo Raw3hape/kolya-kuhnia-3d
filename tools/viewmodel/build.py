@@ -1,8 +1,7 @@
 # Сборка вьюмоделей: ствол Quaternius (CC0) + процедурные перчатки и рукава. blender -b --python build.py -- <dl> <out> <preview>
+# Помощники (mat, rbox, tube, fist, arm, hand_materials, export, preview) берёт и procedural.py — процедурные винтовка и двустволка.
 import bpy, bmesh, sys, os, math
 from mathutils import Vector, Matrix, Euler
-A = sys.argv[sys.argv.index('--')+1:]
-DL, OUT, PREV = A[0], A[1], A[2]
 R = math.radians
 
 GUNS = {
@@ -65,12 +64,50 @@ def arm(name, wrist, direction, r_wrist=0.025, length=0.45):
              tube(name + '_sleeve', w + d * 0.06, w + d * length, r_wrist * 1.36, r_wrist * 1.8, SLEEVE, sides=16)]
     return parts
 
-def build(key, cfg):
+def hand_materials():
     global GLOVE, SLEEVE, CUFF
-    bpy.ops.wm.read_factory_settings(use_empty=True)
     GLOVE = mat('glove', srgb('#4a4640'), 0.7)
     SLEEVE = mat('sleeve', srgb('#5c5f62'), 0.92)
     CUFF = mat('cuff', srgb('#45484b'), 0.88)
+
+def join(parts, name, smooth=True):
+    bpy.ops.object.select_all(action='DESELECT')
+    for p in parts: p.select_set(True)
+    bpy.context.view_layer.objects.active = parts[0]
+    bpy.ops.object.join()
+    o = bpy.context.active_object; o.name = name
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    for p in o.data.polygons: p.use_smooth = smooth
+    return o
+
+def export(path):
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True, export_yup=True)
+
+def preview(key, view, length, prev):
+    """Превью «из глаз» (камера там, где её поставит viewmodel.js, view = WEAPONS[*].pos) и вид сбоку справа."""
+    vx, vy, vz = view
+    sc = bpy.context.scene
+    cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam')); sc.collection.objects.link(cam); sc.camera = cam
+    cam.data.sensor_fit = 'VERTICAL'; cam.data.angle = R(50); cam.data.clip_start = 0.01
+    cam.location = (-vx, vz, -vy)           # glTF (x, y, z) -> Blender (x, -z, y), камера = минус смещение
+    cam.rotation_euler = (R(90), 0, 0)
+    sun = bpy.data.objects.new('sun', bpy.data.lights.new('sun', 'SUN')); sc.collection.objects.link(sun)
+    sun.data.energy = 3; sun.rotation_euler = (R(50), R(-20), R(30))
+    w = bpy.data.worlds.new('w'); sc.world = w; w.use_nodes = True
+    w.node_tree.nodes['Background'].inputs[0].default_value = (0.75, 0.72, 0.68, 1); w.node_tree.nodes['Background'].inputs[1].default_value = 0.8
+    sc.render.engine = 'BLENDER_EEVEE'
+    sc.render.resolution_x, sc.render.resolution_y = 1280, 800
+    sc.render.filepath = os.path.join(prev, key + '_fpv.png')
+    bpy.ops.render.render(write_still=True)
+    cam.data.type = 'ORTHO'; cam.data.ortho_scale = length * 1.6
+    cam.location = (1.0, length * 0.25, 0); cam.rotation_euler = (R(90), 0, R(90))
+    sc.render.filepath = os.path.join(prev, key + '_side.png')
+    bpy.ops.render.render(write_still=True)
+
+def build(key, cfg, DL, OUT, PREV):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    hand_materials()
     bpy.ops.import_scene.gltf(filepath=os.path.join(DL, cfg['src'] + '.glb'))
     gun = [o for o in bpy.context.scene.objects if o.type == 'MESH'][0]
     mw = gun.matrix_world.copy()
@@ -124,41 +161,15 @@ def build(key, cfg):
     parts += arm('arm_r', wrist_r, dir_r)
     parts += arm('arm_l', wrist_l, dir_l)
     # руки — один меш (два материала), ствол — свой меш
-    bpy.ops.object.select_all(action='DESELECT')
-    for p in parts: p.select_set(True)
-    bpy.context.view_layer.objects.active = parts[0]
-    bpy.ops.object.join()
-    hands = bpy.context.active_object; hands.name = 'hands'
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    join(parts, 'hands')
     for p in gun.data.polygons: p.use_smooth = False
-    for p in hands.data.polygons: p.use_smooth = True
     for s_ in gun.material_slots:   # почти чёрный Quaternius в комнате читается пятном: чуть приподнять
         b = s_.material.node_tree.nodes['Principled BSDF'].inputs['Base Color']
         b.default_value = tuple(c * 0.85 + 0.03 for c in b.default_value[:3]) + (1,)
-    # экспорт
-    bpy.ops.object.select_all(action='SELECT')
-    path = os.path.join(OUT, key + '.raw.glb')
-    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True, export_yup=True)
-    # превью «из глаз»: камера там, где её поставит viewmodel.js
-    vx, vy, vz = cfg['view']
-    sc = bpy.context.scene
-    cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam')); sc.collection.objects.link(cam); sc.camera = cam
-    cam.data.sensor_fit = 'VERTICAL'; cam.data.angle = R(50); cam.data.clip_start = 0.01
-    cam.location = (-vx, vz, -vy)           # glTF (x, y, z) -> Blender (x, -z, y), камера = минус смещение
-    cam.rotation_euler = (R(90), 0, 0)
-    sun = bpy.data.objects.new('sun', bpy.data.lights.new('sun', 'SUN')); sc.collection.objects.link(sun)
-    sun.data.energy = 3; sun.rotation_euler = (R(50), R(-20), R(30))
-    w = bpy.data.worlds.new('w'); sc.world = w; w.use_nodes = True
-    w.node_tree.nodes['Background'].inputs[0].default_value = (0.75, 0.72, 0.68, 1); w.node_tree.nodes['Background'].inputs[1].default_value = 0.8
-    sc.render.engine = 'BLENDER_EEVEE'
-    sc.render.resolution_x, sc.render.resolution_y = 1280, 800
-    sc.render.filepath = os.path.join(PREV, key + '_fpv.png')
-    bpy.ops.render.render(write_still=True)
-    # вид сбоку справа
-    cam.data.type = 'ORTHO'; cam.data.ortho_scale = cfg['length'] * 1.6
-    cam.location = (1.0, cfg['length'] * 0.25, 0); cam.rotation_euler = (R(90), 0, R(90))
-    sc.render.filepath = os.path.join(PREV, key + '_side.png')
-    bpy.ops.render.render(write_still=True)
+    export(os.path.join(OUT, key + '.raw.glb'))
+    preview(key, cfg['view'], cfg['length'], PREV)
     print('BUILT', key, 'muzzle', tuple(round(v, 4) for v in mz), 'scale', round(s, 4))
 
-for k, c in GUNS.items(): build(k, c)
+if __name__ == '__main__':
+    A = sys.argv[sys.argv.index('--')+1:]
+    for k, c in GUNS.items(): build(k, c, *A[:3])
