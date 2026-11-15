@@ -9,7 +9,11 @@
 //   -> { update(dt) -> bool   true — нужен кадр (звери видны и двигаются); звать каждый кадр;
 //        raycast(raycaster) -> { distance, point, normal, object, hit(weaponId, damage) } | null   ближайший зверь на луче;
 //        noise(point, loudness = 1)   выстрел: звери слышат (кабаны настораживаются и бегут, птицы взлетают);
-//        stats, enabled, setEnabled(on), openName(), dispose() }
+//        stats, enabled, setEnabled(on), openName(), dispose(),
+//        award(points, point, title, sub)   очки за чужую мишень (мыши, mice.js): в раунд, опыт и всплывашку; 0 — только надпись }
+// addTargets({ raycast(raycaster) -> { distance, point, normal, object, hit(weaponId, damage) } | null }) -> снять()
+//   другие мишени для оружия (мыши и монстры «Живого дома», life.js): raycast() охоты отдаёт ближайшее из зверей и их.
+//   Работают и при выключенной охоте.
 // registerHuntUI(addSection, getHunt) — раздел «Охота» во вкладке 'live' после «Оружия»; как играть — строки справки (help.js).
 //
 // Звери — два InstancedMesh (кабаны и птицы, по одному вызову отрисовки) + пятна тени под кабанами. Геометрия своя,
@@ -49,6 +53,8 @@ const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if
 
 const DEF_PREF = { on: true, name: '', xp: 0, best: 0, last: null, board: [] };
 const shared = { pref: readPref(), spec: null, online: null, status: 'local', hunt: null };
+const targets = new Set();   // addTargets: чужие мишени (life.js)
+export function addTargets(t) { targets.add(t); return () => targets.delete(t); }
 function readPref() {
   try { return { ...DEF_PREF, ...JSON.parse(localStorage.getItem(PREF) || '{}') }; } catch { return { ...DEF_PREF }; }
 }
@@ -1215,7 +1221,13 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     }
     return -1;
   }
+  // ближайшее на луче: звери охоты и чужие мишени (addTargets)
   function raycast(raycaster) {
+    let best = raycastAnimals(raycaster);
+    for (const t of targets) { const h = t.raycast(raycaster); if (h && (!best || h.distance < best.distance)) best = h; }
+    return best;
+  }
+  function raycastAnimals(raycaster) {
     if (!ready || !enabled || !root.visible) return null;
     const r = raycaster.ray, ox = r.origin.x, oy = r.origin.y, oz = r.origin.z;
     const dl = Math.hypot(r.direction.x, r.direction.y, r.direction.z) || 1;
@@ -1401,6 +1413,15 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
   const api = {
     update, raycast, noise, dispose, setEnabled,
+    award(points, point, title, sub = '') {
+      if (points > 0 && S) {
+        if (!round.on) startRound();
+        round.score += points; round.kills++;
+        shared.pref.xp += points; writePref();
+        syncHud(true);
+      }
+      if (point) popup(point, points > 0 ? `+${fmt(points)}` : title, points > 0 ? [title, sub].filter(Boolean).join(' · ') : sub);
+    },
     openName: () => { cardEntry = null; showCard('Имя игрока', null); },
     get enabled() { return enabled; },
     get stats() {

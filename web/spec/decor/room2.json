@@ -61,6 +61,66 @@
                 5.6725
               ],
               "rot": 180
+            },
+            {
+              "model": "models/decor/room2/laptop-gaming/model.glb",
+              "pos": [
+                4.02,
+                0.7055,
+                5.74
+              ],
+              "rot": -125,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/cat-cloudy/model.glb",
+              "pos": [
+                4.6,
+                0.7055,
+                5.84
+              ],
+              "rot": -120,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/figs-wow/model.glb",
+              "pos": [
+                3.68,
+                0.7055,
+                5.42
+              ],
+              "rot": 170,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/figs-dota/model.glb",
+              "pos": [
+                4.18,
+                0.7055,
+                5.36
+              ],
+              "rot": -130,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/camper-toy/model.glb",
+              "pos": [
+                4.62,
+                0.7275,
+                4.98
+              ],
+              "rot": -100,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/bicycle-toy/model.glb",
+              "pos": [
+                3.78,
+                0.7275,
+                4.92
+              ],
+              "rot": -150,
+              "mount": "surface"
             }
           ]
         },
@@ -112,6 +172,66 @@
                 5.8225
               ],
               "rot": 180
+            },
+            {
+              "model": "models/decor/room2/laptop-gaming/model.glb",
+              "pos": [
+                4.02,
+                0.7665,
+                5.89
+              ],
+              "rot": -125,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/cat-cloudy/model.glb",
+              "pos": [
+                4.6,
+                0.7665,
+                5.99
+              ],
+              "rot": -120,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/figs-wow/model.glb",
+              "pos": [
+                3.68,
+                0.7665,
+                5.57
+              ],
+              "rot": 170,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/figs-dota/model.glb",
+              "pos": [
+                4.18,
+                0.7665,
+                5.51
+              ],
+              "rot": -130,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/camper-toy/model.glb",
+              "pos": [
+                4.62,
+                0.7885,
+                5.13
+              ],
+              "rot": -100,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/bicycle-toy/model.glb",
+              "pos": [
+                3.78,
+                0.7885,
+                5.07
+              ],
+              "rot": -150,
+              "mount": "surface"
             }
           ]
         },
@@ -163,6 +283,66 @@
                 5.7575
               ],
               "rot": 180
+            },
+            {
+              "model": "models/decor/room2/laptop-gaming/model.glb",
+              "pos": [
+                4.02,
+                0.6345,
+                5.825
+              ],
+              "rot": -125,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/cat-cloudy/model.glb",
+              "pos": [
+                4.6,
+                0.6345,
+                5.925
+              ],
+              "rot": -120,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/figs-wow/model.glb",
+              "pos": [
+                3.68,
+                0.6345,
+                5.505
+              ],
+              "rot": 170,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/figs-dota/model.glb",
+              "pos": [
+                4.18,
+                0.6345,
+                5.445
+              ],
+              "rot": -130,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/camper-toy/model.glb",
+              "pos": [
+                4.62,
+                0.6565,
+                5.065
+              ],
+              "rot": -100,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/bicycle-toy/model.glb",
+              "pos": [
+                3.78,
+                0.6565,
+                5.005
+              ],
+              "rot": -150,
+              "mount": "surface"
             }
           ]
         },
@@ -214,6 +394,66 @@
                 5.7025
               ],
               "rot": 180
+            },
+            {
+              "model": "models/decor/room2/laptop-gaming/model.glb",
+              "pos": [
+                4.02,
+                0.6275,
+                5.77
+              ],
+              "rot": -125,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/cat-cloudy/model.glb",
+              "pos": [
+                4.6,
+                0.6275,
+                5.87
+              ],
+              "rot": -120,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/figs-wow/model.glb",
+              "pos": [
+                3.68,
+                0.6275,
+                5.45
+              ],
+              "rot": 170,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/figs-dota/model.glb",
+              "pos": [
+                4.18,
+                0.6275,
+                5.39
+              ],
+              "rot": -130,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/camper-toy/model.glb",
+              "pos": [
+                4.62,
+                0.6495,
+                5.01
+              ],
+              "rot": -100,
+              "mount": "surface"
+            },
+            {
+              "model": "models/decor/room2/bicycle-toy/model.glb",
+              "pos": [
+                3.78,
+                0.6495,
+                4.95
+              ],
+              "rot": -150,
+              "mount": "surface"
             }
           ]
         }

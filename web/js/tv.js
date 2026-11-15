@@ -1,4 +1,5 @@
-// Экраны с настоящим YouTube: ТВ в гостиной, ноутбук в кабинете (мемы), телефон на острове (Shorts) — список экранов,
+// Экраны с настоящим YouTube: ТВ в гостиной, ноутбук в кабинете (мемы), телефон на острове (Shorts), игровой ноутбук на кровати
+// в спальне (стрим Dota 2) — список экранов,
 // их видео и настройки в web/spec/tv.json (screens[]). Новый экран — запись в spec, код не меняется.
 //
 // Как это устроено («дыра в холсте»):
@@ -7,6 +8,7 @@
 //     Играет на экране, который сейчас крупнее всех в кадре (видим, к нам лицом, ближе maxDist, не за стеной или дверью);
 //     перешли к другому экрану — плеер переключается на его список (каждый экран помнит своё видео и место в нём).
 //     Ни один экран не в кадре — плеер через pauseAfterSec на паузе: в другой комнате ноутбук ничего не стоит.
+//     Плеер один — значит, и звук всегда у одного экрана: того, что сейчас играет (и только если разрешён: диван, рядом, в руке).
 //   - Плеер лежит в слое ПОД прозрачным WebGL-холстом и после каждого кадра встаёт в плоскость экрана (CSS3DRenderer):
 //     у ТВ — меш 'tv_screen' из furniture.js (размер из PlaneGeometry), у ноутбука и телефона — часть обстановки
 //     (decor.js, ищется по модели) и прямоугольник rect в координатах модели: экран едет за перетаскиванием и пересборкой.
@@ -18,24 +20,30 @@
 //     выключает дыру (pipe.onLive).
 //   - Телефон можно взять в прогулке (handheld.js: E или клик по нему). В руке слой плеера поднимается НАД холстом и
 //     висит перед камерой (внизу по центру, как в руке), телефон на острове прячется; звук включён, листать — колесо, ↑↓,
-//     свайп; положить — E, Q, Esc или кнопка. Оружие при этом убирается (viewmodel.setWeapon('none')).
+//     свайп; с ним можно ходить, открывать двери и садиться (сидя он в руке и листается); вернуть на остров — Q, E без цели,
+//     Esc или кнопка. Оружие при этом убирается (viewmodel.setWeapon('none')).
 //
-// createTV({ THREE, scene, camera, renderer, canvas, pipe, getState, requestRender, getWalk?, getVM? })
+// createTV({ THREE, scene, camera, renderer, canvas, pipe, getState, requestRender, getWalk?, getVM?, getSeats?, getDoors? })
 //   -> { sync()            звать после каждого отрисованного кадра (дёшево: матрицы и пара проверок; луч к стенам — только
 //                          когда сдвинулась камера),
 //        setAudio(on, id?) звук экрана id (по умолчанию 'tv'; включает сидение на диване — жест пользователя),
 //        step(id, d)       следующее/предыдущее видео экрана, hold(on) — взять/положить телефон,
-//        link({ getWalk, getVM }) — подключить позже (проверки из консоли),
+//        link({ getWalk, getVM, getSeats, getDoors }) — подключить позже (проверки из консоли),
+//        screens()         [{ id, mesh, holder, playing }] — экраны, найденные в сцене (mesh — плоскость/меш экрана, null — экрана
+//                          сейчас нет; holder — часть обстановки, у ТВ null): для трещин и прочих эффектов поверх экрана,
 //        dispose(), status — что где играет (для проверки из консоли) }
 //   getWalk() — прогулка (walk.js, нужен walking), getVM() — оружие (viewmodel.js: weapon, setWeapon). Без них телефон не берётся.
+//   getSeats() — seats.js (сесть с телефоном в руке), getDoors() — doors.js (E на двери с телефоном в руке открывает дверь).
+// Видео: start — с какой секунды начинать (трансляции — сразу с игры); каждый экран помнит своё место.
 // tvPosterTexture() — текстура постера ТВ для материала экрана (furniture.js), одна на сеанс.
 import * as THREE from 'three';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import { decorPart } from './decor.js';
 import { createHandheld } from './handheld.js';
 import { addHelp } from './help.js';
+import { whenRoom, isRoomReady } from './loading.js';   // YouTube — после первого вида (LOAD)
 
-addHelp({ mode: 'walk', keys: [], text: 'телевизор, ноутбук в комнате 3 и телефон на острове показывают YouTube; звук ТВ — когда сидите на диване', order: 75 });
+addHelp({ mode: 'walk', keys: [], text: 'телевизор, ноутбук в комнате 3, телефон на острове и ноутбук на кровати в спальне (стрим Dota 2) показывают YouTube; звук — у того, что играет: ТВ — сидя на диване, ноутбуки — подойдя ближе', order: 75 });
 
 const SPEC = await fetch('spec/tv.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
 const EDGE = 0.004;           // м: плеер шире экрана на 4 мм с каждой стороны (за рамкой) — без щелей по краю дыры
@@ -53,7 +61,7 @@ function parseScreen(s) {
     // дальше — состояние в сеансе: что нашли в сцене, где экран, какое видео и с какого места
     HOLE: { value: 0 }, mesh: null, holder: null, group: null, none: false,
     world: new THREE.Matrix4(), center: new THREE.Vector3(), normal: new THREE.Vector3(), radius: 0, dist: Infinity, score: 0,
-    idx: 0, t: 0, failed: 0, audio: false,
+    idx: 0, t: Number(videos[0].start) || 0, failed: 0, audio: false,
   };
 }
 const SCREENS = (SPEC?.screens ?? []).map(parseScreen).filter(Boolean);
@@ -71,17 +79,18 @@ export function tvPosterTexture() {
 
 // YouTube IFrame API грузится один раз на страницу
 let apiPromise = null;
+// (не раньше первого вида — LOAD: плеер YouTube ≈1 МБ скриптов, первому кадру он только мешает качать квартиру)
 function loadAPI() {
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (apiPromise) return apiPromise;
-  apiPromise = new Promise((resolve, reject) => {
+  apiPromise = whenRoom.then(() => new Promise((resolve, reject) => {
     const prev = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => { prev?.(); resolve(window.YT); };
     const s = document.createElement('script');
     s.src = 'https://www.youtube.com/iframe_api'; s.async = true;
     s.onerror = () => { apiPromise = null; s.remove(); reject(new Error('iframe_api')); };
     document.head.appendChild(s);
-  });
+  }));
   return apiPromise;
 }
 
@@ -112,7 +121,7 @@ function findByMaterial(o, name) {
   return null;
 }
 
-export function createTV({ camera, scene, renderer, canvas, pipe, getState, requestRender, getWalk, getVM }) {
+export function createTV({ camera, scene, renderer, canvas, pipe, getState, requestRender, getWalk, getVM, getSeats, getDoors }) {
   let live = true;
   const offLive = pipe.onLive(on => { live = on; if (!on) for (const s of SCREENS) s.HOLE.value = 0; });
 
@@ -159,7 +168,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
       const id = s.videos[s.idx].id;
       player = new YT.Player(host, {
         host: SPEC?.host || 'https://www.youtube-nocookie.com', videoId: id, width: '100%', height: '100%',
-        playerVars: { autoplay: 1, mute: 1, loop: 1, playlist: id, controls: 0, playsinline: 1, modestbranding: 1, rel: 0,
+        playerVars: { ...(s.t ? { start: Math.floor(s.t) } : {}), autoplay: 1, mute: 1, loop: 1, playlist: id, controls: 0, playsinline: 1, modestbranding: 1, rel: 0,
           iv_load_policy: 3, disablekb: 1, fs: 0, cc_load_policy: 0, enablejsapi: 1, origin: location.origin },
         events: {
           onReady() { ready = true; player.mute(); sound = null; applyAudio(); if (active && active !== cur) load(active); player.playVideo(); },
@@ -195,8 +204,8 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
     const n = s.videos.length;
     if (failed) { if (++s.failed > n) return; }
     if (n < 2) { if (ready && cur === s) { player.seekTo(0, true); player.playVideo(); } return; }
-    s.idx = (s.idx + d + n) % n; s.t = 0; stalled = 0;
-    if (ready && cur === s) player.loadVideoById(s.videos[s.idx].id);
+    s.idx = (s.idx + d + n) % n; s.t = Number(s.videos[s.idx].start) || 0; stalled = 0;
+    if (ready && cur === s) player.loadVideoById({ videoId: s.videos[s.idx].id, startSeconds: s.t });
   }
 
   // звук: у экрана, на котором сейчас играет плеер, если его разрешили (диван, телефон в руке, рядом с ноутбуком)
@@ -382,9 +391,9 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
       { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
   }
 
-  const links = { getWalk, getVM };
+  const links = { getWalk, getVM, getSeats, getDoors };
   const hand = phone && createHandheld({ THREE, camera, canvas, requestRender, reach: phone.hold.reach,
-    getWalk: () => links.getWalk?.(), getVM: () => links.getVM?.(),
+    getWalk: () => links.getWalk?.(), getVM: () => links.getVM?.(), getSeats: () => links.getSeats?.(), getDoors: () => links.getDoors?.(),
     // на столе он спрятан, пока в руке (и пока доигрывает «положить»): видимость проверяем у держателя, не у модели
     getTarget: () => (phone.mesh && phone.holder && (!held || dropping) && visibleChain(phone.holder) ? phone.holder : null),
     getRect: () => scr.getBoundingClientRect(),
@@ -405,6 +414,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
     }
     if (phone && held && !dropping) hideIsland(true);   // обстановку пересобрали, пока телефон в руке
     hand?.sync();
+    if (!isRoomReady()) return;   // LOAD: плеер и его рамка (с постером ≈0,2 МБ) — после первого вида
 
     // какой экран играет: телефон в руке или под прицелом; иначе самый крупный в кадре. Выбор (с лучами к стенам) — только когда
     // сдвинулась камера, а без движения — не чаще раза в 0,4 с (дверь закрылась, вещь переставили)
@@ -465,9 +475,11 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
   }
 
   // подключить прогулку и оружие позже (проверки из консоли до того, как main.js их передаст)
-  function link(o = {}) { if (o.getWalk) links.getWalk = o.getWalk; if (o.getVM) links.getVM = o.getVM; }
+  function link(o = {}) { for (const k of ['getWalk', 'getVM', 'getSeats', 'getDoors']) if (o[k]) links[k] = o[k]; }
+  // экраны в сцене (для эффектов поверх: трещины и т. п.); mesh — тот, что сейчас найден, у ТВ holder нет
+  const screens = () => SCREENS.map(s => ({ id: s.id, mesh: s.mesh, holder: s.decorModel ? s.holder : null, playing: s === active }));
 
-  return { sync, setAudio, step, hold: on => (on ? hand?.pick() : hand?.drop()), link, dispose,
+  return { sync, setAudio, step, hold: on => (on ? hand?.pick() : hand?.drop()), link, dispose, screens,
     // для проверки из консоли: __kitchen.tv.status
     get status() {
       return { screen: active?.id ?? null, loaded: cur?.id ?? null, video: cur?.videos[cur.idx]?.id, state: playerState, shown, held,

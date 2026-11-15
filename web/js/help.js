@@ -19,6 +19,7 @@ export const HELP_MODES = [
   { id: 'walk',   title: 'Прогулка' },
   { id: 'seat',   title: 'Сидя' },
   { id: 'phone',  title: 'Телефон в руке' },
+  { id: 'paper',  title: 'Газета в руке' },   // BEDROOM: newspaper.js
   { id: 'photo',  title: 'Фото-рендер' },
 ];
 

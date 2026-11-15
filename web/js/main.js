@@ -11,9 +11,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { createPipeline, DEFAULT_QUALITY } from './render.js';
-import { roomReady, assetUrl, track, setFirstView } from './loading.js';
+import { roomReady, assetUrl, track, afterRoom, setFirstView } from './loading.js';
 
 import { MATERIALS, OPTIONS, PRESETS, findMat, resolveItem, slotById } from './catalog.js';
 import { applyItem, makeMat, setAnisotropy, setTextureQuality, onTexturesChanged } from './materials.js';
@@ -25,6 +24,7 @@ import { initWalk } from './walk.js';
 import { initDoors } from './doors.js';
 import { createSeats, registerSeatsUI } from './seats.js';
 import { createTV } from './tv.js';
+import { createNewspaper } from './newspaper.js';   // BEDROOM: газета с полочки над унитазом (читать, носить, сидеть с ней)
 import { createViewmodel, registerViewmodelUI } from './viewmodel.js';
 import { createHunt, registerHuntUI } from './hunt.js';
 import { buildDecor, placeDecor, disposeDecor, updateDecor, normalizeMoves, decorKey, registerDecorUI, DECOR_SCHEMA, DECOR_DEFAULTS } from './decor.js';
@@ -35,6 +35,10 @@ import { createCutaway } from './cutaway.js';
 import { initMinimap } from './minimap.js';
 import { sunFor, buildContext } from './site.js';
 import { buildBath } from './bath.js';
+import { createHood } from './hood.js';       // KITCHEN: вытяжка над варкой
+import { createTicker } from './ticker.js';   // KITCHEN: крипто-биржа на мониторе комнаты 3
+import { createLife, registerLifeUI } from './life.js';   // LIFE: соседи, звонок, монстры за дверью, вода, мыши
+import { createMirrors } from './mirrors.js';   // BREAK: честные зеркала (плоское отражение), бьются от выстрела
 
 const [plan, kit, viewSpec, site, bathSpec] = await Promise.all([
   fetch('spec/plan.generated.json').then(r => r.json()),
@@ -181,7 +185,7 @@ const M = {
 for (const [k, m] of Object.entries(M)) m.name = k;
 M.carcass = M.fronts; M.plinth = M.fronts; M.islandCarcass = M.island;
 M.hob.map = hobTexture();
-applyItem(M.ceiling, { color: '#eeede3', rough: 0.95, normal: 'white_stucco', normalScale: 0.12, size: 1.6 });
+applyItem(M.ceiling, { color: '#eeede3', rough: 0.95, normal: 'white_stucco', normalScale: 0.12, size: 1.6 }, {}, { label: 'Стены и пол' });
 
 function hobTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 512;
@@ -217,9 +221,10 @@ cutMeshes.push(...bath.cut);
 aboveMeshes.push(...bath.above);
 bath.ready?.then(requestRender);
 // Окружение по OpenStreetMap: свой дом (этажи выше дают тень), соседи, поле, дороги
-const context = buildContext(site, THREE, { date: state.sunDate, assetUrl, track });   // сезон (листва, трава, поле) — по дате солнца
+const context = buildContext(site, THREE, { date: state.sunDate, assetUrl, track, afterRoom });   // сезон (листва, трава, поле) — по дате солнца
 scene.add(context);
 context.ready.then(() => { lighting.invalidate(); requestRender(); });
+context.later?.then(requestRender);   // после первого вида: земля 512 px и машины
 context.traverse(o => { if (o.userData.cut === 'above') aboveMeshes.push(o); });
 
 function rebuildKitchen() {
@@ -319,6 +324,8 @@ const FRIDGE_BODY = {
   brass: { color: '#ebe7df', rough: 0.4 },
 };
 const FLOOR_SLOTS = ['floorA', 'floorB', 'floorRoom2', 'floorRoom3'];
+// Подпись на экране загрузки (loading.js): полы, стены, двери — «Стены и пол», пол ванной — «Ванная», остальное — кухня
+const slotLabel = k => (k === 'floorBath' ? 'Ванная' : /^(floor|wall|doors)/.test(k) ? 'Стены и пол' : 'Кухня');
 const PLAIN_SLOTS = ['floorBath', 'walls', 'wallAccent', 'wallsRoom2', 'wallsRoom3', 'wallsBath', 'doors',
   'counter', 'fronts', 'island', 'islandTop', 'metal'];
 let busy = 0;
@@ -328,12 +335,12 @@ async function applyMaterials() {
   const dirRot = state.floorDir === 'z' ? Math.PI / 2 : 0;
   const jobs = FLOOR_SLOTS.map(k => {
     const it = resolveItem(state, k);
-    return applyItem(M[k], it, { rotation: (it.rotation || 0) + (it.rotate ? Math.PI / 2 : 0) + dirRot, rotate: false });
+    return applyItem(M[k], it, { rotation: (it.rotation || 0) + (it.rotate ? Math.PI / 2 : 0) + dirRot, rotate: false }, { label: slotLabel(k) });
   });
   // Пол ванной с первого ракурса не видно — его текстуры после заставки (materials.js later)
-  for (const k of PLAIN_SLOTS) jobs.push(applyItem(M[k], resolveItem(state, k), {}, { later: k === 'floorBath' }));
+  for (const k of PLAIN_SLOTS) jobs.push(applyItem(M[k], resolveItem(state, k), {}, { later: k === 'floorBath', label: slotLabel(k) }));
   const bs = findMat('backsplash', state.backsplash);
-  if (bs.tex) jobs.push(applyItem(M.backsplash, bs));
+  if (bs.tex) jobs.push(applyItem(M.backsplash, bs, {}, { label: slotLabel('backsplash') }));
   const metal = findMat('metal', state.metal);
   jobs.push(applyItem(M.threshold, { color: metal.color, rough: Math.max(0.35, metal.rough ?? 0.4), metal: metal.metal ?? 1 }));
   jobs.push(applyItem(M.fridge, FRIDGE_BODY[state.metal] || FRIDGE_BODY.steel));
@@ -443,6 +450,10 @@ function frame(now) {
   if (viewmodel?.update(dt, { active: !!walk?.active, moving: !!walk?.moving, running: !!walk?.running })) needs = true;
   if (hunt?.update(dt)) needs = true;
   if (updateDecor(decor, dt)) needs = true;   // догруженные вещи вырастают на месте
+  if (hood?.update(dt)) needs = true;     // KITCHEN: вытяжка (яркость полосы под экспозицию)
+  if (ticker?.update(dt)) needs = true;   // KITCHEN: биржа на мониторе — кадры только когда экран виден рядом
+  if (life?.update(dt)) needs = true;     // LIFE: «Живой дом» — кадры только пока эффект виден
+  if (mirrors.update()) needs = true;     // BREAK: новое зеркало появилось или фото спрятало стёкла
   if (nav?.update()) needs = true;
   if (anim) {
     const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
@@ -460,6 +471,7 @@ function frame(now) {
   pipe.render();
   if (!dirty) return;
   tv?.sync();
+  paper?.sync();   // BEDROOM: газета в руке
   furnEditor?.renderOverlay();
   minimap?.update();
 }
@@ -520,6 +532,7 @@ export async function snapshot() {
 }
 
 export async function exportGLB() {
+  const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');   // только по кнопке: не в загрузке
   const hidden = [];
   scene.traverse(o => { if ((o.userData.shadowOnly || o.userData.rasterOnly) && o.visible) { o.visible = false; hidden.push(o); } });   // следы пуль и обманки света — не в GLB
   const parts = [shell.group, floors, doorsGroup, kitchen.group, lamps?.fixtures, furn?.group, decor?.group, bath.group, scene.getObjectByName('fixtures')].filter(Boolean);
@@ -530,7 +543,7 @@ export async function exportGLB() {
 
 // ---------- запуск ----------
 
-let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null;
+let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null, paper = null;
 registerFurnitureUI(addSection);
 registerDecorUI(addSection);
 registerViewmodelUI(addSection, () => viewmodel);
@@ -541,18 +554,34 @@ ui = initUI({ state, defaults: DEFAULT, setState, setSplit, goView, snapshot, ex
 setQuality(ui.pref('quality') ?? DEFAULT_QUALITY);
 
 // Прогулка WASD и мини-карта. Препятствия: кухня и остров (мебель добавится сюда же).
-walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, getObstacles: () => [...walk.boxesOf(kitchen?.group), ...(furn?.colliders || []), ...bath.colliders, ...(decor?.colliders || []), ...(doors?.colliders() || [])],
+walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, getObstacles: () => [...walk.boxesOf(kitchen?.group), ...(furn?.colliders || []), ...bath.colliders, ...(decor?.colliders || []), ...(doors?.colliders() || []), ...(life?.colliders() || [])],
   onChange: () => { if (walk.active && furnEditor?.enabled) { furnEditor.disable(); ui.info({ furnEdit: false }); } requestRender(); } });
 
 // Двери открываются взглядом + E / кликом (doors.js); руки с оружием в прогулке (viewmodel.js)
 doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, walk, requestRender, onChange: () => { cutaway.rebuild(); lighting.invalidate(); } });   // дверь открыта или закрыта — свет из соседних зон пересчитать
 // Охота: кабаны и птицы на поле за балконом, очки и таблица рекордов (hunt.js, spec/hunt.json)
-hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site });
+// после первого вида (LOAD): звери, их спека и таблица рекордов не нужны первому кадру; до этого getHunt() — null
+afterRoom(() => { hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site }); });
 viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getWalk: () => walk, getHunt: () => hunt });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
-tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel });   // ТВ, ноутбук, телефон (в руке — handheld.js)
+tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors });   // ТВ, ноутбуки, телефон (в руке — handheld.js: с ним можно сесть)
+// BEDROOM: газета на полочке над унитазом (newspaper.js, полка — bath.js): взять E, листать, сесть с ней, Q — на место; до seats: газета под прицелом важнее унитаза под ней
+paper = createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors });
 seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender, getState: () => state,
   getFurniture: () => furn, getDecor: () => decor, getDoors: () => doors, getTV: () => tv });
+// --- KITCHEN: вытяжка над варкой (hood.js, геометрия — model.js buildHood) и крипто-биржа на мониторе в комнате 3 (ticker.js) ---
+let hood = createHood({ THREE, scene, camera, canvas, renderer, pipe, requestRender, getWalk: () => walk, getVM: () => viewmodel });
+let ticker = createTicker({ THREE, scene, camera, renderer, pipe, requestRender });
+// --- /KITCHEN ---
+// --- LIFE: «Живой дом» — соседи за стенами и звонок, монстры за входной дверью, вода сама, мыши (life.js + модули) ---
+registerLifeUI(addSection, () => life);
+let life = createLife({ THREE, scene, camera, renderer, pipe, plan, kit, shell, doorsGroup, requestRender,
+  getWalk: () => walk, getDoors: () => doors, getHunt: () => hunt,
+  getObstacles: () => [...walk.boxesOf(kitchen?.group), ...(furn?.colliders || []), ...bath.colliders, ...(decor?.colliders || [])] });
+// --- /LIFE ---
+// --- BREAK: зеркала с плоским отражением (mirrors.js; бьются через impacts.js → breakables.js) ---
+const mirrors = createMirrors({ THREE, scene, camera, renderer, pipe, requestRender, getDecor: () => decor });
+// --- /BREAK ---
 
 // Редактор мебели: перетаскивание в 3D, размеры до острова и стены
 furnEditor = createFurnitureEditor({ camera, renderer, scene, controls, getState: () => state, setState, requestRender, plan, kit });
@@ -591,16 +620,22 @@ onTexturesChanged(requestRender);   // полные текстуры и фоно
 
 // Первый вид: всё видимое загружено, кадр нарисован, переотражения посчитаны (не дольше ROOM_GI_WAIT) — заставку убрать
 const ROOM_GI_WAIT = 4000;
+// Метки в Performance (DevTools → Timings): kitchen:files — файлы первого вида на месте, kitchen:drawn — первый кадр
+// (шейдеры собраны), kitchen:gi — переотражения посчитаны; дальше заставка уходит
+const mark = name => { try { performance.mark(`kitchen:${name}`); } catch { /* старый браузер */ } };
 Promise.all([lighting.ready, furn?.ready, decor?.near, context.ready].map(p => p?.catch(() => {})))
-  .then(() => pipe.whenDrawn())
-  .then(() => new Promise(done => {
+  .then(() => { mark('files'); return pipe.whenDrawn(); })
+  .then(() => { mark('drawn'); return new Promise(done => {
     const t0 = performance.now();
     const wait = () => (!lighting.debug.baking || performance.now() - t0 > ROOM_GI_WAIT ? done() : setTimeout(wait, 50));
     wait();
-  }))
-  .then(() => pipe.whenDrawn())
+  }); })
+  .then(() => { mark('gi'); return pipe.whenDrawn(); })
   .then(() => { roomReady(); ui.ready(); });
 window.addEventListener('hashchange', () => { const s = decode(location.hash); if (s) setState(s, { push: false }); });
 
 // Для автоматических проверок из консоли
-window.__kitchen = { state, setState, setSplit, goView, snapshot, exportGLB, encode, decode, scene, camera, controls, renderer, shell, M, get floors() { return floors; }, requestRender, lighting, cutaway, pipe, get furnEditor() { return furnEditor; }, get decor() { return decor; }, get doors() { return doors; }, get viewmodel() { return viewmodel; }, get walk() { return walk; }, get seats() { return seats; }, get tv() { return tv; }, get hunt() { return hunt; } };
+window.__kitchen = { state, setState, setSplit, goView, snapshot, exportGLB, encode, decode, scene, camera, controls, renderer, shell, M, get floors() { return floors; }, requestRender, lighting, cutaway, pipe, get furnEditor() { return furnEditor; }, get decor() { return decor; }, get doors() { return doors; }, get viewmodel() { return viewmodel; }, get walk() { return walk; }, get seats() { return seats; }, get tv() { return tv; }, get hunt() { return hunt; }, get paper() { return paper; } };
+Object.defineProperties(window.__kitchen, { hood: { get: () => hood }, ticker: { get: () => ticker } });   // KITCHEN (геттеры живые, Object.assign скопировал бы значение)
+Object.defineProperty(window.__kitchen, 'life', { get: () => life });   // LIFE
+window.__kitchen.mirrors = mirrors;   // BREAK

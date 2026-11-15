@@ -10,7 +10,8 @@
 //     с разметкой, тротуары, бордюры; свой дом; соседи с окнами по этажам, крышами, балконами (в радиусе
 //     деталей); заборы, фонари, машины (web/models/site/cars.glb); деревья и кусты экземплярами по видам.
 //     group.setSeason(dateISO) -> true, если вид поменялся (листва, трава, поле): нужен новый кадр.
-//     group.ready -> Promise: текстуры и машины загружены. opts.assetUrl / opts.track — из loading.js (в node — нет).
+//     group.ready -> Promise: текстуры первого вида (256 px) загружены; group.later -> Promise: после первого вида
+//     (opts.afterRoom) доехали земля 512 px и машины — перерисовать. opts.assetUrl / track / afterRoom — из loading.js (в node — нет).
 //   Вечером (тёмное небо панорамы у горизонта) сами зажигаются окна соседей и фонари; дальнее тонет в дымке
 //   цвета этого же неба. Мелочь (деревья, машины, решётки) не попадает в кубы зондов переотражений lighting.js.
 //
@@ -165,6 +166,7 @@ function keyed(keys, d) {
 // ---------- окружение: константы ----------
 
 const TEX_DIR = 'textures/site/', CARS_URL = 'models/site/cars.glb';
+const LABEL = 'Двор и город';   // подпись на экране загрузки (loading.js track)
 const TEX_M = { grass: 3, meadow: 3, soil: 4, asphalt: 4, paving: 2, bark: 1.5 };   // метров на повтор (SOURCE.md)
 const TEX_SCATTER = new Set(['grass', 'meadow', 'soil']);   // без рисунка: повтор можно сбивать поворотом
 const HAZE_M = 3300;        // дымка: на этом расстоянии воздух берёт 1 − 1/e (видимость ~10 км)
@@ -787,7 +789,7 @@ async function loadCars(THREE, assetUrl, track) {
   const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
     import('three/addons/loaders/GLTFLoader.js'), import('three/addons/libs/meshopt_decoder.module.js')]);
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
-  const gltf = await track(loader.loadAsync(assetUrl(CARS_URL)));
+  const gltf = await track(loader.loadAsync(assetUrl(CARS_URL)), { label: LABEL, url: CARS_URL });
   gltf.scene.updateMatrixWorld(true);
   const out = {};
   gltf.scene.traverse(o => {
@@ -835,7 +837,7 @@ async function loadCars(THREE, assetUrl, track) {
 //   context.ready              -> Promise: текстуры и машины загружены (перерисовать и пересчитать свет)
 //   group.userData.parts       -> меши по именам (для отладки)
 export function buildContext(site, THREE, opts = {}) {
-  const { assetUrl = p => p, track = p => p } = opts;   // адрес с версией и учёт загрузки (loading.js, из main.js)
+  const { assetUrl = p => p, track = p => p, afterRoom = fn => Promise.resolve().then(fn) } = opts;   // адрес с версией, учёт загрузки, «после первого вида» (loading.js, из main.js)
   const { far = true } = opts;
   const browser = typeof document !== 'undefined';
   const fy = site.floorY, ground = -fy;
@@ -844,16 +846,19 @@ export function buildContext(site, THREE, opts = {}) {
   const parts = {};
   const add = (key, mesh) => { if (mesh) { parts[key] = mesh; group.add(mesh); } return mesh; };
   const shared = sharedUniforms(THREE);
-  const pending = [];
+  const pending = [], later = [];   // later — после первого вида (opts.afterRoom)
 
   // --- текстуры
   const texLoader = browser ? new THREE.TextureLoader() : null;
   const tex = {};
   for (const name of Object.keys(TEX_M)) {
     if (!texLoader) { tex[name] = null; continue; }
-    // 512 px (tools/make_web_assets.py): землю видно только издали, из окон и с балкона
-    const t = texLoader.load(assetUrl(`${TEX_DIR}512/${name}.jpg`));
-    pending.push(track(new Promise(res => { t.image ? res() : (t.onUpdate = () => res()); })));
+    // Землю видно только издали, из окон и с балкона: до первого вида 256 px, после него — 512 (tools/make_web_assets.py);
+    // при подмене — dispose: three держит на видеокарте место ровно под 256, новый размер заливается заново
+    const small = `${TEX_DIR}256/${name}.jpg`, full = `${TEX_DIR}512/${name}.jpg`;
+    const t = texLoader.load(assetUrl(small));
+    pending.push(track(new Promise(res => { t.image ? res() : (t.onUpdate = () => { t.onUpdate = null; res(); }); }), { label: LABEL, url: small }));
+    later.push(afterRoom(() => track(new Promise(res => texLoader.load(assetUrl(full), big => { t.dispose(); t.image = big.image; t.needsUpdate = true; res(); }, undefined, res)), { label: LABEL, url: full })));
     t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
     t.repeat.set(1 / TEX_M[name], 1 / TEX_M[name]);
     tex[name] = t;
@@ -1221,7 +1226,7 @@ export function buildContext(site, THREE, opts = {}) {
   });
   const cars = site.cars ?? [];
   if (browser && cars.length) {
-    pending.push(loadCars(THREE, assetUrl, track).then(geos => {
+    later.push(afterRoom(() => loadCars(THREE, assetUrl, track)).then(geos => {
       const names = site.carModels ?? ['sedan', 'hatchback', 'suv', 'van'];
       const colours = (site.carColours ?? []).map(c => new THREE.Color(`#${c}`));
       names.forEach((name, mi) => {
@@ -1313,6 +1318,7 @@ export function buildContext(site, THREE, opts = {}) {
   group.userData.parts = parts;
   group.setSeason = setSeason;
   group.ready = Promise.all(pending).then(() => true);
+  group.later = Promise.all(later).then(() => true);
   return group;
 }
 

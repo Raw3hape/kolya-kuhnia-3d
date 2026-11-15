@@ -5,7 +5,7 @@
 // Рисуется поверх растра своей камерой со своим углом обзора (render.js setOverlay): в стены не проваливается,
 // в фото-режим, снимок и GLB не попадает. Свет вспышки живёт только в сцене рук: свет и тени квартиры не трогает.
 // Попадания (impacts.js): лучи из центра экрана с текущим разбросом, дырка на поверхности и всплеск; зверь (hunt.js) ближе
-// стены — получает урон, вместо дырки брызги.
+// стены — получает урон, вместо дырки брызги. Посуда, фрукты, стёкла и зеркала бьются, экраны трескаются (breakables.js, mirrors.js).
 //
 // createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors, getSeats, getWalk, getHunt })
 //   getDoors()?.target / getSeats()?.target — дверь или сиденье под прицелом: тогда клик открывает/сажает, а не стреляет;
@@ -14,7 +14,7 @@
 //   getHunt() — охота (hunt.js) или null: на выстрел noise(точка, громкость 0–1), на каждую пулю raycast(raycaster).
 //   -> { update(dt, { active, moving, running }) -> bool (true — нужен кадр), setWeapon(id), setSound(on), setAim(on), reload(),
 //        link({ getWalk, getHunt }) — подключить позже (проверки из консоли до того, как main.js их передаст),
-//        clearHoles() — убрать следы попаданий, holes, weapon, sound, armed (оружие в руках: клик стреляет),
+//        clearHoles() — убрать следы и осколки, вернуть разбитое целым; holes, broken, weapon, sound, armed (оружие в руках: клик стреляет),
 //        ammo ({ mag, reserve } у текущего), busy (null | 'reload' | 'cycle' — затвор), aiming (0–1), spread (рад),
 //        shots, dispose() }
 // registerViewmodelUI(addSection, getVM) — раздел «Оружие» во вкладке 'live' после «Сесть»; клавиши — строки справки (help.js).
@@ -215,7 +215,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   const lastPos = new THREE.Vector3(), fwd = new THREE.Vector3(), ear = new THREE.Vector3();
   let lastYaw = null, lastPitch = 0;
   const W = () => byId(weapon);
-  const impacts = createImpacts({ THREE, scene, camera, renderer, pipe, requestRender });
+  const impacts = createImpacts({ THREE, scene, camera, renderer, pipe, requestRender, getSound: () => sound });
 
   // частицы попаданий живут и после выхода из прогулки, поэтому считаются отдельно от рук
   function update(dt = 1 / 60, opts) {
@@ -617,6 +617,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     update, setWeapon, setSound, setAim, reload, link, dispose,
     clearHoles: impacts.clear,
     get holes() { return impacts.holes; },
+    get broken() { return impacts.broken; },
     get weapon() { return weapon; },
     get sound() { return sound; },
     get armed() { return shown && !seated(); },
@@ -640,7 +641,9 @@ export function registerViewmodelUI(addSection, getVM) {
       { type: 'toggle', key: 'vmSound', label: 'Звук выстрела', visible: () => cur() !== 'none',
         get: () => getVM()?.sound ?? readPref().sound !== false,
         set: v => { const vm = getVM(); if (vm) vm.setSound(v); else writePref({ ...readPref(), sound: !!v }); } },
-      { type: 'button', key: 'vmClearHoles', label: 'Убрать следы', run: () => getVM()?.clearHoles() },
+      { type: 'button', key: 'vmClearHoles', label: 'Убрать следы и осколки', run: () => getVM()?.clearHoles() },
+      { type: 'readout', key: 'vmBreakHint', style: 'hint', visible: () => cur() !== 'none',
+        value: 'Посуда, фрукты, стёкла и зеркала бьются, экраны трескаются. Кнопка выше всё чинит.' },
       { type: 'readout', key: 'vmWhere', style: 'hint', value: 'Оружие видно только в прогулке.' },
       { type: 'help', topic: 'weapon' },
       { type: 'readout', key: 'vmCredits', style: 'hint', visible: () => cur() !== 'none',

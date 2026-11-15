@@ -5,7 +5,9 @@
 // API: initWalk({ THREE, camera, controls, canvas, plan, getObstacles, requestRender, onChange })
 //   -> { active, walking, moving, running, enter(pos?, yaw?, { orbit }?), exit({ restore }?), toggle(), update(dt?),
 //        boxesOf(object3d), setPersonHeight(cm), personHeight, eyeHeight, refreshObstacles(), setAreaGate(fn), orbitPose,
-//        setZoom(k), kick(up, side, keep) }
+//        setZoom(k), kick(up, side, keep), nudge(dx, dz) }
+//   nudge(dx, dz) — сдвинуть игрока на столько метров со столкновениями (мягкий толчок: монстры за входной дверью, landing.js);
+//     только в прогулке, кадр применит update().
 //   orbitPose — куда вернёт облёт выход из прогулки ({ pos, target, fov, order } | null); enter(…, { orbit }) задаёт его
 //     явно (seats.js: встал с дивана в прогулку — выход вернёт облёт, каким он был до посадки, а не точку сиденья).
 //   рост по умолчанию 180 см -> глаза 1.68 м.
@@ -646,6 +648,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     get eyeHeight() { return eye; },
     get airborne() { return jy > 0; },
     setPersonHeight, setZoom, kick,
+    nudge(dx, dz) { if (mode === 'walk' && !anim && (dx || dz)) { moveCircle(p, dx, dz, col, extra); requestRender?.(); } },
     enter, exit, toggle, update, boxesOf,
     colliders: col,
   };

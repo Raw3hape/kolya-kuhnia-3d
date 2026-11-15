@@ -492,6 +492,7 @@ export function buildKitchen(kit, state, M) {
   if (hobZ != null) {
     const hb = boxAt(D / 2 - kit.hob.d / 2 + 0.01, D / 2 + kit.hob.d / 2 + 0.01, top, top + 0.005, hobZ - kit.hob.w / 2, hobZ + kit.hob.w / 2, M.hob);
     g.add(hb);
+    if (kit.hood) g.add(buildHood(kit, top, hobZ, M));
   }
   // Фартук
   if (state.backsplash !== 'none') {
@@ -517,6 +518,72 @@ export function buildKitchen(kit, state, M) {
   const ioh = 0.01;
   g.add(boxAt(x0 - ioh, x1 + ioh, top - th, top, z0 - ioh, z1 + ioh, M.islandTop, { slot: 'islandTop' }));
   return { group: g, island: isl };
+}
+
+// Вытяжка над варкой (kitchen.json → hood): наклонная, чёрное стекло, без воздуховода (рециркуляция через фильтр).
+// Профиль сбоку (X от стены, Y вверх): клин от низа depthBottom до верха depthTop, спереди 3 см борт, сверху стекло.
+// Снизу фильтр и LED-полоса, на стекле точки сенсора (питание + 3 скорости). Группа 'hood' с userData.hood;
+// включает в прогулке hood.js (он же меняет яркость материалов ниже — они общие на сеанс, переживают пересборку кухни).
+// Метки детей: hoodLed — полоса, hoodDot = 0..3 — точки (0 — питание), hoodPool — пятно света на варке (только растр).
+let HOOD_MAT = null;
+export function hoodMaterials() {
+  if (HOOD_MAT) return HOOD_MAT;
+  const std = (name, o) => Object.assign(new THREE.MeshStandardMaterial(o), { name });
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d'), grd = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.45, 'rgba(255,255,255,0.55)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = grd; x.fillRect(0, 0, 128, 128);
+  const pool = new THREE.CanvasTexture(c); pool.colorSpace = THREE.SRGBColorSpace;
+  HOOD_MAT = {
+    body: std('hood_body', { color: '#161617', roughness: 0.48, metalness: 0.35 }),
+    glass: std('hood_glass', { color: '#050506', roughness: 0.04, metalness: 0.1 }),
+    led: std('hood_led', { color: '#e9e6df', roughness: 0.5, emissive: '#fff1dc', emissiveIntensity: 0 }),
+    dotOff: std('hood_dot_off', { color: '#3a3b3d', roughness: 0.4 }),
+    dotOn: std('hood_dot_on', { color: '#ffffff', roughness: 0.4, emissive: '#e8f2ff', emissiveIntensity: 1 }),
+    pool: Object.assign(new THREE.MeshBasicMaterial({ map: pool, color: '#000000', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), { name: 'hood_pool' }),
+  };
+  return HOOD_MAT;
+}
+
+function buildHood(kit, top, hobZ, M) {
+  const h = kit.hood, HM = hoodMaterials();
+  const g = new THREE.Group(); g.name = 'hood';
+  const b = h.bottom, H = h.h, dB = h.depthBottom, dT = h.depthTop, lip = 0.03, w = h.w;
+  const z0 = hobZ - w / 2, z1 = hobZ + w / 2;
+  const prism = (pts, mat) => {
+    const s = new THREE.Shape(pts.map(([px, py]) => new THREE.Vector2(px, py)));
+    const geo = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false });
+    geo.translate(0, 0, z0);
+    const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true;
+    return m;
+  };
+  g.add(prism([[0, b], [dB, b], [dB, b + lip], [dT, b + H], [0, b + H]], HM.body));
+  // стекло по наклону: отрезок A→B, толщина t наружу по нормали n
+  const A = [dB, b + lip], B = [dT, b + H], len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+  const n = [(B[1] - A[1]) / len, (A[0] - B[0]) / len], t = 0.006;
+  const glass = prism([A, B, [B[0] + n[0] * t, B[1] + n[1] * t], [A[0] + n[0] * t, A[1] + n[1] * t]], HM.glass);
+  g.add(glass);
+  // снизу: фильтр и полоса света к варке
+  g.add(boxAt(0.03, dB - 0.085, b - 0.002, b, z0 + 0.03, z1 - 0.03, M.vent, { cast: false }));
+  const led = boxAt(dB - 0.065, dB - 0.04, b - 0.003, b, z0 + 0.04, z1 - 0.04, HM.led, { cast: false });
+  led.userData.hoodLed = true; g.add(led);
+  // точки сенсора на стекле внизу справа (смотрим со стороны комнаты: +X, правее — меньше Z)
+  const dotGeo = new THREE.CircleGeometry(0.0042, 16);
+  for (let i = 0; i < 4; i++) {
+    const s = 0.03, px = A[0] + (B[0] - A[0]) * (s / len) + n[0] * (t + 0.0006), py = A[1] + (B[1] - A[1]) * (s / len) + n[1] * (t + 0.0006);
+    const dot = new THREE.Mesh(dotGeo, HM.dotOff);
+    dot.position.set(px, py, z0 + 0.05 + (i === 0 ? 0 : 0.03 + i * 0.022));
+    dot.lookAt(px + n[0], py + n[1], dot.position.z);
+    dot.userData.hoodDot = i; g.add(dot);
+  }
+  // пятно света на варке: растровая подсказка, что полоса светит (в фото и GLB его нет — прячет hood.js)
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(dB + 0.2, w + 0.1).rotateX(-Math.PI / 2), HM.pool);
+  pool.position.set(dB / 2 + 0.02, top + 0.0075, hobZ);
+  pool.visible = false; pool.castShadow = false; pool.receiveShadow = false; pool.renderOrder = 2;
+  Object.assign(pool.userData, { hoodPool: true, rasterOnly: true, noPick: true });
+  g.add(pool);
+  g.userData.hood = { center: new THREE.Vector3(dB / 2, b + H / 2, hobZ), z0, z1, bottom: b, top: b + H };
+  return g;
 }
 
 export function islandBox(kit, state) {

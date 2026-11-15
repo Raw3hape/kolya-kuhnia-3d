@@ -1,19 +1,25 @@
-// Следы выстрелов в прогулке: дырка от пули на поверхности и короткий всплеск пыли, щепок и искр. Ничего не ломается.
-// Зовёт viewmodel.js на каждый выстрел; в код варианта не входит, живёт до «Убрать следы» или перезагрузки.
+// Следы выстрелов в прогулке: дырка от пули на поверхности и короткий всплеск пыли, щепок и искр; посуда, фрукты,
+// стёкла и зеркала бьются (breakables.js, mirrors.js), экраны трескаются, но продолжают показывать видео.
+// Зовёт viewmodel.js на каждый выстрел; в код варианта не входит, живёт до «Убрать следы и осколки» или перезагрузки.
 //
-// createImpacts({ THREE, scene, camera, renderer, pipe, requestRender })
+// createImpacts({ THREE, scene, camera, renderer, pipe, requestRender, getSound })
 //   -> { shoot({ spread, pellets, range, hunt, weapon, damage }) -> сколько пуль попало в зверей (hunt.js)
 //          лучи из камеры через центр экрана (прицел): pellets штук (дробь — много), каждый со своим отклонением в конусе
 //          spread (рад) в осях экрана: пуля — гуще к центру (радиус ∝ случайному числу), дробь — равномерно по кругу;
 //          дальность range, м; hunt — объект охоты или null: hunt.raycast(raycaster) -> { distance, point, normal,
-//          hit(weapon, damage) } | null; зверь ближе стены — hit(weapon, damage) и брызги без следа, иначе след как обычно;
-//        update(dt) -> bool   true, пока летят частицы или меняется видимость следов (в покое — false, ноль работы);
-//        clear(), holes (сколько следов сейчас), dispose() }
+//          hit(weapon, damage) } | null — спрашивается первым на каждую пулю (звери, мыши); зверь ближе стены —
+//          hit(weapon, damage) и брызги без следа (цвет — hit.surface { albedo, solid }, без него красные), иначе след;
+//        update(dt) -> bool   true, пока летят частицы и осколки или меняется видимость следов (в покое — false, ноль работы);
+//        clear() — убрать следы и трещины, вернуть разбитое целым; holes (следов сейчас), broken (разбито), dispose() }
+//   getSound() -> bool — звук включён (звон и хруст разбитого).
 //
-// Луч: только видимое на слое 0 (вырез прячет стены на слой 1); стекло (userData.glass) пропускает насквозь,
-// userData.shadowOnly и невидимые материалы — мимо; экран ТВ (userData.tvScreen, «дыра» под видео) останавливает пулю
-// без следа, только искры; листья и прочее вырезанное по альфе — без следа, с частицами. На узком (корешок, кромка)
-// след уменьшается, пока не влезет (IMP.minSize); не влезает и он — только частицы.
+// Луч: только видимое на слое 0 (вырез прячет стены на слой 1); userData.shadowOnly и невидимые материалы — мимо.
+// Стекло (userData.glass) пропускает пулю, но само разбивается (breakables.shatterPane; userData.shatter = false — нет).
+// Попадание: свой обработчик меша (breakables.shotHandlers — зеркала) → вещь, которая бьётся (breakables.breakAt) →
+// экран (userData.tvScreen, userData.screen или материал 'screen' моделей; стекло телефона над экраном) — трещина-паутина
+// на экране, видео под ней играет: трещина — прозрачный квад перед экраном, через «дыру» tv.js её видно; трещин сколько
+// угодно, старые уходят после IMP.maxCracks → иначе дырка. Листья и прочее вырезанное по альфе — без следа, с частицами.
+// На узком (корешок, кромка) след уменьшается, пока не влезет (IMP.minSize); не влезает и он — только частицы.
 // След: квадрат с холщовой текстурой (тёмная дыра, светлый сколотый край, трещины, копоть), лежит на 0,4 мм над
 // поверхностью с polygonOffset. Он ребёнок задетого меша (матрица считается в его координатах, любой масштаб): дверь
 // уносит след с собой, пересобранная мебель — забирает. Освещается как поверхность (MeshStandardMaterial, тень,
@@ -24,6 +30,7 @@
 // Фото-режим и снимок PNG: следы и частицы прячутся (pipe.photo каждый кадр, pipe.onLive на время снимка).
 // Частицы: щепки — инстансы тетраэдров, пыль — инстансы плоскостей к камере (оба освещены, как сцена; пыль не идёт в AO),
 // искры и вспышка попадания — одно облако точек с аддитивным смешением. Всё живёт не дольше IMP.life.
+import { createBreakables } from './breakables.js';
 
 const IMP = {
   max: 200,               // следов всего
@@ -34,13 +41,17 @@ const IMP = {
   gravity: 9.8,
   pool: { chips: 160, dust: 96, sparks: 96 },
   sparkGain: 6,           // яркость искр относительно белого при экспозиции 1
+  maxCracks: 80,          // трещин на экранах всего
+  crack: [0.05, 0.32],    // сторона квадрата трещины, м (не больше 0,6 меньшей стороны экрана)
+  crackGain: 0.55,        // яркость трещины относительно белого при экспозиции 1 (светлые изломы на видео)
 };
 const ATLAS = 2;          // текстура следа — 2×2 варианта
 const CELL = 128;         // пикселей на вариант
+const CRACK_CELL = 256;   // пикселей на вариант трещины
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
-export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRender }) {
+export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRender, getSound = () => true }) {
   const V3 = () => new THREE.Vector3();
   const ray = new THREE.Raycaster();
   ray.layers.set(0);
@@ -71,6 +82,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   let holes = [];           // по возрасту, старые первыми
   let hidden = false, capturing = false;
   const inScene = o => { while (o) { if (o === scene) return true; o = o.parent; } return false; };
+  const shown = o => { for (let x = o; x && x !== scene; x = x.parent) if (!x.visible) return false; return true; };   // разбитое в этом же выстреле
 
   // ---------- цвет поверхности: цвет материала × средний цвет карты ----------
   const avgCache = new WeakMap();
@@ -152,9 +164,56 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     while (holes.length > IMP.max) holes.shift().removeFromParent();
   }
 
+  // ---------- трещины на экранах (видео под ними играет) ----------
+  const crackTex = makeCrackAtlas(THREE);
+  const crackMat = new THREE.MeshBasicMaterial({ map: crackTex, transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
+  let cracks = [], crackExp = -1;
+  const SCREEN = 'screen';
+  const hasScreen = o => { let f = false; o.traverse(x => { if (!f && x.isMesh && x.material?.name === SCREEN) f = true; }); return f; };
+  function isScreen(o) {
+    if (o.userData.tvScreen || o.userData.screen) return true;
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (m?.name === SCREEN) return true;
+    // стекло телефона лежит поверх экрана: тоже экран, если рядом в модели есть меш с материалом 'screen'
+    return m?.name === 'glass' && !!o.parent && hasScreen(o.parent);
+  }
+  const sz3 = V3(), bb = new THREE.Box3();
+  function addCrack(hit, n) {
+    const parent = hit.object;
+    parent.updateWorldMatrix(true, false);
+    if (Math.abs(parent.matrixWorld.determinant()) < 1e-12) return;
+    // размер — по экрану: на телефоне паутина меньше, чем на ТВ
+    const g = parent.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    bb.copy(g.boundingBox).applyMatrix4(parent.matrixWorld).getSize(sz3);
+    const dims = [sz3.x, sz3.y, sz3.z].sort((a, b) => b - a);
+    const s = Math.max(IMP.crack[0] * 0.4, Math.min(rand(IMP.crack[0], IMP.crack[1]), dims[1] * 0.6));
+    q.setFromUnitVectors(Z, n);
+    qs.setFromAxisAngle(n, Math.random() * Math.PI * 2);
+    mtx.compose(hit.point.clone().addScaledVector(n, 0.0015), qs.multiply(q), new THREE.Vector3(s, s, s));
+    const d = new THREE.Mesh(quads[(Math.random() * quads.length) | 0], crackMat);   // атлас трещин тоже 2×2
+    d.matrixAutoUpdate = false;
+    d.matrix.copy(inv.copy(parent.matrixWorld).invert().multiply(mtx));
+    d.castShadow = false; d.receiveShadow = false;
+    d.raycast = noRaycast;
+    d.renderOrder = 4;   // поверх экрана и его «дыры»
+    d.visible = !hidden;
+    Object.assign(d.userData, { impact: true, rasterOnly: true, noPick: true });
+    parent.add(d);
+    cracks = cracks.filter(h => inScene(h));
+    cracks.push(d);
+    while (cracks.length > IMP.maxCracks) cracks.shift().removeFromParent();
+  }
+
+  // ---------- то, что бьётся ----------
+  const breaks = createBreakables({ THREE, scene, camera, pipe, requestRender, getSound, burst: (p, n, dir, surf) => burst(p, n, dir, surf) });
+
   function clear() {
     for (const h of holes) h.removeFromParent();
-    holes = [];
+    for (const c of cracks) c.removeFromParent();
+    holes = []; cracks = [];
+    breaks.restore();
     requestRender?.();
   }
 
@@ -258,6 +317,15 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   // списки переиспользуются: на выстрел — ни одного нового массива, кроме того, что создаёт сам three.js на попадание
   const centre = new THREE.Vector2(0, 0), nrm = V3(), list = [], hits = [], ax = V3(), ay = V3();
   const FLESH = { albedo: new THREE.Color(0.32, 0.04, 0.03), metal: false, solid: true, flesh: true };
+  // мишень сама говорит, из чего она (hit.surface: мышь — пыль, монстр — без крови): те же крошки и облачко её цвета,
+  // без искр и вспышки; без подсказки — красные брызги зверя. Кэш — без новых объектов на выстрел
+  const surfCache = new WeakMap();
+  const beastSurf = s => {
+    if (!s?.albedo) return FLESH;
+    let v = surfCache.get(s);
+    if (!v) surfCache.set(s, v = { albedo: s.albedo, metal: !!s.metal, solid: s.solid !== false, flesh: true });
+    return v;
+  };
   const collect = o => {
     if (!o.isMesh || o.userData.impact || o.userData.shadowOnly) return;
     const m = o.material, m0 = Array.isArray(m) ? m[0] : m;
@@ -276,17 +344,25 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
         ax.setFromMatrixColumn(camera.matrixWorld, 0); ay.setFromMatrixColumn(camera.matrixWorld, 1);
         ray.ray.direction.addScaledVector(ax, Math.cos(a) * r).addScaledVector(ay, Math.sin(a) * r).normalize();
       }
+      // звери (и всё, что отдаёт hunt.raycast) — первыми: их луч не зависит от сцены
+      const beast = hunt?.raycast?.(ray) ?? null;
       hits.length = 0;
       ray.intersectObjects(list, false, hits);
       let hit = null;
-      for (const h of hits) if (!h.object.userData.glass) { hit = h; break; }
-      const beast = hunt?.raycast?.(ray) ?? null;
+      for (const h of hits) if (shown(h.object) && !h.object.userData.glass) { hit = h; break; }
+      // стекло до цели (или до зверя) бьётся, пуля летит дальше
+      const stop = Math.min(hit ? hit.distance : Infinity, beast ? beast.distance : Infinity);
+      for (const h of hits) {
+        if (h.distance >= stop) break;
+        if (!h.object.userData.glass || !shown(h.object)) continue;
+        if (breaks.handle(h, ray.ray.direction) == null) breaks.shatterPane(h, ray.ray.direction);
+      }
       if (beast && beast.distance < (hit ? hit.distance : Infinity)) {
         beast.hit?.(weapon, damage);
         struck++;
         nrm.copy(beast.normal ?? ray.ray.direction).normalize();
         if (nrm.dot(ray.ray.direction) > 0) nrm.negate();
-        burst(beast.point, nrm, ray.ray.direction, FLESH);
+        burst(beast.point, nrm, ray.ray.direction, beastSurf(beast.surface));
         continue;
       }
       if (!hit) continue;
@@ -298,9 +374,16 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
         nrm.copy(hit.face.normal).applyMatrix3(nm.getNormalMatrix(mtx)).normalize();
       } else nrm.copy(ray.ray.direction).negate();
       if (nrm.dot(ray.ray.direction) > 0) nrm.negate();
-      const surf = surface(hit), decal = !o.userData.tvScreen && !surf.cutout;
-      if (decal) addHole(hit, nrm, surf.albedo);
-      burst(hit.point, nrm, ray.ray.direction, { ...surf, solid: !o.userData.tvScreen });
+      const surf = surface(hit);
+      // свой обработчик (зеркало) или вещь, которая бьётся: без следа, с крошкой
+      if (breaks.handle(hit, ray.ray.direction) || breaks.breakAt(hit, ray.ray.direction, surf)) {
+        burst(hit.point, nrm, ray.ray.direction, { ...surf, solid: true });
+        continue;
+      }
+      const screen = isScreen(o);
+      if (screen) addCrack(hit, nrm);
+      else if (!surf.cutout) addHole(hit, nrm, surf.albedo);
+      burst(hit.point, nrm, ray.ray.direction, { ...surf, solid: !screen });
     }
     list.length = 0;   // не держим ссылки на меши до следующего выстрела
     requestRender?.();
@@ -315,6 +398,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     if (h === hidden) return false;
     hidden = h;
     for (const d of holes) d.visible = !h;
+    for (const d of cracks) d.visible = !h;
     return true;
   }
 
@@ -335,6 +419,12 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
 
   function update(dt = 1 / 60) {
     let changed = syncHidden();
+    if (breaks.update(dt)) changed = true;
+    // трещина одинаково светлая днём и вечером: яркость делится на экспозицию кадра
+    if (cracks.length && renderer.toneMappingExposure !== crackExp) {
+      crackExp = renderer.toneMappingExposure;
+      crackMat.color.setScalar(IMP.crackGain / Math.max(1e-3, crackExp));
+    }
     if (!alive) {
       if (chips.visible || dust.visible || sparks.visible) { chips.visible = dust.visible = sparks.visible = false; changed = true; }
       return changed;
@@ -377,13 +467,15 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     for (const o of [chips, dust, sparks]) o.removeFromParent();
     quads.forEach(g => g.dispose());
     mats.forEach(m => m.dispose());
-    [holeTex, dustTex, chipsGeo, chipsMat, dustGeo, dustMat, sparkGeo, sparkMat].forEach(x => x.dispose());
+    breaks.dispose();
+    [crackTex, crackMat, holeTex, dustTex, chipsGeo, chipsMat, dustGeo, dustMat, sparkGeo, sparkMat].forEach(x => x.dispose());
     chips.dispose(); dust.dispose();
   }
 
   return {
     shoot, update, clear, dispose,
-    get holes() { return holes.filter(inScene).length; },
+    get holes() { return holes.filter(inScene).length + cracks.filter(inScene).length; },
+    get broken() { return breaks.broken; },
   };
 }
 
@@ -452,4 +544,50 @@ function makeSoftDot(THREE) {
   gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(160,160,160,1)'); gr.addColorStop(1, 'rgba(0,0,0,1)');
   g.fillStyle = gr; g.fillRect(0, 0, n, n);
   return new THREE.CanvasTexture(cv);
+}
+
+// Атлас 2×2 трещин экрана: паутина — лучи от точки удара, кольца между ними, в центре крошево. Белые изломы
+// с тёмной тенью рядом (читаются и на светлом, и на тёмном видео); фон прозрачный.
+function makeCrackAtlas(THREE) {
+  const n = CRACK_CELL * ATLAS, cv = document.createElement('canvas'); cv.width = cv.height = n;
+  const g = cv.getContext('2d');
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (let cell = 0; cell < ATLAS * ATLAS; cell++) {
+    const R = CRACK_CELL / 2 - 3, cx = (cell % ATLAS) * CRACK_CELL + CRACK_CELL / 2, cy = Math.floor(cell / ATLAS) * CRACK_CELL + CRACK_CELL / 2;
+    g.save();
+    g.beginPath(); g.rect(cx - CRACK_CELL / 2 + 1, cy - CRACK_CELL / 2 + 1, CRACK_CELL - 2, CRACK_CELL - 2); g.clip();
+    const rays = [], k = 9 + ((Math.random() * 6) | 0);
+    for (let i = 0; i < k; i++) {
+      let a = (i / k) * Math.PI * 2 + rand(-0.25, 0.25), r = R * 0.06;
+      const pts = [[cx + Math.cos(a) * r, cy + Math.sin(a) * r]], L = R * rand(0.7, 1);
+      while (r < L) { r += R * rand(0.07, 0.14); a += rand(-0.12, 0.12); pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+      rays.push(pts);
+    }
+    const line = (pts, w, a) => {
+      g.beginPath(); pts.forEach(([x, y], i) => g[i ? 'lineTo' : 'moveTo'](x, y));
+      g.strokeStyle = `rgba(10,12,14,${a * 0.55})`; g.lineWidth = w + 1.4; g.stroke();
+      g.strokeStyle = `rgba(255,255,255,${a})`; g.lineWidth = w; g.stroke();
+    };
+    // кольца: между соседними лучами на нескольких радиусах, с изломом
+    for (const f of [0.22, 0.4, 0.62].map(x => x * rand(0.85, 1.15))) {
+      for (let i = 0; i < rays.length; i++) {
+        if (Math.random() < 0.25) continue;
+        const A = rays[i], B = rays[(i + 1) % rays.length];
+        const pa = A[Math.min(A.length - 1, Math.round(f * (A.length - 1)))], pb = B[Math.min(B.length - 1, Math.round(f * (B.length - 1)))];
+        const mx = (pa[0] + pb[0]) / 2 + rand(-3, 3), my = (pa[1] + pb[1]) / 2 + rand(-3, 3);
+        line([pa, [mx, my], pb], 1, 0.75 * (1 - f * 0.6));
+      }
+    }
+    for (const pts of rays) line(pts, rand(1.1, 1.8), 0.95);
+    // крошево в центре
+    const core = g.createRadialGradient(cx, cy, 0, cx, cy, R * 0.12);
+    core.addColorStop(0, 'rgba(255,255,255,0.95)'); core.addColorStop(0.5, 'rgba(230,235,240,0.7)'); core.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = core; g.beginPath(); g.arc(cx, cy, R * 0.12, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(8,8,10,0.9)'; g.beginPath(); g.arc(cx, cy, R * 0.025, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
 }

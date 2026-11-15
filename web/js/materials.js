@@ -2,7 +2,8 @@
 // Вся геометрия имеет UV в метрах (см. model.js → boxUV), поэтому repeat = 1 / size.
 // Сгенерированные текстуры (gen: true) несут meta.json {size, sizeV, rough}.
 //
-//   applyItem(mat, item, extra, { later }) — запись каталога на материал; makeMat(opts); loadMeta(id); setAnisotropy(a)
+//   applyItem(mat, item, extra, { later, label }) — запись каталога на материал (label — подпись на экране загрузки,
+//                            loading.js track); makeMat(opts); loadMeta(id); setAnisotropy(a)
 //   onTexturesChanged(fn) — карты сменились без участия вызывающего (полный размер доехал): перерисовать кадр
 //   setTextureQuality(q)  — качество растра (render.js QUALITY): какой размер текстур держать, уже наложенные
 //                            материалы догружаются до него на месте
@@ -18,7 +19,7 @@
 // текстуры, которые сейчас на материалах (их GPU-копию освобождает dispose в applyItem).
 // Заливка на видеокарту — бюджетом кадра в render.js (материал помечается needsUpdate, render.js льёт его карты).
 import * as THREE from 'three';
-import { assetUrl, track, whenRoom, isRoomReady, retry } from './loading.js';
+import { assetUrl, assetIndex, track, whenRoom, isRoomReady, retry } from './loading.js';
 
 const IMAGE_CACHE = 36;   // ≈ 12 наборов цвет/нормаль/шероховатость (маленькие и полные)
 // Переворот — при декодировании (flipY у ImageBitmap в WebGL не работает); цвет без пересчёта профилей,
@@ -31,7 +32,10 @@ let maxAniso = 8;
 // Размер по качеству: '512' | '1k' | 'full' (оригинал)
 const TIER_OF = { eco: '1k', fast: '1k', high: 'full', ultra: 'full' };
 let tier = '1k';
-const sizes = fetch(assetUrl('textures/sizes.json')).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
+// Список уровней и meta.json текстур сборка кладёт в страницу (loading.js assetIndex): без запросов; локально — файлы
+const sizes = assetIndex('sizes') ? Promise.resolve(assetIndex('sizes'))
+  : fetch(assetUrl('textures/sizes.json')).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
+const FULL_LABEL = 'Текстуры в полном размере';
 const live = new Map();   // материал -> аргументы последнего applyItem (для смены размера по качеству)
 
 export function setAnisotropy(a) { maxAniso = a; }
@@ -51,10 +55,10 @@ async function pathOf(dir, map, t) {
   return `textures/${dir}/${has ? `${t}/` : ''}${map}.jpg`;
 }
 
-function baseTexture(path, srgb, later) {
+function baseTexture(path, srgb, later, label) {
   let p = imageCache.get(path);
   if (p) { imageCache.delete(path); imageCache.set(path, p); return p; }
-  p = track(retry(() => loader.loadAsync(assetUrl(path))), { later }).then(bitmap => {
+  p = track(retry(() => loader.loadAsync(assetUrl(path))), { later, label, url: path }).then(bitmap => {
     const t = new THREE.Texture(bitmap);
     t.flipY = false;
     t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
@@ -67,14 +71,16 @@ function baseTexture(path, srgb, later) {
 }
 
 export function loadMeta(id) {
+  const known = assetIndex('meta');
+  if (known && !metaCache.has(id)) metaCache.set(id, Promise.resolve(known[id] ?? null));
   if (!metaCache.has(id)) {
     metaCache.set(id, fetch(assetUrl(`textures/${id}/meta.json`)).then(r => (r.ok ? r.json() : null)).catch(() => null));
   }
   return metaCache.get(id);
 }
 
-async function tex(id, map, item, srgb, t, later) {
-  const t0 = (await baseTexture(await pathOf(id, map, t), srgb, later)).clone();
+async function tex(id, map, item, srgb, t, later, label) {
+  const t0 = (await baseTexture(await pathOf(id, map, t), srgb, later, label)).clone();
   t0.wrapS = t0.wrapT = THREE.RepeatWrapping;
   t0.anisotropy = maxAniso;
   const su = item.size || 1, sv = item.sizeV || su;
@@ -86,14 +92,14 @@ async function tex(id, map, item, srgb, t, later) {
 }
 
 // Карты записи в размере t: { map, normalMap, roughnessMap } (нет текстуры — пусто)
-async function loadMaps(it, t, later) {
+async function loadMaps(it, t, later, label) {
   const maps = {};
   if (it.tex) {
     [maps.map, maps.normalMap, maps.roughnessMap] = await Promise.all([
-      tex(it.tex, 'color', it, true, t, later), tex(it.tex, 'normal', it, false, t, later), tex(it.tex, 'rough', it, false, t, later),
+      tex(it.tex, 'color', it, true, t, later, label), tex(it.tex, 'normal', it, false, t, later, label), tex(it.tex, 'rough', it, false, t, later, label),
     ]);
   } else if (it.normal) {
-    maps.normalMap = await tex(it.normal, 'normal', { size: it.size }, false, t, later);
+    maps.normalMap = await tex(it.normal, 'normal', { size: it.size }, false, t, later, label);
   }
   return maps;
 }
@@ -144,7 +150,8 @@ export async function applyItem(mat, item, extra = {}, opts = {}) {
     changed();
   };
   const stage = async t => {
-    try { put(await loadMaps(it, t, later || t !== '512'), t); }
+    // подпись: маленькие — как сказал вызывающий; полный размер после первого вида — общая «полный размер»
+    try { put(await loadMaps(it, t, later || t !== '512', t === '512' || !isRoomReady() ? opts.label : FULL_LABEL), t); }
     catch (err) {
       console.warn('Нет текстуры', it.tex || it.normal, err);
       if (current()) {

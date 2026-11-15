@@ -13,7 +13,8 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { applyItem, loadMeta } from './materials.js';
-import { assetUrl, track, retry } from './loading.js';
+import { assetUrl, track, retry, isRoomReady, afterRoom } from './loading.js';
+const LABEL = 'Мебель гостиной';   // подпись на экране загрузки (loading.js track)
 import { islandBox } from './model.js';
 import { tvPosterTexture } from './tv.js';
 import { addHelp } from './help.js';
@@ -470,7 +471,7 @@ function finishMat(id, ctx) {
   const key = `furn_wood_${f.id}`;
   const fresh = !MATS.has(key);
   const m = cached(key, () => physical({ color: f.item.color || '#ffffff', roughness: f.item.rough ?? 0.6 }));
-  if (fresh) READY.set(m, applyItem(m, f.item).catch(() => {}));
+  if (fresh) READY.set(m, applyItem(m, f.item, {}, { label: LABEL }).catch(() => {}));
   ctx.ready.push(READY.get(m));
   return m;
 }
@@ -478,10 +479,19 @@ const isWood = id => id === 'oak' || id === 'walnut';
 
 // Экран ТВ. В живом растре поверх него идёт настоящий YouTube (tv.js находит меш 'tv_screen' и вырезает в кадре «дыру»
 // под плеер). Материал «включённого» экрана светится постером (spec/tv.json → poster): его видят фото-режим, снимок
-// PNG и экспорт GLB, где iframe быть не может.
+// PNG и экспорт GLB, где iframe быть не может. Постер (≈0,2 МБ) качается после первого вида: до него экран тёмный
+// (на месте карты — чёрная 1×1, чтобы приход постера не пересобирал шейдер экрана).
+let posterStub = null;
 function screenMat(on) {
   const m = cached('furn_tv_screen', () => physical({ color: '#050506', roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.03 }));
-  const poster = on ? tvPosterTexture() : null;
+  m.userData.posterOn = on;
+  let poster = null;
+  if (on && isRoomReady()) poster = tvPosterTexture();
+  else if (on) {
+    poster = posterStub ??= new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    posterStub.needsUpdate = true;
+    afterRoom(() => { if (m.userData.posterOn && m.emissiveMap === posterStub) m.emissiveMap = tvPosterTexture() || null; });
+  }
   m.emissiveMap = poster;
   m.emissive.set(poster ? '#ffffff' : '#000000');
   m.emissiveIntensity = poster ? 1 : 0;   // яркость постера под экспозицию кадра подгоняет tv.js
@@ -511,7 +521,7 @@ const GLB = new Map();
 function loadGLB(url) {
   if (!gltf) { gltf = new GLTFLoader(); gltf.setMeshoptDecoder(MeshoptDecoder); }
   if (!GLB.has(url)) {
-    const p = track(retry(() => gltf.loadAsync(assetUrl(url)))).then(r => r.scene);
+    const p = track(retry(() => gltf.loadAsync(assetUrl(url))), { label: LABEL, url }).then(r => r.scene);
     p.catch(() => GLB.delete(url));   // неудачную загрузку можно повторить
     GLB.set(url, p);
   }
@@ -725,7 +735,7 @@ function rugMaterial(S, c) {
     sheen: e.pile === 'medium' || e.pile === 'high' ? 0.6 : 0.3, sheenRoughness: 0.8, sheenColor: new THREE.Color('#ffffff') }));
   if (fresh && e.tex) {
     const t = rugTiling(e);
-    READY.set(m, applyItem(m, { tex: rugTexId(e), size: t.whole ? 1 : t.su, sizeV: t.whole ? 1 : t.sv, rough: 1, normalScale: 1 })
+    READY.set(m, applyItem(m, { tex: rugTexId(e), size: t.whole ? 1 : t.su, sizeV: t.whole ? 1 : t.sv, rough: 1, normalScale: 1 }, {}, { label: LABEL })
       .then(() => { if (!m.map) m.color.set(e.color || '#d9d3c7'); })   // нет текстуры — остаётся цвет
       .catch(() => {}));
   }

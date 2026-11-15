@@ -9,6 +9,7 @@
 //        colliders() -> [{ x0, x1, z0, z1 } | { ax, az, bx, bz, h }]  глухие части рам и полотна (отрезок петля -> край),
 //        target  — дверь под прицелом { id, open } или null: клик/E откроет её; оружие в этот момент не стреляет,
 //        list    — все двери [{ id, open }], toggle(id), setOpen(id, open, { instant }) — для проверок из консоли,
+//        onToggle(fn) -> снять()  fn(id, open) — дверь начала открываться или закрываться (life.js: за входной дверью монстры),
 //        dispose() }
 // Прогулке (walk.js) сообщает: refreshObstacles() пока полотно двигается, setAreaGate() — открыт ли путь на балкон
 // и на площадку (телепорт с плана туда только через открытую дверь).
@@ -74,12 +75,13 @@ export function initDoors({ THREE, camera, canvas, plan, doorsGroup, shell, walk
     return hit;
   }
 
-  const animating = new Set();
+  const animating = new Set(), toggles = new Set();
   function setOpen(id, open, { instant = false } = {}) {
     const door = typeof id === 'string' ? doors.find(d => d.id === id) : id;
     if (!door || door.open === !!open) return false;
     if (blocksSwing(door, open ? 1 : 0)) { flash('Отойдите от двери'); return false; }
     door.open = !!open;
+    for (const f of toggles) f(door.id, door.open);
     if (instant) { door.v = open ? 1 : 0; door.t = 1; pose(door); animating.delete(door); onChange?.(door.id, door.open); }
     else { door.from = door.v; door.to = open ? 1 : 0; door.t = 0; animating.add(door); }
     walk?.refreshObstacles?.();
@@ -194,6 +196,7 @@ export function initDoors({ THREE, camera, canvas, plan, doorsGroup, shell, walk
   const pub = d => (d ? { id: d.id, get open() { return d.open; } } : null);
   return {
     update, colliders, dispose, toggle, setOpen,
+    onToggle(fn) { toggles.add(fn); return () => toggles.delete(fn); },
     get target() { return pub(target); },
     get list() { return doors.map(pub); },
   };

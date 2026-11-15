@@ -1,5 +1,5 @@
 {
- "_about": "Экраны с настоящим YouTube (web/js/tv.js): ТВ в гостиной, ноутбук в кабинете, телефон на острове. Плеер один на всю сцену: играет на экране, который сейчас крупнее всех в кадре (видим, к нам лицом, не за стеной); телефон в руке забирает плеер себе. Общие поля: host — домен плеера; pauseAfterSec — пауза, когда ни один экран так долго не в кадре; stallSec — через сколько секунд без воспроизведения брать следующее видео. Экран (screens[]): id; найти — mesh (имя меша-плоскости в сцене) или decorModel + material (часть обстановки decor.js с этой моделью и материал экрана в ней) и rect — прямоугольник экрана в координатах модели (center, size Ш×В в метрах, rot — градусы XYZ: плоскость смотрит в +Z, поворот ставит её на экран). when — условие по состоянию (\"!x\" — не равно). maxDist — дальше этого (м) экран не играет. px — ширина плеера в CSS-пикселях (по ней YouTube выбирает качество). crop — увеличение видео внутри экрана (1 — без обрезки). onEnd — loop (повтор) или next (следующее). volume — громкость со звуком (0–100); звук: ТВ — сидя на диване (setAudio), audioNear — ближе стольких метров к экрану, телефон — в руке. poster — кадр для фото-режима, снимка и GLB (лицензия в textures/tv/SOURCE.md), posterBrightness — его видимая яркость. hold — телефон в руке (handheld.js): reach — с какого расстояния взять, м; height — доля высоты кадра; y — центр по высоте кадра (−1 низ, 1 верх); tilt, roll — наклон, градусы; bezel, radius, screenRadius — рамка и скругления, м. videos — по порядку; при ошибке (встраивание запрещено, видео удалено) или зависании — следующее, по кругу; duration — длительность или \"live\"; embedCheck — дата проверки oEmbed (200) и настоящего воспроизведения во встроенном плеере.",
+ "_about": "Экраны с настоящим YouTube (web/js/tv.js): ТВ в гостиной, ноутбук в кабинете, телефон на острове, ноутбук на кровати в спальне (стрим Dota 2). Плеер один на всю сцену: играет на экране, который сейчас крупнее всех в кадре (видим, к нам лицом, не за стеной); телефон в руке забирает плеер себе. Общие поля: host — домен плеера; pauseAfterSec — пауза, когда ни один экран так долго не в кадре; stallSec — через сколько секунд без воспроизведения брать следующее видео. Экран (screens[]): id; найти — mesh (имя меша-плоскости в сцене) или decorModel + material (часть обстановки decor.js с этой моделью и материал экрана в ней) и rect — прямоугольник экрана в координатах модели (center, size Ш×В в метрах, rot — градусы XYZ: плоскость смотрит в +Z, поворот ставит её на экран). when — условие по состоянию (\"!x\" — не равно). maxDist — дальше этого (м) экран не играет. px — ширина плеера в CSS-пикселях (по ней YouTube выбирает качество). crop — увеличение видео внутри экрана (1 — без обрезки). onEnd — loop (повтор) или next (следующее). volume — громкость со звуком (0–100); звук: ТВ — сидя на диване (setAudio), audioNear — ближе стольких метров к экрану, телефон — в руке. poster — кадр для фото-режима, снимка и GLB (лицензия в textures/tv/SOURCE.md), posterBrightness — его видимая яркость. hold — телефон в руке (handheld.js): reach — с какого расстояния взять, м; height — доля высоты кадра; y — центр по высоте кадра (−1 низ, 1 верх); tilt, roll — наклон, градусы; bezel, radius, screenRadius — рамка и скругления, м. videos — по порядку; при ошибке (встраивание запрещено, видео удалено) или зависании — следующее, по кругу; duration — длительность или \"live\"; start — с какой секунды начинать (трансляции: сразу игра, а не заставка); embedCheck — дата проверки oEmbed (200) и настоящего воспроизведения во встроенном плеере.",
  "host": "https://www.youtube-nocookie.com",
  "pauseAfterSec": 30,
  "stallSec": 25,
@@ -286,6 +286,111 @@
      "channel": "Guff 🥇",
      "url": "https://www.youtube.com/shorts/cVh1JpchCUk",
      "duration": "0:20",
+     "embedCheck": "2026-11-15"
+    }
+   ]
+  },
+  {
+   "id": "bedroom",
+   "title": "Ноутбук на кровати в спальне: стрим Dota 2",
+   "decorModel": "models/decor/room2/laptop-gaming/model.glb",
+   "material": "screen",
+   "rect": {
+    "center": [
+     0,
+     0.1427,
+     -0.1184
+    ],
+    "size": [
+     0.33,
+     0.186
+    ],
+    "rot": [
+     -20,
+     0,
+     0
+    ]
+   },
+   "maxDist": 5,
+   "audioNear": 1.4,
+   "volume": 30,
+   "crop": 1.0,
+   "px": 854,
+   "onEnd": "next",
+   "videos": [
+    {
+     "id": "GMbjTK8UVks",
+     "title": "[EN] The International 2026 - Grand Finals Day",
+     "channel": "dota2",
+     "url": "https://www.youtube.com/watch?v=GMbjTK8UVks",
+     "duration": "11:55:01",
+     "start": 9000,
+     "embedCheck": "2026-11-15"
+    },
+    {
+     "id": "gCEmlnmjwLk",
+     "title": "Dota 2 WTF Moments 658",
+     "channel": "Dota Watafak",
+     "url": "https://www.youtube.com/watch?v=gCEmlnmjwLk",
+     "duration": "8:34",
+     "embedCheck": "2026-11-15"
+    },
+    {
+     "id": "U8j8q5SywCA",
+     "title": "BLAST SLAM VIII: Malta, Playoffs, Day 2 - Spirit vs Aurora, 1win vs PARIVISION, LGD vs ???",
+     "channel": "BLAST SLAM Dota 2",
+     "url": "https://www.youtube.com/watch?v=U8j8q5SywCA",
+     "duration": "11:54:57",
+     "start": 5400,
+     "embedCheck": "2026-11-15"
+    },
+    {
+     "id": "KB5aa3yFa3g",
+     "title": "Best Moments of the International 2026 | DOTA2",
+     "channel": "PGL DOTA2",
+     "url": "https://www.youtube.com/watch?v=KB5aa3yFa3g",
+     "duration": "22:16",
+     "embedCheck": "2026-11-15"
+    },
+    {
+     "id": "Epdugn8QYJI",
+     "title": "Dota 2 WTF Moments 657",
+     "channel": "Dota Watafak",
+     "url": "https://www.youtube.com/watch?v=Epdugn8QYJI",
+     "duration": "8:38",
+     "embedCheck": "2026-11-15"
+    },
+    {
+     "id": "cwgPyxlrH_Y",
+     "title": "[EN] The International 2026 - Day 2",
+     "channel": "dota2",
+     "url": "https://www.youtube.com/watch?v=cwgPyxlrH_Y",
+     "duration": "11:55:01",
+     "start": 14400,
+     "embedCheck": "2026-11-15"
+    },
+    {
+     "id": "NVT-Iu8ZDxA",
+     "title": "TOP-25 Best Plays of TI15 The International 2026 - Dota 2",
+     "channel": "hOlyhexOr",
+     "url": "https://www.youtube.com/watch?v=NVT-Iu8ZDxA",
+     "duration": "20:21",
+     "embedCheck": "2026-11-15"
+    },
+    {
+     "id": "3k-cTvUwioc",
+     "title": "The Most ICONIC Moments in The International History (Dota 2)",
+     "channel": "theScore esports",
+     "url": "https://www.youtube.com/watch?v=3k-cTvUwioc",
+     "duration": "16:29",
+     "embedCheck": "2026-11-15"
+    },
+    {
+     "id": "44vlfT6LE-g",
+     "title": "Dota 2 WTF Moments 254",
+     "channel": "Dota Watafak",
+     "url": "https://www.youtube.com/watch?v=44vlfT6LE-g",
+     "duration": "10:44",
      "embedCheck": "2026-11-15"
     }
    ]

@@ -11,6 +11,8 @@
 //   light     — SpotLight светильника (выключен интенсивностью 0); setLight(on, scale) включает
 //   ready     — Promise: материалы заданы (текстуры ванной догружаются после первого вида, materials.js later)
 //   seat      — wcSeat(spec): где сидит человек на унитазе
+//   Полочка с газетами над унитазом (spec.papers): группы 'bath_papers' / 'bath_papers_stack' / 'bath_paper_top', обложка
+//   'bath_paper_cover' — их ищет по имени newspaper.js (взять и читать газету), см. buildPapers.
 // wcSeat(spec) -> { x, y, z, yaw } | null — точка таза на сиденье (крышка закрыта), yaw — куда смотрит сидящий
 //   (радианы вокруг +Y, 0 = +Z). Короб на стене x0, унитаз смотрит в +X. Читает seats.js.
 import * as THREE from 'three';
@@ -220,6 +222,9 @@ export function buildBath(plan, spec, M, state = {}) {
   for (const s of [-1, 1]) lcyl(0.012, 0.03, 'x', s * 0.075, wc.bowl.seat + 0.004, 0.04, mat.metal, 'wc_hinge', bowl, 12);
   colliders.push({ x0: bx.x1, x1: bx.x1 + bd, z0: wc.bowl.z - bw / 2, z1: wc.bowl.z + bw / 2 });
 
+  // ---------- полочка с газетами над унитазом (верхнюю берёт и читает newspaper.js) ----------
+  if (spec.papers) buildPapers(spec.papers, faces.right, mat, mk, lbox, group, cut);
+
   // ---------- тумба с раковиной, смеситель, зеркало, розетка ----------
 
   const v = spec.vanity;
@@ -254,7 +259,7 @@ export function buildBath(plan, spec, M, state = {}) {
   lbox(-mr.width / 2 + 0.05, mr.width / 2 - 0.05, mr.y0 + 0.05, mr.y1 - 0.05, md, md + 0.012, mat.dark, 'mirror_spacer', mir);
   const glassM = lbox(-mr.width / 2, mr.width / 2, mr.y0, mr.y1, md + 0.012, md + 0.017, mat.mirror, 'mirror', mir);
   // отражает саму ванную, а не уличную панораму: lighting.js снимает куб-зонд комнаты (локальная ось +Z — в комнату)
-  glassM.userData.localReflection = true;
+  glassM.userData.mirror = true;   // честное плоское отражение (mirrors.js), лицо — +Z
 
   if (spec.outlet) {
     const of = faces[spec.outlet.face] || far;
@@ -291,6 +296,40 @@ export function buildBath(plan, spec, M, state = {}) {
   return { group, above, cut, colliders, light, setLight, ready, seat: wcSeat(spec), dispose };
 }
 
+// Доска на стене над коробом и стопка газет. Группы: 'bath_papers' (полка целиком, прячется с вырезом стены),
+// 'bath_papers_stack' (стопка: прицел «взять газету»), 'bath_paper_top' (верхняя газета: прячется, пока газета в руке),
+// в ней плоскость 'bath_paper_cover' — первая полоса; её картинку (CanvasTexture) рисует newspaper.js после первого вида.
+// Обложка: u — вдоль стены к −Z (вправо для того, кто стоит лицом к полке), v — от края полки к стене (вверх по газете).
+function buildPapers(P, wall, mat, mk, lbox, group, cut) {
+  const x0 = wall.at, d = P.depth, b = P.board ?? 0.022, y = P.y, zc = P.z, hw = P.width / 2;
+  const shelf = new THREE.Group(); shelf.name = 'bath_papers'; group.add(shelf); cut.push(shelf);
+  lbox(x0, x0 + d, y - b, y, zc - hw, zc + hw, mat.oak, 'papers_board', shelf);
+  for (const s of [-1, 1]) {   // две чёрные консоли-уголка
+    const z = zc + s * (hw - 0.06);
+    lbox(x0, x0 + 0.004, y - b - 0.12, y - b, z - 0.012, z + 0.012, mat.dark, 'papers_bracket', shelf);
+    lbox(x0, x0 + d * 0.7, y - b - 0.004, y - b, z - 0.012, z + 0.012, mat.dark, 'papers_bracket', shelf);
+  }
+  const stack = new THREE.Group(); stack.name = 'bath_papers_stack'; shelf.add(stack);
+  const pp = P.paper, n = Math.max(1, pp.count | 0), cx = x0 + d / 2 + 0.004;
+  let top = y;
+  for (let i = 0; i < n; i++) {
+    const last = i === n - 1;
+    const g = last ? new THREE.Group() : stack;
+    if (last) { g.name = 'bath_paper_top'; stack.add(g); }
+    const m = mk(new THREE.BoxGeometry(pp.width, pp.thick, pp.length), i % 2 ? mat.paper : mat.paper2, 'paper', g, { cast: true });
+    // стопка лежит неровно: каждая газета чуть сдвинута и повёрнута
+    m.position.set(cx + Math.sin(i * 2.1) * 0.008, top + pp.thick / 2, zc + Math.cos(i * 1.7) * 0.012);
+    m.rotation.y = Math.sin(i * 3.3) * 0.05;
+    if (last) {
+      const cover = mk(new THREE.PlaneGeometry(pp.length, pp.width), mat.cover, 'bath_paper_cover', g, { cast: false });
+      cover.position.set(m.position.x, top + pp.thick + 0.0006, m.position.z);
+      cover.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0)))
+        .premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), m.rotation.y));
+    }
+    top += pp.thick;
+  }
+}
+
 // ---------- материалы ----------
 
 function bathMaterials(spec, state) {
@@ -318,6 +357,11 @@ function bathMaterials(spec, state) {
     plastic: P('bathPlastic', { color: '#f1f1ef', roughness: 0.35 }),
     housing: P('bathLampBody', { color: '#f1f1ef', roughness: 0.45 }),
     diffuser: P('bathLampDiffuser', { color: '#f6f5f2', roughness: 0.6, emissive: '#fff1dc', emissiveIntensity: 0 }),
+    // полочка с газетами (spec.papers): дуб, газетная бумага, первая полоса (карту ставит newspaper.js)
+    oak: P('bathShelfOak', { color: '#b98a5a', roughness: 0.55 }),
+    paper: P('bathPaper', { color: '#e9e4d6', roughness: 0.92 }),
+    paper2: P('bathPaper2', { color: '#dfd9c8', roughness: 0.92 }),
+    cover: P('bathPaperCover', { color: '#e9e4d6', roughness: 0.9 }),
   };
 }
 

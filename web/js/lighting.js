@@ -7,7 +7,8 @@
 //   SHADER_LAMP_LAYER            — слой «светильник шейдера» (см. п. 7): так помечает свои источники lamps.js
 //   lighting.ready               — Promise: панорама текущего режима загружена и стоит (первый вид)
 //   lighting.lights, .sun, .setQuality(q) — бюджет, глубина пересчёта и размер панорамы по качеству (карты теней — render.js), .dispose()
-//   Панорамы грузятся по требованию: только режим, который сейчас выбран (HDR_TIER — размер по качеству).
+//   Панорамы грузятся по требованию: только режим, который сейчас выбран (HDR_TIER — размер по качеству;
+//   до первого вида — HDR_FIRST, маленькая: ≈0,3 МБ вместо 1,2, размер по качеству доезжает после него).
 //
 // Как устроено (почему так, а не «один свет на всю сцену»):
 // 1. Зоны. Квартира делится на герметичные по свету зоны: открытое пространство (кухня-гостиная, холл, шахта),
@@ -46,7 +47,7 @@ import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUnifo
 import { sunFor, sunTimes } from './site.js';
 import { outdoorAreas } from './walk.js';
 import { rasterBusy } from './render.js';
-import { assetUrl, track, retry } from './loading.js';
+import { assetUrl, track, retry, whenRoom, isRoomReady } from './loading.js';
 
 // ---------- настройки ----------
 
@@ -65,6 +66,8 @@ const FACE = 32;               // сторона грани кубическог
 // Бюджет пересчёта на кадр (мс процессора): грани зондов снимаются по одной, пока не выйдет время (минимум одна).
 // Так пересчёт после смены света не роняет кадр ниже ~60 fps и не грузит GPU пачкой (риск потери WebGL).
 const BAKE_MS = { eco: 3, fast: 5, high: 8, ultra: 10 };
+// До первого вида кадр всё равно закрыт заставкой (loading.js): пересчёт идёт крупными кусками, заставка уходит раньше
+const BOOT_BAKE_MS = 30;
 // Мелочь (радиус меньше PROBE_SKIP_R, без свечения) в кубы зондов не попадает: на рассеянный свет комнаты
 // книги и ручки не влияют, а вызовов отрисовки в каждой грани из-за них вдвое больше.
 const PROBE_SKIP_R = 0.3;
@@ -83,7 +86,6 @@ const OPEN_ROOMS = ['kitchen_living', 'hall', 'shaft'];   // одна зона: 
 // Баланс белого переотражений: глаз в комнате подстраивается под тёплый отскок от дубового пола и стен,
 // поэтому цвет отражённого света приглушается (1 — физически, 0 — серый). Иначе белый потолок выходит персиковым.
 const GI_SAT = 0.3;
-const MIRROR_FACE = 256;       // сторона грани куб-зонда зеркала
 // Площадка подъезда за входной дверью — лестничная клетка без своего света: ни неба, ни солнца, только то,
 // что приходит из холла через открытую дверь (зонды), и ровный нейтральный подсвет подъезда — эта доля
 // освещённости холла (средний зонд холла, яркость без цвета).
@@ -93,6 +95,7 @@ const LANDING_FILL = 0.12;
 const ENV_WIDTH = 2048;
 // Панорама по качеству (tools/make_web_assets.py): '1k' — textures/hdri/1k/ (≈1,5 МБ), 'full' — оригинал (до 6,5 МБ)
 const HDR_TIER = { eco: '1k', fast: '1k', high: 'full', ultra: 'full' };
+const HDR_FIRST = '512';   // textures/hdri/512/ (≈0,3 МБ): для первого вида, пока не догрузилась панорама по качеству
 
 // ---------- режим и время суток ----------
 
@@ -311,9 +314,6 @@ uniform vec4 rlPoint[ ${LAMP_MAX.point * 3} ];  // позиция + маска, 
 uniform vec4 rlRect[ ${LAMP_MAX.rect * 4} ];    // центр + маска, полуширина, полувысота, цвет
 uniform ivec3 rlLampCount;                // светильники шейдера: споты, точечные, прямоугольные
 varying vec3 vRlWorld;
-#ifdef RL_LOCAL_ENV
-uniform vec3 rlEnvMin, rlEnvMax, rlEnvPos;   // комната и точка съёмки куб-зонда (мир)
-#endif
 const float rlGiSat = ${glslFloat(GI_SAT)};
 const vec4 RL_BOX[ ${boxes.length} ] = vec4[ ${boxes.length} ](
 	${v4(boxes.map(q => [q.x0, q.z0, q.x1, q.z1]))} );
@@ -439,16 +439,6 @@ if ( rlZi.x > 0.5 ) {
 	#endif
 }
 #endif
-// Зеркало: отражение из куб-зонда своей комнаты с поправкой на её коробку (box projection) — без неба и солнца
-#if defined( RL_LOCAL_ENV ) && defined( USE_ENVMAP ) && defined( RE_IndirectSpecular ) && defined( ENVMAP_TYPE_CUBE_UV )
-{
-	vec3 rlR = reflect( - geometryViewDir, geometryNormal );
-	rlR = inverseTransformDirection( normalize( mix( rlR, geometryNormal, material.roughness * material.roughness ) ), viewMatrix );
-	vec3 rlT = mix( ( rlEnvMin - vRlWorld ) / rlR, ( rlEnvMax - vRlWorld ) / rlR, step( vec3( 0.0 ), rlR ) );
-	float rlD = max( min( min( rlT.x, rlT.y ), rlT.z ), 0.0 );
-	radiance = textureCubeUV( envMap, normalize( vRlWorld + rlR * rlD - rlEnvPos ), material.roughness ).rgb * envMapIntensity;
-}
-#endif
 `;
 
 // Маски: тип 0 — точечные, 1 — прожекторы, 2 — направленные, 3 — прямоугольные, 4 — полусферные
@@ -527,13 +517,14 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   const env = {};        // режим -> { tier, bg, env, … } — последняя загруженная
   const loading = {};    // `${режим}@${размер}` -> Promise
   const pmrem = new THREE.PMREMGenerator(renderer);
-  let hdrTier = HDR_TIER.eco;
+  let hdrTier = HDR_FIRST, wantTier = HDR_TIER.eco;   // до первого вида — маленькая, потом по качеству
   let resolveReady;
   const ready = new Promise(r => { resolveReady = r; });
+  whenRoom.then(() => { hdrTier = wantTier; if (current.mode) ensureEnv(current.mode); });
   async function loadHDR(name, tier) {
-    const dir = `${hdriPath}${tier === '1k' ? '1k/' : ''}`;
+    const dir = `${hdriPath}${tier === 'full' ? '' : `${tier}/`}`;
     const [t, sunUV] = await Promise.all([
-      track(retry(() => new RGBELoader().loadAsync(assetUrl(`${dir}${name}.hdr`)))),
+      track(retry(() => new RGBELoader().loadAsync(assetUrl(`${dir}${name}.hdr`))), { label: tier === HDR_FIRST ? 'Небо и свет' : 'Небо в полном размере' }),
       fetch(assetUrl(`${hdriPath}${name}.json`)).then(r => r.json()),
     ]);
     t.mapping = THREE.EquirectangularReflectionMapping;
@@ -619,7 +610,6 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   const lightsBegin = patchedLightsBegin(THREE), pars = glslPars(Z);
   function inject(shader, mat) {
     Object.assign(shader.uniforms, U);
-    if (mat?.userData.rlLocalEnv) Object.assign(shader.uniforms, mat.userData.rlLocalEnv.uniforms);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vRlWorld;')
       .replace('#include <project_vertex>', `#include <project_vertex>
@@ -645,49 +635,8 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     mat.customProgramCacheKey = function () { return (prevKey === THREE.Material.prototype.customProgramCacheKey ? '' : prevKey.call(this)) + '|roomlight1'; };
     mat.needsUpdate = true;
   }
-  // --- зеркала: свой куб-зонд комнаты вместо уличной панорамы (меш с userData.localReflection, +Z — в комнату)
-  const mirrors = [];
-  let mirrorsDirty = true;
-  function setupMirror(mesh) {
-    const mat = mesh.material;
-    mesh.updateWorldMatrix(true, false);
-    const c = new THREE.Vector3().setFromMatrixPosition(mesh.matrixWorld);
-    const n = new THREE.Vector3(0, 0, 1).transformDirection(mesh.matrixWorld);
-    // комната перед зеркалом
-    const front = c.clone().addScaledVector(n, 0.25);
-    const zone = Z.zones[Z.lookup(front.x, Math.min(front.y, H - 0.1), front.z)];
-    const rects = zone?.kind === 'room' ? zone.rects : [];
-    if (!rects.length) { console.warn('lighting: зеркало вне комнаты', mesh.name); return; }
-    const min = new THREE.Vector3(Math.min(...rects.map(q => q.x0)), 0, Math.min(...rects.map(q => q.z0)));
-    const max = new THREE.Vector3(Math.max(...rects.map(q => q.x1)), H, Math.max(...rects.map(q => q.z1)));
-    // точка съёмки — на полметра перед зеркалом, внутри комнаты
-    const pos = c.clone().addScaledVector(n, 0.5).clamp(min.clone().addScalar(0.05), max.clone().subScalar(0.05));
-    const rt = new THREE.WebGLCubeRenderTarget(MIRROR_FACE, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
-    const cam = new THREE.CubeCamera(0.03, 30, rt);
-    cam.position.copy(pos);
-    cam.children.forEach(k => { k.layers.set(0); k.layers.enable(1); });   // стены и потолок, спрятанные вырезом, в отражении есть
-    mat.envMap = rt.texture;
-    mat.envMapIntensity = 1;
-    mat.userData.rlLocalEnv = { uniforms: { rlEnvMin: { value: min }, rlEnvMax: { value: max }, rlEnvPos: { value: pos } } };
-    mat.defines = { ...(mat.defines || {}), RL_LOCAL_ENV: '' };
-    mat.needsUpdate = true;
-    mirrors.push({ mesh, cam, rt });
-    disposables.push(rt);
-    mirrorsDirty = true;
-  }
-  function renderMirrors() {
-    for (const m of mirrors) {
-      const vis = m.mesh.visible;
-      m.mesh.visible = false;   // не отражать само себя
-      m.cam.update(renderer, scene);
-      m.mesh.visible = vis;
-    }
-    mirrorsDirty = false;
-  }
-
   function patchScene() {
     scene.traverse(o => {
-      if (o.userData.localReflection && !mirrors.some(m => m.mesh === o)) setupMirror(o);
       if (!o.material) return;
       if (Array.isArray(o.material)) o.material.forEach(patch); else patch(o.material);
     });
@@ -955,7 +904,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     // ждём новый пересчёт (старый всё равно выбросится) и фоновую сборку шейдеров (иначе соберутся здесь, с заморозкой)
     if (!bake || bake.reading || dirty || now < bakeRest || rasterBusy(renderer)) return;
     if (bake.face < nP * 6) {
-      const budget = BAKE_MS[quality] ?? BAKE_MS.high, spent = renderFaces(bake, budget);
+      const budget = isRoomReady() ? BAKE_MS[quality] ?? BAKE_MS.high : BOOT_BAKE_MS, spent = renderFaces(bake, budget);
       if (spent > 2 * budget) bakeRest = now + spent;
       return;
     }
@@ -969,7 +918,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       setLandingFill();
       job.reading = false; job.pass++; job.face = 0; job.full = true;
       if (job.pass >= (BOUNCES_BY[quality] ?? BOUNCES)) {
-        bake = null; mirrorsDirty = true;
+        bake = null;
         if (!hasGI) { gridShow.image.data.set(gridBake.image.data); gridShow.needsUpdate = true; hasGI = true; U.rlGridB.value.z = 1; giActive = true; }
         else { target.set(gridBake.image.data); blending = true; }
         requestRender();
@@ -1084,12 +1033,12 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
 
   // Сцена изменилась: пересчитать переотражения и перерисовать тени (в «Экономе» они не обновляются от камеры)
   function invalidate() {
-    dirty = true; dirtyAt = performance.now(); mirrorsDirty = true; lightsFor = -1;
+    dirty = true; dirtyAt = performance.now(); lightsFor = -1;
     renderer.shadowMap.needsUpdate = true;
     requestRender();
   }
 
-  // WebGL вернулся после сброса: содержимое целей (карты окружения PMREM, зеркала, тени, атлас зондов) пропало,
+  // WebGL вернулся после сброса: содержимое целей (карты окружения PMREM, тени, атлас зондов) пропало,
   // данные (сетки, таблица) three зальёт сам. Карты окружения — заново из панорам, остальное — пересчётом.
   function onRestored() {
     for (const e of Object.values(env)) {
@@ -1111,8 +1060,6 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     let changed = adapt(now);
     stepBake(now);
     if (blendStep()) changed = true;
-    // зеркала — когда переотражения досчитаны (или их ещё нет вовсе)
-    if (mirrors.length && mirrorsDirty && !bake && !blending && !(dirty && hasGI) && !rasterBusy(renderer)) { renderMirrors(); changed = true; }
     return changed;
   }
 
@@ -1121,7 +1068,8 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   function setQuality(q) {
     quality = q;
     const t = HDR_TIER[q] ?? 'full';
-    if (t === hdrTier) return;
+    wantTier = t;
+    if (!isRoomReady() || t === hdrTier) return;   // до первого вида — маленькая, по качеству — после (whenRoom выше)
     hdrTier = t;
     if (current.mode) ensureEnv(current.mode);
   }

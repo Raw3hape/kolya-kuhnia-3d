@@ -36,7 +36,7 @@
 //   цифры — вкладки, / — поиск, ? — справка, ⌘Z / ⇧⌘Z — отмена и возврат (сами строки — в help.js, из addHelp ниже).
 // Сообщения: handle.toast(msg, action, ms) или событие NOTICE на window (render.js — сброс WebGL, мало кадров);
 //   QUALITY_REQUEST (render.js) ставит качество как выбор пользователя.
-// Загрузка: событие PROGRESS из loading.js ('kitchen:progress') { phase: 'start'|'room'|'details'|'done', loaded, total } — экран загрузки
+// Загрузка: событие PROGRESS из loading.js ('kitchen:progress') { phase, loaded, total, done, weight, labels } — экран загрузки (index.html)
 //   до 'room' (дальше можно работать, внизу «догружаю» до 'done'); handle.ready() main.js зовёт на первом виде —
 //   заставка уходит и без событий.
 // Раскладка: ui.js пишет в :root --hud-bottom (сколько снизу занимает полоса режима): плавающие кнопки модулей
@@ -173,20 +173,19 @@ function helpRow(e, touch, cls = 'kr') {
 }
 const helpInline = (e, touch) => helpRow(e, touch, 'ki');
 
-// ---------- загрузка: экран до 'room', дальше полоса «догружаю» (kitchen:progress; без событий — до ready()) ----------
-const LOAD = { phase: null, loaded: 0, total: 0 };
+// ---------- загрузка: экран до 'room' ведёт index.html (его скрипт ловит то же событие), после — полоса «фоном» ----------
+// kitchen:progress (loading.js) { phase, loaded, total, done, weight, labels }: на 'details' внизу в полосе режима —
+// «Фоном: <что грузится> · N %» (доля по размеру, только растёт), на 'done' пропадает.
+const LOAD = { phase: null, loaded: 0, total: 0, done: 0, weight: 0, labels: [], shown: 0 };
 let onLoadChange = null;
-const loadFrac = () => (LOAD.total > 0 ? Math.min(1, LOAD.loaded / LOAD.total) : null);
+const loadFrac = () => (LOAD.weight > 0 ? Math.min(1, LOAD.done / LOAD.weight) : LOAD.total > 0 ? Math.min(1, LOAD.loaded / LOAD.total) : null);
 addEventListener(PROGRESS, e => {
-  Object.assign(LOAD, e.detail || {});
+  const d = e.detail || {};
+  if (d.phase === 'details' && LOAD.phase !== 'details') LOAD.shown = 0;   // новый этап — своя доля
+  Object.assign(LOAD, d);
+  const f = loadFrac();
+  if (f != null) LOAD.shown = Math.max(LOAD.shown, f);
   if (LOAD.phase && LOAD.phase !== 'start') document.body.classList.add('usable');
-  const el = document.getElementById('loading'), f = loadFrac();
-  if (el) {
-    el.classList.toggle('det', f != null);
-    el.style.setProperty('--p', `${((f ?? 0) * 100).toFixed(1)}%`);
-    const num = el.querySelector('.ld-num');
-    if (num) num.textContent = LOAD.total ? `${LOAD.loaded} из ${LOAD.total}` : '';
-  }
   onLoadChange?.();
 });
 
@@ -1378,7 +1377,10 @@ export function initUI(api) {
   function renderLoad() {
     const on = document.body.classList.contains('usable') && (LOAD.phase === 'room' || LOAD.phase === 'details');
     loadChip.hidden = !on;
-    if (on) { const f = loadFrac(); loadChip.textContent = f == null ? 'Догружаю детали…' : `Догружаю детали · ${Math.round(f * 100)} %`; }
+    if (!on) return;
+    const what = LOAD.labels?.[0], pct = loadFrac() == null ? '' : ` · ${Math.min(99, Math.floor(LOAD.shown * 100))} %`;
+    loadChip.textContent = `Фоном: ${what ? what.toLowerCase() : 'детали'}${pct}`;
+    loadChip.title = LOAD.labels?.length ? `Догружается: ${LOAD.labels.join(', ')}. Можно работать — вещи появятся сами.` : 'Догружаются детали. Можно работать.';
   }
 
   // --- всплывающее сообщение

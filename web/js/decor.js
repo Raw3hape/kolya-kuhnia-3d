@@ -61,12 +61,13 @@ import { LAMP_OPTIONS, LAMP_DEFAULTS, useDecorZones } from './lamps.js';   // п
 
 // ---------- каталог ----------
 // Файлы пишут несколько агентов одновременно: битый или отсутствующий файл зоны — зоны просто нет
-// (перечитывается при перезагрузке страницы). no-cache — чтобы правка файла была видна сразу.
+// (перечитывается при перезагрузке страницы). Свежесть — заголовками сервера (serve.py no-store, Vercel перепроверяет),
+// без cache: 'no-cache' в запросе: так он совпадает с <link rel=preload> сборки (tools/build_static.mjs).
 // Сетевой сбой — до трёх попыток: пропавшая зона сдвинула бы поля всех следующих зон в коде варианта.
 async function getJSON(url) {
   for (let i = 0; i < 3; i++) {
     try {
-      const r = await fetch(url, { cache: 'no-cache' });
+      const r = await fetch(url);
       if (r.ok) return await r.json();
       if (r.status === 404) return null;
     } catch { /* обрыв соединения — повторить */ }
@@ -207,13 +208,18 @@ export function resetDecorPart(moves, pkey) {
 }
 
 // ---------- модели ----------
+// Мелочь в кадре первого вида грузится после него (LOAD): заставка ждёт мебель, а не рейлинг с ложками и картины.
+const SMALL_FIRST_M = 0.7;
+const smallOption = o => Array.isArray(o.size) && o.size.length === 3
+  && (Math.max(...o.size) < SMALL_FIRST_M || (Math.min(...o.size) < 0.06 && Math.max(...o.size) < 1));   // картина: плоская и не огромная
+
 // GLB грузятся один раз (кеш по адресу); неудачную загрузку можно повторить при следующей пересборке.
 let loader = null;
 const GLB = new Map();
-function loadGLB(url) {
+function loadGLB(url, label) {   // label — подпись на экране загрузки (название зоны)
   if (!loader) { loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder); }
   if (!GLB.has(url)) {
-    const p = track(retry(() => loader.loadAsync(assetUrl(url)))).then(r => r.scene);
+    const p = track(retry(() => loader.loadAsync(assetUrl(url))), { label, url }).then(r => r.scene);
     p.catch(() => GLB.delete(url));
     GLB.set(url, p);
   }
@@ -307,11 +313,13 @@ export function buildDecor(state, plan, M, anchors) {
         if (isRoomReady()) { decor.grow.push({ obj, s: obj.scale.clone(), t: 0 }); obj.scale.multiplyScalar(GROW_FROM); }   // после первого вида — вырастает
       };
       // В кадре первого вида (его комнаты и поле зрения стартовой камеры) — сразу, кроме мелочи (models/decor/props:
-      // книги, вазы, растения) — она после первого кадра и вырастает на месте (updateDecor); остальное — после первого кадра
+      // книги, вазы, растения; и вся опция меньше SMALL_FIRST_M или плоская картина) — она после первого кадра
+      // и вырастает на месте (updateDecor); остальное — после первого кадра
       const sz = i === 0 && o.size ? o.size : [1.2, 1.2, 1.2];
-      const first = !p.model.includes('/props/') && FIRST_ROOMS.has(slot.zone.room)
+      const first = !p.model.includes('/props/') && !smallOption(o) && FIRST_ROOMS.has(slot.zone.room)
         && inFirstView(p.pos[0], p.pos[1] + sz[1] / 2, p.pos[2], Math.hypot(...sz) / 2);
-      const load = (first ? loadGLB(p.model) : afterRoom(() => loadGLB(p.model))).then(tpl => attach(tpl.clone(true))).catch(err => {
+      const label = slot.zone.title;
+      const load = (first ? loadGLB(p.model, label) : afterRoom(() => loadGLB(p.model, label))).then(tpl => attach(tpl.clone(true))).catch(err => {
         console.warn(`Обстановка ${slot.key}=${o.id}: модель ${p.model} не загрузилась, показан габарит`, err);
         if (i === 0) attach(stub(o));
       });

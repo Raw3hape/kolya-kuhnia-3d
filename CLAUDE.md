@@ -74,23 +74,39 @@
     Метки: `userData.glass`, `passLight`, `shadowOnly`, `rasterOnly` (свет-обманка или меш только для растра: не в фото,
     PNG и GLB). Светильники без тени `lighting.js` считает в своём шейдере (слой 3): смена ламп и времени суток
     не пересобирает шейдеры, кадр ~0,1 с.
-  - `loading.js` — порядок загрузки: сначала первый вид (холл, текстуры 512, одна панорама, крупная обстановка в кадре),
-    потом остальное фоном; событие `kitchen:progress` (start/room/details/done, см. шапки `loading.js` и `main.js`); `assetUrl` — адрес с версией.
+  - `loading.js` — порядок загрузки: сначала первый вид (холл, текстуры 512, панорама 512, крупная обстановка в кадре),
+    потом остальное фоном; `track(p, { label, url })` — подпись и вес для заставки; событие `kitchen:progress`
+    (start/room/details/done, см. шапки `loading.js` и `main.js`); `assetUrl` — адрес с версией.
   - `nav.js` — камера как в 3D-редакторе (колесо к курсору, WASD/QE, правая кнопка — сдвиг);
     `walk.js` — прогулка (F), рост 180, глаза 168, FOV 55, прыжок — Пробел (на телефоне кнопка); `minimap.js` — план с переходом по клику
     (полка `#kw-dock` в `#hud-bottom` слева от полосы режима, до 1100 px — под карточкой заголовка). Своих кнопок и подсказок у модулей нет: вход — переключатель режимов ui.js.
   - `doors.js` — межкомнатные и балконные двери открываются (E или клик), сталкиваются в прогулке.
   - `seats.js` — «Сесть» на диван, кресла, стулья (места из мебели и обстановки), из орбиты и из прогулки.
   - `tv.js` + `spec/tv.json` — настоящий YouTube на экранах: ТВ, ноутбук в комнате 3 (мемы), телефон на острове
-    (Shorts). Один iframe на всю сцену под прозрачным холстом («дыра» в кадре), играет ближайший видимый экран;
-    в фото, PNG и GLB у ТВ постер. Телефон в руке (E — взять, колесо/↑↓/свайп — листать) — `handheld.js`.
-    Ролики — плейлисты в `spec/tv.json`, каждый проверен на встраивание (oEmbed + показ в Chrome).
+    (Shorts), ноутбук на кровати спальни (стрим Dota 2). Один iframe на всю сцену под прозрачным холстом («дыра»
+    в кадре), играет и звучит только ближайший видимый экран; в фото, PNG и GLB у ТВ постер. `tv.screens()` —
+    id и меш каждого экрана. Ролики — плейлисты в `spec/tv.json`, каждый проверен на встраивание (oEmbed + Chrome).
+  - Вещи в руке — `handheld.js`: телефон (tv.js) и газета (`newspaper.js` + `spec/newspaper.json`, полочка над
+    унитазом — `bath.js` → papers). E — взять, колесо/↑↓/свайп — листать, Q — вернуть; с вещью можно ходить и сесть
+    куда угодно (E на сиденье), вещь остаётся в руке. Игрушки на кровати спальни — `tools/decor/room2/toys.py`.
+  - Вытяжка над варкой: геометрия `model.js` (`buildHood`, размеры `kitchen.json` → hood), включение в прогулке,
+    LED и гул — `hood.js`. `ticker.js` — крипто-биржа на мониторе комнаты 3 (холст поверх меша 'screen', 6 кадров/с,
+    только когда экран виден рядом).
   - `viewmodel.js` — оружие в прогулке: пистолет (2), автомат (3), винтовка (4), двустволка (5), 1 — убрать;
-    ПКМ — прицел, R — перезарядка; попадания в зверей через `getHunt` (noise, raycast). `impacts.js` — дырки от пуль
-    и частицы (только растр, кнопка «Убрать следы»). Вьюмодели — риги рук с оружием с poly.pizza (J-Toastie, AdamKokrito —
+    ПКМ — прицел, R — перезарядка; попадания в зверей через `getHunt` (noise, raycast; `hit.surface` — цвет брызг).
+    `impacts.js` — дырки от пуль, частицы и трещины на экранах (`userData.screen`/`tvScreen`, видео под ними играет);
+    `breakables.js` + `spec/break.json` — что бьётся (тип по модели обстановки или `userData.breakable`: glass |
+    ceramic | fruit), осколки с простой физикой, стёкла `userData.glass` (`shatter: false` — нет), звук синтезом;
+    `mirrors.js` — плоские отражения зеркал (`userData.mirror` или `mirror` в `spec/break.json`), бьются тоже.
+    Всё только растр, до кнопки «Убрать следы и осколки». Вьюмодели — риги рук с оружием с poly.pizza (J-Toastie, AdamKokrito —
     CC-BY 3.0; Quaternius — CC0); подпись в `web/models/viewmodel/SOURCE.md` и в панели, сборка `tools/viewmodel/build.py`.
   - `hunt.js` + `spec/hunt.json` — охота: кабаны на поле за балконом и на газонах справа, клинья гусей и стаи птиц, очки, раунды; таблица рекордов —
     `api/scores.js` (Vercel Blob `kolya-kuhnia-hunt`, переменная `BLOB_READ_WRITE_TOKEN`), без неё — только в браузере.
+  - `life.js` — «Живой дом» (ядро: настройки, звук WebAudio, `seen`, загрузка GLB) и модули после первого вида:
+    `neighbours.js` (соседи за стенами и звонок, синтез), `landing.js` (площадка за входной дверью: мигающая лампа
+    на слое 3, монстры, толкаются через `walk.nudge`), `water.js` (вода сама: кухня, раковина, душ), `mice.js`
+    (мыши вдоль стен, мишени через `hunt.addTargets` + `award`). Хук двери — `doors.onToggle`. Модели и лицензии —
+    `web/models/life/SOURCE.md`. В консоли: `__kitchen.life.debug` (`ring()`, `water(id)`, `mouse()`).
   - `decor.js` + `spec/decor/*.json` — обстановка комнат (реальные вещи IKEA и др.), контракт
     `web/models/decor/README.md`, конвейер `tools/decor/`. Зоны и опции — только в конец.
   - `furniture.js` + `spec/furniture.json` — диван, ТВ, тумба, ковёр, столик и редактор расстановки;
@@ -119,7 +135,7 @@ uv run --with numpy --with pillow tools/make_rugs.py <tmp> [id]   # ковры �
 uv run --with numpy --with pillow tools/make_bath_wall_tile.py    # плитка стен ванной 15×7,5
 python3 tools/fetch_site.py                                  # дома вокруг и солнце -> web/spec/site.json
 uv run --with numpy --with pillow tools/make_wood.py        # реальные деревянные полы (tools/real_wood.json, w_* в catalog.js)
-uv run --with numpy --with pillow tools/make_web_assets.py  # лёгкие версии: текстуры 512/1k, панорамы 1k, мелкие GLB (готовое пропускает)
+uv run --with numpy --with pillow tools/make_web_assets.py  # лёгкие версии: текстуры 512/1k, двор 256, панорамы 512/1k, мелкие GLB
 blender -b -P blender/render.py -- --glb exports/<file>.glb --view living --out renders/x.png \
   --date 2026-11-15 --time 13:00 --context --save blender/kitchen.blend
 ```
@@ -135,6 +151,8 @@ blender -b -P blender/render.py -- --glb exports/<file>.glb --view living --out 
   командой `node tools/build_static.mjs` → `dist/`; каркас страницы общий с serve.py: `tools/skeleton.html`.
   Сборка ставит каждой папке textures/ и models/ хеш содержимого (`?v=` в адресах), `vercel.json` отдаёт такие файлы
   с кешем на год, без `?v` — 5 минут; JS всегда перепроверяется.
+  Ещё сборка вкладывает в страницу meta.json текстур, подсказки modulepreload/preload и сжимает js/ (esbuild из
+  `npm install`; без него — как есть). Шапка `tools/build_static.mjs`.
 - Иконка и превью ссылки: `web/favicon.svg` (кабан-шеф; из него `favicon.ico` и `apple-touch-icon.png`, rsvg-convert +
   magick), `web/og.jpg` 1200×630 (исходник и команда пересборки — `tools/og/og.html`, фон `tools/og/scene.jpg`).
   Мета-теги og:/twitter: в начале `web/index.html`, ссылки на иконки — в `tools/skeleton.html`. Адрес картинки абсолютный.

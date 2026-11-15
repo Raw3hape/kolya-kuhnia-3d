@@ -1,28 +1,50 @@
-// Телефон в руке (прогулка): взять со стола, листать Shorts, положить. Рисует и играет видео tv.js (экран с полем hold
-// в spec/tv.json); здесь только прицел, ввод, подсказка и кнопка.
-//   Взять: смотрим на телефон ближе reach и жмём E или кликаем/тапаем по нему (телефон под прицелом важнее двери и стула:
+// Вещь в руке (прогулка): взять, пользоваться, носить с собой, сесть с ней, вернуть на место. Вещей несколько —
+// телефон с Shorts на острове (рисует и играет tv.js), газета на полке над унитазом (newspaper.js); у каждой свой
+// экземпляр createHandheld, в руке всегда одна: взяли другую — первая сама возвращается на место.
+// Здесь только прицел, ввод, подсказка и кнопка; что видно в руке — у владельца вещи (onHold, onStep).
+//   Взять: смотрим на вещь ближе reach и жмём E или кликаем/тапаем по ней (вещь под прицелом важнее двери и стула:
 //   обработчики стоят в фазе захвата и дальше событие не пускают). Оружие убирается (getVM().setWeapon('none')).
-//   В руке: колесо, ↑/↓ или свайп по телефону — следующее/предыдущее видео; E, Q, Esc или кнопка «Положить» — положить.
-//   W/S и мышь по-прежнему ходят и смотрят; 1–5 (оружие) сначала кладут телефон. Вышли из прогулки — телефон кладётся сам.
+//   В руке: колесо, ↑/↓ или свайп по вещи — листать; W/S и мышь по-прежнему ходят и смотрят.
+//   С вещью можно ходить по всей квартире, открывать двери и садиться: E с прицелом на двери или сиденье работает
+//   как обычно (их подсказки видны), сидя вещь остаётся в руке и листается; E, Esc, Пробел сидя — встать (seats.js).
+//   Вернуть на место: Q (всегда), E — когда прицел ни на что не наведён, Esc в прогулке, кнопка «Положить».
+//   1–5 (оружие) сначала кладут вещь; вышли из прогулки и не сидим — вещь возвращается сама.
 //
-// createHandheld({ THREE, camera, canvas, getWalk, getVM, requestRender, reach, getTarget, getRect, onHold, onStep })
-//   getTarget() -> Object3D телефона на столе (луч прицела) | null; getRect() -> DOMRect экрана телефона в руке (свайп);
-//   onHold(on) — взяли/положили; onStep(d) — листать (1 — следующее, −1 — предыдущее).
-//   -> { sync() — после кадра (прицел пересчитывается, только если сдвинулась камера), pick(), drop(), held, dispose() }
+// createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats?, getDoors?, requestRender, reach, getTarget, getRect,
+//                  onHold, onStep, name? })
+//   getTarget() -> Object3D вещи на месте (луч прицела) | null; getRect() -> DOMRect вещи в руке (свайп);
+//   onHold(on) — взяли/положили; onStep(d) — листать (1 — следующее, −1 — предыдущее);
+//   name — { take: 'взять телефон', btn: 'Взять телефон', scroll: 'листать', heldHint: true } для подсказок
+//   (heldHint: false — в руке своей подсказки не показывать: вещь пишет клавиши сама, как газета в подвале).
+//   -> { sync() — после кадра (прицел пересчитывается, только если сдвинулась камера), pick(), drop(), held, aimed, dispose() }
 import { injectStyle } from './minimap.js';
 import { addHelp } from './help.js';
 
 addHelp(
   { mode: 'walk', topic: 'walk', keys: ['E'], text: 'взять телефон с острова — там Shorts', touch: 'кнопка «Взять телефон», когда смотрите на него', order: 60 },
   { mode: 'phone', keys: ['колесо', '↑', '↓'], text: 'листать видео', touch: 'свайп по телефону — листать', brief: true, order: 10 },
-  { mode: 'phone', keys: ['E'], text: 'положить телефон (или Esc)', touch: 'кнопка «Положить»', brief: true, order: 20 },
+  { mode: 'phone', keys: ['Q'], text: 'вернуть телефон на остров (или E, когда прицел ни на что не наведён)', touch: 'кнопка «Положить»', brief: true, order: 20 },
+  { mode: 'phone', keys: ['E'], text: 'с телефоном в руке можно ходить, открывать двери и садиться — прицел на сиденье и E; сидя он листается дальше', touch: 'кнопка «Сесть» под прицелом', order: 30 },
 );
 
 const SWIPE = 28;        // px: короче — это не свайп
 const STEP_GAP = 320;    // мс между перелистываниями (колесо трекпада сыплет событиями)
 const WHEEL = 40;        // накопленная прокрутка, после которой листаем
+const ALL = new Set();   // все вещи: в руке одна, классы body — по всем сразу
 
-export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestRender, reach = 2, getTarget, getRect, onHold, onStep }) {
+// Классы body по всем вещам: khh-on — подсказка вещи под прицелом заняла место подсказок дверей и стульев (.kd-*);
+// khh-held — что-то в руке (ui.js подписан на классы body)
+function bodyClasses() {
+  let aim = false, held = false;
+  for (const it of ALL) { if (it.state.on && it.state.aimed && !it.state.held) aim = true; if (it.state.on && it.state.held) held = true; }
+  document.body.classList.toggle('khh-on', aim && !held);
+  document.body.classList.toggle('khh-held', held);
+}
+
+export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats, getDoors, requestRender, reach = 2, getTarget, getRect,
+  onHold, onStep, name = {} }) {
+  const N = { take: 'взять телефон', btn: 'Взять телефон', scroll: 'листать', heldHint: true, ...name };
+  const state = { on: false, held: false, aimed: false };
   let held = false, aimed = false, touchSeen = false, lastStep = 0, wheel = 0, wheelAt = 0, press = null, swipe = null;
   injectStyle('khh-style', CSS);
   const hint = document.createElement('div');
@@ -32,9 +54,13 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestR
   document.body.append(hint, btn);
 
   const walking = () => !!getWalk?.()?.walking;
+  const seated = () => !!getSeats?.()?.active;
+  const carrying = () => !!getWalk?.()?.active || seated();       // вещь может оставаться в руке
+  // E с вещью в руке: дверь или сиденье под прицелом — им (вещь остаётся в руке), иначе — вернуть вещь
+  const eBusy = () => seated() || (walking() && (!!getDoors?.()?.target || !!getSeats?.()?.target));
   const mq = matchMedia('(pointer: coarse)'), coarse = () => mq.matches;
   const ray = new THREE.Raycaster(), hits = [], ndc = new THREE.Vector2();
-  // попадает ли луч из точки экрана (NDC; по умолчанию центр — прицел) в телефон на столе ближе reach
+  // попадает ли луч из точки экрана (NDC; по умолчанию центр — прицел) в вещь на месте ближе reach
   function hitAt(x = 0, y = 0) {
     const t = walking() ? getTarget() : null;
     if (!t) return false;
@@ -47,23 +73,24 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestR
 
   let hintKey = -1;
   function render() {
-    const touch = touchSeen || coarse(), on = walking();
+    const touch = touchSeen || coarse(), on = held ? carrying() : walking();
+    state.on = on; state.held = held; state.aimed = aimed;
     const key = (on ? 1 : 0) | (held ? 2 : 0) | (aimed ? 4 : 0) | (touch ? 8 : 0);
-    if (key === hintKey) return;
-    hintKey = key;
-    hint.hidden = !on || (held ? touch : !aimed || touch);
-    hint.classList.toggle('held', held);
-    hint.innerHTML = held ? 'Колесо / <kbd>↑</kbd><kbd>↓</kbd> — листать · <kbd>E</kbd> — положить' : '<kbd>E</kbd> — взять телефон';
-    btn.hidden = !on || !touch || !(held || aimed);
-    btn.classList.toggle('held', held);
-    btn.textContent = held ? 'Положить' : 'Взять телефон';
-    // E сейчас за телефоном: подсказки и кнопки дверей и стульев (.kd-*) на том же месте прячем
-    document.body.classList.toggle('khh-on', on && (held || aimed));
-    document.body.classList.toggle('khh-held', on && held);   // ui.js: режим «телефон в руке» в полосе внизу
+    if (key !== hintKey) {
+      hintKey = key;
+      hint.hidden = !on || (held ? touch || !N.heldHint : !aimed || touch);
+      hint.classList.toggle('held', held);
+      hint.innerHTML = held ? `Колесо / <kbd>↑</kbd><kbd>↓</kbd> — ${N.scroll} · <kbd>Q</kbd> — вернуть на место` : `<kbd>E</kbd> — ${N.take}`;
+      btn.hidden = !on || !touch || !(held || aimed);
+      btn.classList.toggle('held', held);
+      btn.textContent = held ? 'Положить' : N.btn;
+    }
+    bodyClasses();
   }
 
   function pick() {
     if (held || !walking()) return;
+    for (const it of ALL) if (it !== api && it.held) it.drop();   // в руке одна вещь
     const vm = getVM?.();
     if (vm && vm.weapon && vm.weapon !== 'none') vm.setWeapon('none');
     held = true; aimed = false; lastTarget = null;
@@ -86,9 +113,9 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestR
   const lastCam = new Float64Array(16);
   let lastTarget = null;
   function sync() {
-    if (held && !walking()) drop();
+    if (held && !carrying()) drop();
     if (!held) {
-      // пересчёт — когда сдвинулась камера или телефон появился/пропал (положили обратно, сменили опцию)
+      // пересчёт — когда сдвинулась камера или вещь появилась/пропала (положили обратно, сменили опцию)
       const e = camera.matrixWorld.elements, t = walking() ? getTarget() : null;
       let same = t === lastTarget;
       for (let i = 0; i < 16 && same; i++) same = e[i] === lastCam[i];
@@ -104,22 +131,25 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestR
   const onKey = e => {
     if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
     if (held) {
-      if (e.code === 'KeyE' || e.code === 'KeyQ' || e.code === 'Escape') { if (!e.repeat) drop(); stop(e); }
+      if (!carrying()) return;
+      if (e.code === 'KeyQ' || (e.code === 'KeyE' && !eBusy()) || (e.code === 'Escape' && !seated())) { if (!e.repeat) drop(); stop(e); }
       else if (e.code === 'ArrowDown' || e.code === 'ArrowUp') { step(e.code === 'ArrowDown' ? 1 : -1); stop(e); }
-      else if (/^Digit[1-5]$/.test(e.code)) drop();   // оружие: телефон кладём, клавиша идёт дальше в viewmodel
-      return;
+      else if (/^Digit[1-5]$/.test(e.code)) drop();   // оружие: вещь кладём, клавиша идёт дальше в viewmodel
+      return;                                          // E на двери/сиденье и E/Esc/Пробел сидя — дальше, им
     }
     if (e.code === 'KeyE' && !e.repeat && walking() && aimed) { pick(); stop(e); }
   };
   const inRect = (e, r) => e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   const onDown = e => {
     if (e.pointerType === 'touch' && !touchSeen) { touchSeen = true; render(); }
-    if (e.target !== canvas || !walking()) return;
-    if (held) {   // свайп по телефону в руке; мимо него — обычный взгляд
-      if (inRect(e, getRect())) { swipe = { id: e.pointerId, y: e.clientY }; stop(e); }
+    if (e.target !== canvas) return;
+    if (held) {   // свайп по вещи в руке; мимо неё — обычный взгляд (и клик по сиденью — сесть)
+      if (carrying() && document.pointerLockElement !== canvas && inRect(e, getRect())) { swipe = { id: e.pointerId, y: e.clientY }; stop(e); }
       return;
     }
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (!walking() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const vm = getVM?.();
+    if (!held && vm?.weapon && vm.weapon !== 'none') return;   // с оружием клик — выстрел (экран трескается), взять — клавишей E
     const locked = document.pointerLockElement === canvas;
     if (locked) { if (aimed) { stop(e); pick(); } return; }
     const r = canvas.getBoundingClientRect();
@@ -139,8 +169,8 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestR
     if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 10 && performance.now() - p.t < 600) pick();
   };
   const onWheel = e => {
-    if (!held || e.target !== canvas) return;
-    stop(e);
+    if (!held || !carrying() || e.target !== canvas) return;
+    stop(e);   // и сидя: колесо листает вещь, а не приближает (seats.js)
     const now = performance.now();
     if (now - wheelAt > 200) wheel = 0;
     wheelAt = now;
@@ -162,10 +192,13 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, requestR
     removeEventListener('pointercancel', onUp, true);
     removeEventListener('wheel', onWheel, { capture: true });
     hint.remove(); btn.remove();
-    document.body.classList.remove('khh-on', 'khh-held');
+    ALL.delete(api);
+    bodyClasses();
   }
 
-  return { sync, pick, drop, dispose, get held() { return held; }, get aimed() { return aimed; } };
+  const api = { state, sync, pick, drop, dispose, get held() { return held; }, get aimed() { return aimed; } };
+  ALL.add(api);
+  return api;
 }
 
 // Токены --kw-* — у .kw-float (minimap.js), как у подсказок дверей
@@ -174,7 +207,7 @@ const CSS = `
   border: 1px solid var(--kw-line); border-radius: 4px; background: var(--kw-sheet); color: var(--kw-ink); box-shadow: var(--kw-shadow);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font: 500 12.5px/1 var(--f-body, "Inter", Arial, sans-serif); white-space: nowrap; }
 .khh-hint { padding: 6px 9px; pointer-events: none; }
-.khh-hint.held { top: calc(50% - 48px); }   /* в руке телефон занимает низ кадра: подсказка над прицелом */
+.khh-hint.held { top: calc(50% - 48px); }   /* в руке вещь занимает низ кадра: подсказка над прицелом */
 .khh-hint kbd { font: 600 10.5px/1 var(--f-data, ui-monospace, Menlo, monospace); padding: 2px 5px; margin-right: 1px;
   border: 1px solid currentColor; border-radius: 3px; opacity: 0.7; }
 .khh-btn { top: calc(50% + 28px); padding: 0 16px; min-height: 44px; min-width: 112px; cursor: pointer; touch-action: manipulation;

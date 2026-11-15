@@ -8,10 +8,10 @@
 #    (длинная сторона ≤ 512 / 1024, пропорции те же). Карта меньше уровня копируется как есть (git хранит одинаковое
 #    один раз). Список папок с уровнями — web/textures/sizes.json, его читает materials.js: 512 — первый кадр,
 #    1k — «Эконом» и «Быстрое», оригинал (2k) — «Высокое» и «Ультра». thumb.jpg, hdri/ и tv/ не трогаются.
-#    Земля вокруг дома (site/) всегда грузится из site/512 (site.js): её видно только издали, из окон.
+#    Земля вокруг дома (site/): до первого вида site/256 (FIRST_TIERS), потом site/512 (site.js): её видно только издали.
 #    Новая текстура без прогона скрипта тоже работает: её папки нет в sizes.json — грузится оригинал.
-# 2. Панорамы: web/textures/hdri/<name>.hdr шире 1024 -> hdri/1k/<name>.hdr (ImageMagick, усреднение, RGBE).
-#    lighting.js: 1k для «Эконома» и «Быстрого», оригинал для «Высокого» и «Ультра».
+# 2. Панорамы: web/textures/hdri/<name>.hdr -> hdri/512/ и hdri/1k/<name>.hdr (ImageMagick, усреднение, RGBE).
+#    lighting.js: 512 — первый вид, следом 1k для «Эконома» и «Быстрого», оригинал для «Высокого» и «Ультра».
 # 3. GLB обстановки и диванов (web/models/decor, web/models/sofas): у мелочи (наибольший габарит < SMALL_M)
 #    текстуры ужимаются до 512 и лишние треугольники (> TRI_SMALL) упрощаются (gltf-transform resize, simplify,
 #    затем meshopt заново; WEBP остаётся). Перезаписывает файл на месте: исходник — конвейеры tools/decor/ и
@@ -26,7 +26,8 @@ ROOT = Path(__file__).resolve().parent.parent
 TEX = ROOT / 'web' / 'textures'
 TIERS = {'512': 512, '1k': 1024}
 QUALITY = {'color': 84, 'normal': 90, 'rough': 80}   # JPEG; нормали 4:4:4 (без потери разрешения цвета)
-SKIP_DIRS = {'hdri', 'tv'} | set(TIERS)   # постер ТВ грузит tv.js сам, целиком
+FIRST_TIERS = {'site': 256}   # папка -> px: отдельный крошечный уровень только для первого вида (см. textures())
+SKIP_DIRS = {'hdri', 'tv'} | set(TIERS) | {str(px) for px in FIRST_TIERS.values()}   # постер ТВ грузит tv.js сам, целиком
 SMALL_M = 0.8   # до 0,8 м хватает 512 px (≈ 640 px на метр)
 GLB_DIRS = [ROOT / 'web' / 'models' / 'decor', ROOT / 'web' / 'models' / 'sofas']
 TRI_SMALL = 8000          # треугольников у мелочи: больше — упростить (meshopt simplify, без заметной ошибки)
@@ -82,23 +83,36 @@ def textures(force):
             if d.name not in sizes.get(rel, []):
                 shutil.rmtree(d)
     (TEX / 'sizes.json').write_text(json.dumps(dict(sorted(sizes.items())), separators=(',', ':')) + '\n')
+    # Совсем маленький уровень для первого вида (FIRST_TIERS): земля вокруг дома видна только издали из окон,
+    # site.js грузит её в 256 px до заставки, 512 — после. В sizes.json не входит (это не уровень качества).
+    for rel, px in FIRST_TIERS.items():
+        for f in sorted((TEX / rel).glob('*.jpg')):
+            out = TEX / rel / str(px) / f.name
+            if not force and out.exists() and out.stat().st_mtime >= f.stat().st_mtime:
+                continue
+            src = Image.open(f)
+            k = px / max(src.size)
+            img = src.convert('RGB').resize((max(1, round(src.width * k)), max(1, round(src.height * k))), Image.LANCZOS)
+            save_jpg(img, out, f.stem)
+            made += 1
     print(f'textures: {len(sizes)} папок с уровнями, записано {made} карт')
 
 
 def hdri(force):
     src_dir = TEX / 'hdri'
-    out_dir = src_dir / '1k'
-    out_dir.mkdir(exist_ok=True)
-    for f in sorted(src_dir.glob('*.hdr')):
-        out = out_dir / f.name
-        w = int(subprocess.run(['magick', 'identify', '-format', '%w', str(f)], capture_output=True, text=True, check=True).stdout)
-        if w <= 1024:
-            shutil.copyfile(f, out)   # уже 1k: тот же файл (git хранит один раз), путь у всех панорам одинаковый
-            continue
-        if not force and out.exists() and out.stat().st_mtime >= f.stat().st_mtime:
-            continue
-        subprocess.run(['magick', str(f), '-filter', 'Box', '-resize', '1024x512!', str(out)], check=True)
-        print(f'hdri: {f.name} {f.stat().st_size // 1024} КБ -> {out.stat().st_size // 1024} КБ')
+    for tier, px in TIERS.items():   # 512 — первый вид (lighting.js), 1k — «Эконом» и «Быстрое»
+        out_dir = src_dir / tier
+        out_dir.mkdir(exist_ok=True)
+        for f in sorted(src_dir.glob('*.hdr')):
+            out = out_dir / f.name
+            w = int(subprocess.run(['magick', 'identify', '-format', '%w', str(f)], capture_output=True, text=True, check=True).stdout)
+            if w <= px:
+                shutil.copyfile(f, out)   # уже такого размера: тот же файл (git хранит один раз), путь у всех панорам одинаковый
+                continue
+            if not force and out.exists() and out.stat().st_mtime >= f.stat().st_mtime:
+                continue
+            subprocess.run(['magick', str(f), '-filter', 'Box', '-resize', f'{px}x{px // 2}!', str(out)], check=True)
+            print(f'hdri: {f.name} {f.stat().st_size // 1024} КБ -> {tier} {out.stat().st_size // 1024} КБ')
 
 
 # ---------- GLB: габарит сцены по JSON (accessor min/max + матрицы узлов) ----------
