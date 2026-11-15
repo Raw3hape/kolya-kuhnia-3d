@@ -279,7 +279,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     const touch = touchSeen || coarse();
     hint.innerHTML = touch
       ? 'Джойстик — идти · веди пальцем — смотреть · наведи на дверь — открыть · план — перейти'
-      : '<b>W A S D</b> — идти · тяни мышью — смотреть · <b>E</b> или клик — дверь · <b>Shift</b> — быстрее · <b>Esc</b> — выход';
+      : '<b>W A S D</b> — идти · тяни мышью — смотреть · <b>E</b> или клик — дверь · <b>Shift</b> — быстрее · <b>2</b>/<b>3</b> — пистолет/автомат, <b>1</b> — убрать · <b>Esc</b> — выход';
     hint.hidden = false; hint.classList.remove('fade');
     clearTimeout(hintTimer);
     hintTimer = setTimeout(() => { hint.classList.add('fade'); hintTimer = setTimeout(() => { hint.hidden = true; }, 450); }, 5500);
