@@ -1,6 +1,7 @@
 // Руки с оружием в прогулке «по приколу» (вид от первого лица, как в шутерах). Настройка браузера, в код варианта не входит.
-// Модели: web/models/viewmodel/ (SOURCE.md): пистолет и автомат Quaternius (CC0), винтовка времён Первой мировой и двустволка
-// процедурные (tools/viewmodel/procedural.py); перчатки и рукава процедурные. Грузятся при первом выборе.
+// Модели: web/models/viewmodel/ (SOURCE.md, сборка tools/viewmodel/build.py): руки и оружие одним скелетом с клипами
+// idle (кадр 0 — поза держания), shoot, reload; грузятся при первом выборе. Клипы ведёт время действия, а не часы:
+// в покое скелет не считается. Прицел — по пустышкам sight_rear/sight_front модели, вспышка — у пустышки muzzle.
 // Рисуется поверх растра своей камерой со своим углом обзора (render.js setOverlay): в стены не проваливается,
 // в фото-режим, снимок и GLB не попадает. Свет вспышки живёт только в сцене рук: свет и тени квартиры не трогает.
 // Попадания (impacts.js): лучи из центра экрана с текущим разбросом, дырка на поверхности и всплеск; зверь (hunt.js) ближе
@@ -14,7 +15,7 @@
 //   -> { update(dt, { active, moving, running }) -> bool (true — нужен кадр), setWeapon(id), setSound(on), setAim(on), reload(),
 //        link({ getWalk, getHunt }) — подключить позже (проверки из консоли до того, как main.js их передаст),
 //        clearHoles() — убрать следы попаданий, holes, weapon, sound, armed (оружие в руках: клик стреляет),
-//        ammo ({ mag, reserve } у текущего), busy (перезарядка/затвор: null или вид действия), aiming (0–1), spread (рад),
+//        ammo ({ mag, reserve } у текущего), busy (null | 'reload' | 'cycle' — затвор), aiming (0–1), spread (рад),
 //        shots, dispose() }
 // registerViewmodelUI(addSection, getVM) — раздел «Оружие» во вкладке 'view' сразу после «Прогулки».
 // Ввод в прогулке: 1 — убрать, 2 — пистолет, 3 — автомат, 4 — винтовка, 5 — двустволка; R — перезарядка
@@ -29,41 +30,48 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { createImpacts } from './impacts.js';
 
-// pos — место центра рукояти в пространстве камеры рук (м): вправо, вверх, вперёд = −z; yaw — доворот к центру экрана,
-// pitch — подъём ствола, рад.
-// action: semi | auto | bolt (затвор после каждого выстрела, зарядка обоймой) | break (переломка).
-// rate — выстрелов в секунду; mag/reserve — патронов в магазине и в запасе; reload — перезарядка, с;
-// damage — урон за попадание (одной пули, дробины), range — дальность, м; pellets — дробин в выстреле; loud — громкость для зверей 0–1.
-// spread, рад: hip — от бедра, ads — в прицеле, move/run — добавка на ходу/бегом, bloom — рост за выстрел, max — потолок роста,
-//   recover — спад роста, рад/с. recoil — взгляд: up/side, рад, keep — доля, что остаётся. kick — руки: back, м; pitch, рад.
-// ads: zoom — во сколько раз уже обзор, time — подъём к глазу, с; eye — от глаза до целика, м; sight — целик и мушка в осях модели.
-// parts (винтовка): ось затвора, шар рукояти относительно оси, окно ствольной коробки — в осях модели, м.
+// pos — место спускового крючка (начало координат модели) в пространстве камеры рук (м): вправо, вверх, вперёд = −z;
+// yaw — доворот к центру экрана, pitch — подъём ствола, рад.
+// action: semi | auto | bolt (затвор после каждого выстрела — клип shoot за cycle с) | break (переломка).
+// rate — выстрелов в секунду; mag/reserve — патронов в магазине и в запасе; reload — перезарядка (клип reload), с;
+// shot — клип shoot на выстрел, с (если у модели он есть и это не затвор); reloadEv/cycleEv — звуки по ходу клипа:
+// [доля времени, звук, 1 — в этот миг патроны в магазин]; damage — урон за попадание (одной пули, дробины);
+// range — дальность, м; pellets — дробин в выстреле; loud — громкость для зверей 0–1.
+// spread, рад: hip — от бедра, ads — в прицеле, move/run — добавка на ходу/бегом, bloom — рост за выстрел (в прицеле
+//   × VM.adsBloom), max — потолок роста, recover — спад роста, рад/с. Отдача уводит взгляд (walk.kick), а не луч:
+//   recoil up/side, рад (в прицеле × VM.adsRecoil), keep — доля, что остаётся (игрок возвращает прицел сам).
+// kick — руки: back, м; pitch, рад. ads: zoom — во сколько раз уже обзор, time — подъём к глазу, с; eye — от глаза до целика, м;
+//   lift — глаз выше целика, м (мушка в центре экрана, целик чуть ниже — мушку видно над ним).
 export const WEAPONS = [
   { id: 'none', name: 'Нет' },
-  { id: 'pistol', name: 'Пистолет', file: 'pistol.glb', pos: [0.1, -0.112, -0.42], yaw: 0.16, action: 'semi', rate: 6,
-    mag: 12, reserve: 48, reload: 1.5, damage: 34, range: 150, loud: 0.6,
-    spread: { hip: 0.012, ads: 0.003, move: 0.01, run: 0.03, bloom: 0.012, max: 0.05, recover: 0.08 },
-    recoil: { up: 0.022, side: 0.008, keep: 0.2 }, kick: { back: 0.045, pitch: 0.2 },
-    ads: { zoom: 1.25, time: 0.16, eye: 0.36, sight: [[0, 0.0878, 0.0], [0, 0.0894, -0.148]] },
+  { id: 'pistol', name: 'Пистолет', file: 'pistol.glb', pos: [0.1, -0.1, -0.36], yaw: 0.1, action: 'semi', rate: 6,
+    mag: 12, reserve: 48, reload: 1.7, shot: 0.25, damage: 34, range: 150, loud: 0.6,
+    reloadEv: [[0.21, 'magOut'], [0.5, 'magIn', 1], [0.82, 'rack']],
+    spread: { hip: 0.008, ads: 0.0012, move: 0.008, run: 0.025, bloom: 0.004, max: 0.012, recover: 0.06 },
+    recoil: { up: 0.022, side: 0.006, keep: 0.2 }, kick: { back: 0.03, pitch: 0.12 },
+    ads: { zoom: 1.25, time: 0.16, eye: 0.36, lift: 0 },
     flash: 0.13, sound: { gain: 1, cutoff: 3200, decay: 0.16, thump: 150 } },
-  { id: 'rifle', name: 'Автомат', file: 'rifle.glb', pos: [0.14, -0.2, -0.56], yaw: 0.03, pitch: 0.05, action: 'auto', rate: 10,
-    mag: 30, reserve: 120, reload: 2.2, damage: 28, range: 400, loud: 0.8,
-    spread: { hip: 0.02, ads: 0.004, move: 0.012, run: 0.035, bloom: 0.007, max: 0.045, recover: 0.05 },
-    recoil: { up: 0.009, side: 0.006, keep: 0.45 }, kick: { back: 0.026, pitch: 0.06 },
-    ads: { zoom: 1.6, time: 0.22, eye: 0.24, sight: [[0, 0.178, -0.05], [0, 0.1917, -0.446]] },   // целик-короб без прорези: смотрим поверх него на мушку
+  { id: 'rifle', name: 'Автомат', file: 'rifle.glb', pos: [0.14, -0.17, -0.48], yaw: 0.05, pitch: -0.06, action: 'auto', rate: 10,
+    mag: 30, reserve: 120, reload: 2.3, shot: 0.1, damage: 28, range: 400, loud: 0.8,
+    reloadEv: [[0.25, 'magOut'], [0.46, 'magIn', 1], [0.75, 'rack']],
+    spread: { hip: 0.01, ads: 0.0012, move: 0.012, run: 0.035, bloom: 0.0015, max: 0.006, recover: 0.03 },
+    recoil: { up: 0.007, side: 0.004, keep: 0.25 }, kick: { back: 0.018, pitch: 0.04 },
+    ads: { zoom: 1.6, time: 0.22, eye: 0.34, lift: 0.006 },
     flash: 0.2, sound: { gain: 0.8, cutoff: 2400, decay: 0.12, thump: 110 } },
-  { id: 'bolt', name: 'Винтовка', file: 'bolt.glb', pos: [0.16, -0.2, -0.58], yaw: 0.07, pitch: 0.03, action: 'bolt', rate: 1.5,
-    mag: 5, reserve: 30, clip: 5, cycle: 0.8, damage: 120, range: 800, loud: 1,
-    spread: { hip: 0.03, ads: 0.0004, move: 0.02, run: 0.05, bloom: 0, max: 0, recover: 1 },
-    recoil: { up: 0.05, side: 0.012, keep: 0.15 }, kick: { back: 0.06, pitch: 0.12 },
-    ads: { zoom: 2.4, time: 0.3, eye: 0.48, sight: [[0, 0.091, -0.28], [0, 0.091, -0.784]] },
-    parts: { pivot: [0, 0.055, 0], knob: [0.05, -0.028, 0.014], port: [0, 0.075, -0.13], lift: 1.25, travel: 0.085 },
+  { id: 'bolt', name: 'Винтовка', file: 'bolt.glb', pos: [0.14, -0.17, -0.46], yaw: 0.05, pitch: -0.06, action: 'bolt', rate: 1.5,
+    mag: 5, reserve: 30, reload: 2.6, cycle: 0.8, damage: 120, range: 800, loud: 1,
+    reloadEv: [[0.15, 'boltUp'], [0.21, 'boltBack'], [0.35, 'clip'], [0.6, 'shell', 1], [0.76, 'boltFwd'], [0.81, 'boltDown']],
+    cycleEv: [[0.35, 'boltUp'], [0.5, 'boltBack'], [0.7, 'boltFwd'], [0.8, 'boltDown']],
+    spread: { hip: 0.012, ads: 0.0003, move: 0.02, run: 0.05, bloom: 0, max: 0, recover: 1 },
+    recoil: { up: 0.05, side: 0.012, keep: 0.15 }, kick: { back: 0.05, pitch: 0.1 },
+    ads: { zoom: 2.4, time: 0.3, eye: 0.45, lift: 0.008 },
     flash: 0.24, sound: { gain: 1.2, cutoff: 2600, decay: 0.3, thump: 85 } },
-  { id: 'shotgun', name: 'Двустволка', file: 'shotgun.glb', pos: [0.13, -0.15, -0.42], yaw: 0.05, pitch: 0.03, action: 'break', rate: 4,
+  { id: 'shotgun', name: 'Двустволка', file: 'shotgun.glb', pos: [0.14, -0.17, -0.44], yaw: 0.05, pitch: -0.04, action: 'break', rate: 4,
     mag: 2, reserve: 24, reload: 2.0, pellets: 9, damage: 14, range: 70, loud: 0.9,
-    spread: { hip: 0.05, ads: 0.035, move: 0.01, run: 0.02, bloom: 0, max: 0, recover: 1 },
-    recoil: { up: 0.045, side: 0.015, keep: 0.2 }, kick: { back: 0.055, pitch: 0.14 },
-    ads: { zoom: 1.3, time: 0.22, eye: 0.3, sight: [[0, 0.075, -0.14], [0, 0.040, -0.832]] },   // глаз над планкой, выше кулака: смотрим вдоль планки на мушку
+    reloadEv: [[0.12, 'open'], [0.21, 'shell'], [0.6, 'shell', 1], [0.79, 'close']],
+    spread: { hip: 0.03, ads: 0.022, move: 0.01, run: 0.02, bloom: 0, max: 0, recover: 1 },
+    recoil: { up: 0.045, side: 0.015, keep: 0.2 }, kick: { back: 0.05, pitch: 0.12 },
+    ads: { zoom: 1.3, time: 0.22, eye: 0.5, lift: 0.05 },
     flash: 0.28, sound: { gain: 1.25, cutoff: 2000, decay: 0.28, thump: 75 } },
 ];
 const VM = {
@@ -77,19 +85,23 @@ const VM = {
   light: 1.3,        // яркость подсветки рук относительно экспозиции сцены
   adsSway: 0.15,     // покачивание и инерция рук в прицеле — доля от обычного
   adsVm: 0.5,        // насколько сужается обзор камеры рук в прицеле (доля от корня увеличения сцены)
+  adsBloom: 0.3,     // рост разброса за выстрел в прицеле — доля от обычного
+  adsRecoil: 0.45,   // отдача взгляда в прицеле — доля от обычной
   dry: 0.25,         // щелчок пустого не чаще, с
 };
+// материалы без металла (кожа, ткань, дерево, пластик): иначе без карты окружения они чернеют
+const SOFT = /shirt|skin|glove|wood|plastic|bakelite|shellred|white|primary/i;
 const PREF = 'kitchen-viewmodel-v1';   // { weapon, sound }
 const MODELS = new URL('../models/viewmodel/', import.meta.url);
 const byId = id => WEAPONS.find(w => w.id === id) || WEAPONS[0];
 
-// Поза в прицеле: целик и мушка на оси камеры рук, целик — в eye метрах перед глазом
-function adsPose(w) {
-  const [r, f] = w.ads.sight;
-  const rx = Math.atan((f[1] - r[1]) / (f[2] - r[2])), c = Math.cos(rx), s = Math.sin(rx);
-  return { x: -r[0], y: -(r[1] * c - r[2] * s), z: -w.ads.eye - (r[1] * s + r[2] * c), rx };
+// Поза в прицеле: точка над целиком (r, поднята на lift) и мушка (в осях модели, поза держания) на оси камеры рук,
+// целик — в eye метрах перед глазом
+function adsPose({ eye, lift }, r, f) {
+  r.y += lift;
+  const rx = Math.atan((f.y - r.y) / (f.z - r.z)), c = Math.cos(rx), s = Math.sin(rx);
+  return { x: -r.x, y: -(r.y * c - r.z * s), z: -eye - (r.y * s + r.z * c), rx };
 }
-const ADS = new Map(WEAPONS.filter(w => w.ads).map(w => [w.id, adsPose(w)]));
 
 function readPref() {
   try { return { weapon: 'none', sound: true, ...JSON.parse(localStorage.getItem(PREF) || '{}') }; } catch { return { weapon: 'none', sound: true }; }
@@ -97,9 +109,6 @@ function readPref() {
 function writePref(p) { try { localStorage.setItem(PREF, JSON.stringify(p)); } catch { /* хранилище недоступно */ } }
 const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 const coarse = () => { try { return matchMedia('(hover: none), (pointer: coarse)').matches; } catch { return false; } };
-const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-const win = (x, a, b, c, d) => ss(a, b, x) * (1 - ss(c, d, x));            // 0 → 1 → 0 со ступенями
-const bump = (x, a, b) => (x <= a || x >= b ? 0 : Math.sin((Math.PI * (x - a)) / (b - a)));
 const rand = (a, b) => a + Math.random() * (b - a);
 
 export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors, getSeats, getWalk, getHunt }) {
@@ -121,13 +130,14 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   // вспышка: спрайт с лучами + короткий свет, оба у дула
   const flashTex = makeFlashTexture(THREE);
   const flashMat = new THREE.SpriteMaterial({ map: flashTex, color: new THREE.Color(3.2, 2.3, 1.2), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true });
-  // дуло из глаз закрыто затвором: вспышка рисуется поверх ствола и чуть впереди дула
-  const flashSprite = new THREE.Sprite(flashMat); flashSprite.visible = false; flashSprite.renderOrder = 10; flashSprite.position.z = -0.02;
+  // дуло из глаз закрыто затвором: вспышка рисуется поверх ствола и чуть впереди дула (у пустышки muzzle ствол — её +X)
+  const flashSprite = new THREE.Sprite(flashMat); flashSprite.visible = false; flashSprite.renderOrder = 10; flashSprite.position.x = 0.02;
   const flashLight = new THREE.PointLight('#ffb36b', 0, 0.8, 2);   // всегда в сцене: число источников не меняется, шейдеры не пересобираются
 
-  // модель: { root, muzzle, n: { bolt, hand_r, clip, barrels, shells }, base: исходные положения подвижных узлов }
+  // модель: { root, mixer, acts: { idle, shoot?, reload? } (действия клипов), flash (крепление вспышки у дула), ads (поза прицела) }
   const models = {};
   let loader = null;
+  const pa = new THREE.Vector3(), pb = new THREE.Vector3();
   function load(id) {
     const w = byId(id);
     if (!w.file || models[id]) return;
@@ -138,23 +148,35 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
         if (!o.isMesh) return;
         o.frustumCulled = false;
         const m = o.material;
-        // без карты окружения металл чернеет: держим его полуматовым
-        if (m.metalness > 0.3) m.metalness = 0.3;
+        m.metalness = SOFT.test(m.name) ? 0 : Math.min(m.metalness, 0.3);   // металл без карты окружения — полуматовый
         if (m.roughness < 0.45) m.roughness = 0.45;
       });
-      const n = {}, base = {};
-      for (const name of ['bolt', 'hand_r', 'clip', 'barrels', 'shells']) {
-        const o = root.getObjectByName(name);
-        if (!o) continue;
-        n[name] = o; base[name] = { p: o.position.clone(), r: o.rotation.clone() };
+      const mixer = new THREE.AnimationMixer(root), acts = {};
+      for (const clip of g.animations) {
+        const a = acts[clip.name] = mixer.clipAction(clip);
+        a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.paused = true; a.play();
       }
-      if (n.clip) n.clip.visible = false;
-      if (n.shells) n.shells.visible = false;
+      const m = { root, mixer, acts };
+      clipPose(m, 'idle', 0);
+      root.updateMatrixWorld(true);
+      // вспышка в метрах: дуло висит на кости в масштабе скелета — крепление гасит масштаб
       const muzzle = root.getObjectByName('muzzle') || root;
-      models[id] = { root, muzzle, n, base };
+      m.flash = new THREE.Group();
+      m.flash.scale.setScalar(1 / muzzle.getWorldScale(pa).x);
+      muzzle.add(m.flash);
+      m.ads = adsPose(w.ads, root.getObjectByName('sight_rear').getWorldPosition(pa), root.getObjectByName('sight_front').getWorldPosition(pb));
+      models[id] = m;
       if (id === weapon) mount();
-      return models[id];
+      return m;
     }).catch(err => { console.warn('viewmodel.js: модель не загрузилась', w.file, err); delete models[id]; });
+  }
+
+  // поза модели: клип name на доле k (0–1); остальные клипы без веса. Только по требованию — кадров не просит.
+  function clipPose(m, name, k) {
+    for (const n in m.acts) m.acts[n].setEffectiveWeight(n === name ? 1 : 0);
+    const a = m.acts[name];
+    a.time = Math.min(Math.max(k, 0), 0.999) * a.getClip().duration;   // не до конца: на конце клип шлёт событие
+    m.mixer.update(0);
   }
 
   let mounted = null;    // id смонтированной модели
@@ -164,7 +186,8 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     rig.clear(); mounted = null;
     if (!m?.root) return;
     rig.add(m.root);
-    m.muzzle.add(flashSprite, flashLight);
+    m.flash.add(flashSprite, flashLight);
+    clipName = null; clipPose(m, 'idle', 0);
     mounted = weapon;
     raise = 0; quiet = 0;
     requestRender?.();
@@ -179,12 +202,12 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   let shown = false, wasActive = false, raise = 1, quiet = 0, bobAmp = 0, phase = 0, lagX = 0, lagY = 0;
   let rec = 0, recV = 0, recYaw = 0, flash = 0, lastShot = -1e9, lastDry = -1e9, holding = false, spd = 0, shots = 0;
   let aimHeld = false, adsK = 0, adsE = 0, zoomSet = 1, bloom = 0, mvNow = false, runNow = false;
-  let act = null;        // { kind: mag | cycle | load | break, t, dur, ev: [[t, fn]], i, load? } — перезарядка или затвор
+  let act = null;        // { kind: reload | cycle, t, dur, ev: [[доля, звук, патроны?]], i, fill } — перезарядка или затвор
+  let clipName = null, clipT = 0, clipDur = 0;   // клип, который сейчас идёт (null — поза держания)
   const lastPos = new THREE.Vector3(), fwd = new THREE.Vector3(), ear = new THREE.Vector3();
   let lastYaw = null, lastPitch = 0;
   const W = () => byId(weapon);
   const impacts = createImpacts({ THREE, scene, camera, renderer, pipe, requestRender });
-  const ap = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };   // добавка позы от действия (перезарядка, затвор)
 
   // частицы попаданий живут и после выхода из прогулки, поэтому считаются отдельно от рук
   function update(dt = 1 / 60, opts) {
@@ -205,6 +228,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
       shown = show;
       if (!show) { stopHold(); aimHeld = false; adsK = adsE = 0; act = null; lastYaw = null; setZoom(1); syncDom(); return true; }   // ещё кадр — убрать руки
       raise = 0; quiet = 0; lastPos.copy(camera.position);
+      clipName = null; clipPose(models[weapon], 'idle', 0);
       syncDom();
     }
     if (!show) return false;
@@ -228,11 +252,21 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     lagX += (THREE.MathUtils.clamp((dYaw / dt) * 0.012, -0.035, 0.035) - lagX) * lk;
     lagY += (THREE.MathUtils.clamp(-(dPitch / dt) * 0.010, -0.025, 0.025) - lagY) * lk;
 
-    // действие (перезарядка, затвор): события по времени, в конце — снова можно стрелять
+    // действие (перезарядка, затвор): звуки и патроны по доле времени, в конце — снова можно стрелять
     if (act) {
       act.t += dt;
-      while (act && act.i < act.ev.length && act.ev[act.i][0] <= act.t) act.ev[act.i++][1]();
-      if (act && act.t >= act.dur) { act = null; hud(); }
+      while (act.i < act.ev.length && act.ev[act.i][0] * act.dur <= act.t) {
+        const e = act.ev[act.i++];
+        mech(e[1]);
+        if (e[2]) act.fill();
+      }
+      if (act.t >= act.dur) { act = null; hud(); }
+    }
+    // клип модели идёт за своим временем; кончился — поза держания
+    if (clipName) {
+      clipT += dt;
+      const m = models[weapon];
+      if (clipT >= clipDur) { clipName = null; clipPose(m, 'idle', 0); } else clipPose(m, clipName, clipT / clipDur);
     }
     if (holding && w.action === 'auto') fire();
 
@@ -255,7 +289,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     }
     raise = Math.min(1, raise + dt / VM.raise);
     flash = Math.max(0, flash - dt);
-    const busy = mv || Math.abs(dYaw) + Math.abs(dPitch) > 1e-4 || holding || flash > 0 || raise < 1 || act || bloom > 0 || (adsK > 0 && adsK < 1);
+    const busy = mv || Math.abs(dYaw) + Math.abs(dPitch) > 1e-4 || holding || flash > 0 || raise < 1 || act || clipName || bloom > 0 || (adsK > 0 && adsK < 1);
     quiet = busy ? 0 : quiet + dt;
     const breath = Math.max(0, 1 - quiet / VM.settle);
 
@@ -276,90 +310,24 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   }
 
   // ---------- поза ----------
-  const v3 = new THREE.Vector3();
   function pose(breath) {
-    const w = W(), m = models[weapon], t = performance.now() / 1000, A = ADS.get(w.id), a = adsE;
+    const w = W(), t = performance.now() / 1000, A = models[weapon].ads, a = adsE;
     const e = 1 - (1 - raise) ** 3, h = 1 - a * (1 - VM.adsSway);
     const bx = Math.sin(phase) * 0.011 * bobAmp, by = (Math.cos(2 * phase) - 1) * 0.0065 * bobAmp;
     const br = Math.sin(t * 1.6) * 0.0018 * breath, bs = Math.sin(t * 0.8) * 0.0012 * breath;
-    animate(w, m);
     const L = THREE.MathUtils.lerp;
     rig.position.set(
-      L(w.pos[0], A.x, a) + (bx + lagX + bs) * h + ap.x,
-      L(w.pos[1], A.y, a) + (by + lagY + br) * h + ap.y - (1 - e) * 0.22,
-      L(w.pos[2], A.z, a) + rec * w.kick.back * (1 - 0.4 * a) + ap.z);
+      L(w.pos[0], A.x, a) + (bx + lagX + bs) * h,
+      L(w.pos[1], A.y, a) + (by + lagY + br) * h - (1 - e) * 0.22,
+      L(w.pos[2], A.z, a) + rec * w.kick.back * (1 - 0.4 * a));
     rig.rotation.set(
-      L(w.pitch || 0, A.rx, a) + rec * w.kick.pitch * (1 - 0.6 * a) - (1 - e) * 0.7 + lagY * 2 * h + ap.rx,
-      L(w.yaw, 0, a) + (lagX * 2.5 + recYaw * rec) * h + ap.ry,
-      (Math.sin(phase) * 0.025 * bobAmp - lagX * 1.5) * h + ap.rz, 'YXZ');
+      L(w.pitch || 0, A.rx, a) + rec * w.kick.pitch * (1 - 0.6 * a) - (1 - e) * 0.7 + lagY * 2 * h,
+      L(w.yaw, 0, a) + (lagX * 2.5 + recYaw * rec) * h,
+      (Math.sin(phase) * 0.025 * bobAmp - lagX * 1.5) * h, 'YXZ');
     flashSprite.visible = flash > 0;
     flashLight.intensity = flash > 0 ? 3 * (flash / VM.flashTime) : 0;
     crosshair();
     if (act) hudProgress();
-  }
-
-  // Действие -> добавка позы рук (ap) и положения подвижных узлов модели (затвор, правая рука, обойма, стволы, патроны)
-  function animate(w, m) {
-    ap.x = ap.y = ap.z = ap.rx = ap.ry = ap.rz = 0;
-    if (!m?.n) return;
-    const { n, base } = m;
-    if (n.bolt) boltPose(w, m, 0, 0, 0, 0);
-    if (n.barrels) { n.barrels.rotation.x = base.barrels.r.x; n.shells.visible = false; }
-    if (!act) return;
-    const t = act.t, k = t / act.dur;
-    if (act.kind === 'mag') {
-      // наклонить к себе, выбить магазин, новый — шлепком, передёрнуть затвор
-      const tilt = win(k, 0, 0.16, 0.84, 1), rack = bump(k, 0.71, 0.82);
-      ap.rz = 0.5 * tilt - 0.1 * rack; ap.rx = 0.22 * tilt; ap.x = -0.035 * tilt;
-      ap.y = -0.035 * tilt + 0.014 * bump(k, 0.2, 0.32) - 0.03 * win(k, 0.3, 0.38, 0.5, 0.58) + 0.02 * bump(k, 0.57, 0.67);
-      ap.z = 0.035 * rack;
-    } else if (act.kind === 'cycle') {
-      // рука к рукояти, вверх, назад, вперёд, вниз, рука на шейку
-      const hand = win(t, 0, 0.13, 0.62, 0.78);
-      boltPose(w, m, win(t, 0.1, 0.2, 0.56, 0.66), win(t, 0.22, 0.34, 0.4, 0.52), hand, 0);
-      ap.rz = 0.1 * hand; ap.rx = 0.03 * hand; ap.y = -0.012 * hand;
-    } else if (act.kind === 'load') {
-      // затвор открыт, патроны по одному или обоймой (большой палец давит сверху), затвор закрыт — обойма слетает
-      const L = act.load, tc = L.To + L.Tl;
-      const hand = win(t, 0, 0.12, tc + 0.32, tc + 0.45);
-      let push = 0;
-      if (L.clip) push = ss(L.To + 0.5, L.To + 0.85, t);
-      else if (t > L.To && t < tc) { const f = (t - L.To) / 0.5; push = bump(f - Math.floor(f), 0.3, 0.8); }
-      boltPose(w, m, win(t, 0.04, 0.14, tc + 0.2, tc + 0.3), win(t, 0.16, 0.36, tc + 0.02, tc + 0.18), hand,
-        win(t, L.To - 0.08, L.To + 0.12, tc - 0.12, tc + 0.02), push);
-      if (n.clip) {
-        n.clip.visible = L.clip && t > L.To - 0.08 && t < tc + 0.06;
-        n.clip.position.copy(base.clip.p);
-        n.clip.position.y += 0.07 * (1 - ss(L.To - 0.08, L.To + 0.3, t)) - 0.035 * push;
-      }
-      ap.rz = 0.22 * hand; ap.rx = 0.1 * hand; ap.x = -0.04 * hand;
-    } else if (act.kind === 'break') {
-      // переломить, гильзы назад-вверх, два новых патрона в патронники, закрыть
-      const open = win(t, 0.05, 0.25, 1.45, 1.65);
-      n.barrels.rotation.x = base.barrels.r.x - 0.6 * open;
-      const out = t > 0.22 && t < 0.45, inn = t > 0.75 && t < 1.2;
-      n.shells.visible = out || inn;
-      n.shells.position.copy(base.shells.p);
-      if (out) { const f = ss(0.22, 0.45, t); n.shells.position.z += -0.07 + 0.35 * f; n.shells.position.y += 0.12 * f; }
-      if (inn) { const f = ss(0.75, 1.1, t); n.shells.position.z += 0.12 - 0.19 * f; n.shells.position.y += 0.05 * (1 - f); }
-      ap.rx = 0.25 * open; ap.rz = 0.2 * open; ap.x = -0.03 * open; ap.y = -0.02 * open;
-    }
-  }
-
-  // Затвор винтовки: lift — поднят (0–1), slide — отведён (0–1); правая рука: hand — доля пути от шейки,
-  // port — доля пути от рукояти затвора к окну коробки, push — нажим большим пальцем вниз
-  function boltPose(w, m, lift, slide, hand, port, push = 0) {
-    const { n, base } = m, P = w.parts;
-    const a = P.lift * lift, dz = P.travel * slide;
-    n.bolt.rotation.set(base.bolt.r.x, base.bolt.r.y, base.bolt.r.z + a);
-    n.bolt.position.set(base.bolt.p.x, base.bolt.p.y, base.bolt.p.z + dz);
-    if (!n.hand_r) return;
-    const [kx, ky, kz] = P.knob, c = Math.cos(a), s = Math.sin(a);
-    // кулак обхватывает шар чуть ниже и позади
-    v3.set(P.pivot[0] + kx * c - ky * s + 0.004, P.pivot[1] + kx * s + ky * c - 0.022, P.pivot[2] + kz + dz + 0.012);
-    const px = P.port[0] + 0.012, py = P.port[1] + 0.03 - 0.03 * push, pz = P.port[2] + 0.05;
-    v3.x += (px - v3.x) * port; v3.y += (py - v3.y) * port; v3.z += (pz - v3.z) * port;
-    n.hand_r.position.copy(base.hand_r.p).addScaledVector(v3, hand);
   }
 
   // ---------- выстрел ----------
@@ -380,8 +348,8 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     const hunt = getHunt?.() ?? null;
     hunt?.noise?.(ear.copy(camera.position), w.loud);
     impacts.shoot({ spread: spreadNow(), pellets: w.pellets || 1, range: w.range, hunt, weapon: w.id, damage: w.damage });
-    bloom = Math.min(w.spread.max, bloom + w.spread.bloom);
-    const r = w.recoil, k = 1 - 0.25 * adsE;
+    bloom = Math.min(w.spread.max, bloom + w.spread.bloom * (1 - (1 - VM.adsBloom) * adsE));
+    const r = w.recoil, k = 1 - (1 - VM.adsRecoil) * adsE;
     getWalk?.()?.kick?.(r.up * k * rand(0.85, 1.15), r.side * k * rand(-1, 1), r.keep);
     recV += 26 * (0.85 + Math.random() * 0.3);
     recYaw = (Math.random() - 0.5) * 0.25;
@@ -391,7 +359,8 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     flashMat.rotation = Math.random() * Math.PI * 2;
     quiet = 0;
     if (sound) audio.play(w.sound);
-    if (w.action === 'bolt') begin('cycle', w.cycle, [[0.14, () => mech('boltUp')], [0.27, () => mech('boltBack')], [0.42, () => mech('boltFwd')], [0.6, () => mech('boltDown')]], -0.12);
+    if (w.action === 'bolt') begin('cycle', 'shoot', w.cycle, w.cycleEv, -0.12);
+    else if (w.shot) playClip('shoot', w.shot);
     if (!a.mag) holding = false;
     hud();
     requestRender?.();
@@ -406,8 +375,15 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     if (!reload()) hud(true);
   }
 
-  function begin(kind, dur, ev, t = 0, extra = null) {
-    act = { kind, t, dur, ev, i: 0, load: extra };
+  // клип модели на dur секунд; t < 0 — с задержкой (затвор после выстрела)
+  function playClip(name, dur, t = 0) {
+    if (!models[weapon]?.acts?.[name]) return;
+    clipName = name; clipT = t; clipDur = dur;
+  }
+  // действие: клип и звуки по долям времени; fill — патроны в магазин (на событии с пометкой)
+  function begin(kind, clip, dur, ev, t = 0, fill = null) {
+    act = { kind, t, dur, ev, i: 0, fill };
+    playClip(clip, dur, t);
     quiet = 0; holding = false;
     hud();
     requestRender?.();
@@ -416,20 +392,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     const w = W(), a = ammo[w.id];
     if (!shown || act || !a || a.mag >= w.mag || a.reserve <= 0) return false;
     const n = Math.min(w.mag - a.mag, a.reserve);
-    const fill = () => { a.mag += n; a.reserve -= n; hud(); };
-    if (w.action === 'bolt') {
-      const clip = a.mag === 0 && n === w.clip, To = 0.45, Tl = clip ? 1.2 : 0.5 * n, tc = To + Tl;
-      const ev = [[0.06, () => mech('boltUp')], [0.22, () => mech('boltBack')]];
-      if (clip) ev.push([To + 0.3, () => mech('clip')], [To + 0.75, () => { mech('shell'); fill(); }]);
-      else for (let i = 0; i < n; i++) ev.push([To + 0.5 * i + 0.4, () => { mech('shell'); a.mag++; a.reserve--; hud(); }]);
-      ev.push([tc + 0.06, () => mech('boltFwd')], [tc + 0.24, () => mech('boltDown')]);
-      begin('load', tc + 0.45, ev, 0, { To, Tl, clip });
-    } else if (w.action === 'break') {
-      begin('break', w.reload, [[0.12, () => mech('open')], [0.95, () => mech('shell')], [1.08, () => { mech('shell'); fill(); }], [1.55, () => mech('close')]]);
-    } else {
-      const D = w.reload;
-      begin('mag', D, [[0.22 * D, () => mech('magOut')], [0.6 * D, () => { mech('magIn'); fill(); }], [0.74 * D, () => mech('rack')]]);
-    }
+    begin('reload', 'reload', w.reload, w.reloadEv, 0, () => { a.mag += n; a.reserve -= n; hud(); });
     return true;
   }
 
@@ -610,7 +573,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   function setWeapon(id) {
     const w = byId(id);
     if (w.id === weapon) return;
-    weapon = w.id; stopHold(); act = null; bloom = 0; adsK = adsE = 0;
+    weapon = w.id; stopHold(); act = null; clipName = null; bloom = 0; adsK = adsE = 0;
     writePref({ weapon, sound });
     if (weapon !== 'none') { load(weapon); mount(); }
     syncDom();
@@ -632,7 +595,10 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     fireBtn.remove(); aimBtn.remove(); cross.remove(); hudEl.remove();
     for (const w of WEAPONS) document.body.classList.remove('kvm-w-' + w.id);
     document.body.classList.remove('kvm-ads');
-    for (const m of Object.values(models)) m?.root?.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    for (const m of Object.values(models)) {
+      m?.mixer?.stopAllAction();
+      m?.root?.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    }
     flashTex.dispose(); flashMat.dispose();
     rt?.dispose(); quad?.material.dispose(); quad?.dispose();
     audio.dispose();
@@ -669,6 +635,8 @@ export function registerViewmodelUI(addSection, getVM) {
       { type: 'button', key: 'vmClearHoles', label: 'Убрать следы', run: () => getVM()?.clearHoles() },
       { type: 'readout', key: 'vmKeys', style: 'hint',
         value: 'Видно только в прогулке. 1 — убрать, 2 — пистолет, 3 — автомат, 4 — винтовка, 5 — двустволка. Клик — выстрел, у автомата зажать. Правая кнопка — прицел (оружие к глазу, обзор уже). R — перезарядка, патроны пополняются при выходе из прогулки. Двойной клик — захват мыши. На телефоне — кнопки огня и прицела, счётчик патронов — перезарядка.' },
+      { type: 'readout', key: 'vmCredits', style: 'hint', visible: () => cur() !== 'none',
+        value: 'Модели: руки и оружие — J-Toastie, винтовка — AdamKokrito (poly.pizza, CC-BY 3.0), обрез — Quaternius (CC0).' },
     ],
   });
 }

@@ -1,45 +1,45 @@
 # Вьюмодели оружия (прогулка)
 
 Подключает `web/js/viewmodel.js`; грузятся лениво, только когда в прогулке выбрано оружие.
+Сборка — `tools/viewmodel/build.py` (Blender, без окна), затем сжатие meshopt. Все исходники скачаны 2026-11-15
+с poly.pizza (страница модели → кнопка GLB), без регистрации.
 
-| Файл | Исходник | Автор | Лицензия |
-|---|---|---|---|
-| `pistol.glb` | https://poly.pizza/m/Jyn9qex4ba (GLB: https://static.poly.pizza/3b53f0fe-f86e-451c-816d-6ab9bd265cdc.glb) | Quaternius, пак «Ultimate Guns» https://quaternius.com/packs/ultimategun.html | CC0 |
-| `rifle.glb` | https://poly.pizza/m/Bgvuu4CUMV (GLB: https://static.poly.pizza/9a0e478c-de82-4773-9b70-a0219bb0057c.glb) | Quaternius, тот же пак | CC0 |
-| `bolt.glb` | процедурная, `tools/viewmodel/procedural.py` | своя работа, 2026-11-15 | как у проекта |
-| `shotgun.glb` | процедурная, `tools/viewmodel/procedural.py` | своя работа, 2026-11-15 | как у проекта |
+| Файл | Что внутри | Исходники | Автор | Лицензия |
+|---|---|---|---|---|
+| `pistol.glb` | руки + пистолет класса Glock, клипы idle/shoot/reload | «Fps Rig» https://poly.pizza/m/uxko5LkGia | J-Toastie | CC-BY 3.0 |
+| `rifle.glb` | руки + автомат класса АКМ, клипы idle/shoot/reload | «Fps Rig AKM» https://poly.pizza/m/U6l6wjxFhC | J-Toastie | CC-BY 3.0 |
+| `bolt.glb` | руки из «Fps Rig AKM» + винтовка класса Kar98k; клипы собраны в build.py | https://poly.pizza/m/U6l6wjxFhC, «Kar98k» https://poly.pizza/m/ntijptIGIw | J-Toastie; AdamKokrito | CC-BY 3.0 (оба) |
+| `shotgun.glb` | руки из «Fps Rig AKM» + обрез-двустволка; клип reload собран в build.py, патроны свои | https://poly.pizza/m/U6l6wjxFhC, «Shotgun Sawed Off» https://poly.pizza/m/29FXKu7G91 | J-Toastie; Quaternius | CC-BY 3.0; CC0 |
 
-Скачано 2026-11-15. Перчатки и рукава процедурные (`tools/viewmodel/build.py`), чужих ассетов в них нет.
+Обязательная подпись (CC-BY 3.0, показать там, где перечислены авторы):
+«Fps Rig» и «Fps Rig AKM» — J-Toastie (poly.pizza, CC-BY 3.0); «Kar98k» — AdamKokrito (poly.pizza, CC-BY 3.0).
+Изменения: масштаб, оси, обрезка клипов, новые кости и анимации для винтовки и двустволки.
 
-## Что сделано с исходником
+## Контракт GLB (читает viewmodel.js)
 
-- Узлы: `gun`, `hands`, `muzzle` (пустышка в точке дула — от неё вспышка).
-- Начало координат — центр рукояти, ствол смотрит в −Z (вперёд в glTF), верх +Y.
-- Реальный размер: пистолет 0.20 м, автомат 0.86 м.
-- У автомата срезан приклад (x = −0.62 в исходных единицах) и закрыт срез — у плеча он всё равно вне кадра.
-- Цвета ствола чуть осветлены, затенение плоское; перчатки #4a4640, рукав #5c5f62, манжета #45484b.
+- Метры; ствол смотрит в −Z (glTF), верх +Y; начало координат — спусковой крючок.
+- Скелет рук и оружия одним мешем со скином; клипы `idle` (кадр 0 — поза держания), `shoot`, `reload`
+  (у двустволки нет `shoot`: выстрел — процедурная отдача).
+- Пустышки на кости оружия: `muzzle` (дуло, его +X — вдоль ствола), `sight_rear` и `sight_front` (линия прицела:
+  самые высокие точки у казны и у дула). По ним `viewmodel.js` сам строит позу в прицеле.
+- Положение в кадре, глаз в прицеле (`ads.eye`, `ads.lift`) и доли событий по ходу клипов (`reloadEv`, `cycleEv`) —
+  в `WEAPONS` в `viewmodel.js`. Если пересобранный клип поменяет тайминг, доли надо сверить.
 
-## Винтовка и двустволка (процедурные)
+## Винтовка и двустволка (сборка)
 
-- `bolt.glb` — обобщённая магазинная винтовка Первой мировой (класс Маузер/Мосин, не копия конкретной), 1.16 м, дерево и воронёная сталь.
-  Узлы: `gun`, `bolt` (ось вращения — ось канала ствола, z 0.055), `clip` (обойма на 5 патронов), `hand_r`, `hand_l`, `muzzle`.
-  Линия прицеливания приподнята: низ прорези целика и верх мушки на высоте 0.091 м, иначе в прицеле мешает затвор.
-- `shotgun.glb` — горизонтальная двустволка. Узлы: `gun`, `barrels` (шарнир переламывания), `shells` (две гильзы),
-  `hand_r`, `hand_l`, `muzzle`; левая рука, гильзы и дуло — дочерние к `barrels` и откидываются вместе со стволами.
-- Анимации (затвор, обойма, переламывание) делает `viewmodel.js`, двигая эти узлы; в GLB анимаций нет.
-- Точки прицела (`WEAPONS[*].ads.sight`) заданы в `viewmodel.js` в метрах модели: при правке геометрии прицела их надо сверить.
+- Руки — риг автомата без автомата, поза кадра 0 его Idle. Левая кисть переезжает на цевьё (высота цевья
+  меряется лучом по треугольникам), правая — ведётся IK к шару затвора / к патронам; IK запекается в кости.
+- `bolt.glb`: кости `kar_bolt` (затвор: поворот 90° и ход 10 см), `kar_clip` (обойма), `kar_rounds` (патроны).
+  shoot — передёрнуть затвор (0.83 с), reload — открыть, обойма в паз, патроны вниз, закрыть, обойма слетает (2.58 с).
+- `shotgun.glb`: кость `sg_barrels` (стволы с цевьём, шарнир перед колодкой), `sg_shells` (два патрона 12-го калибра,
+  своя геометрия). reload — переломить, гильзы назад-вверх, правая рука приносит два патрона, закрыть (2.0 с).
 
 ## Пересборка
 
 ```
-blender -b --python tools/viewmodel/build.py -- <папка со скачанными GLB по id> <out> <превью>
-npx -y @gltf-transform/cli@4 meshopt <out>/pistol.raw.glb pistol.glb
-npx -y @gltf-transform/cli@4 meshopt <out>/rifle.raw.glb rifle.glb
-
-blender -b --python tools/viewmodel/procedural.py -- <out> <превью>
-npx -y @gltf-transform/cli@4 meshopt <out>/bolt.raw.glb bolt.glb
-npx -y @gltf-transform/cli@4 meshopt <out>/shotgun.raw.glb shotgun.glb
+blender -b --python tools/viewmodel/build.py -- <папка с исходными GLB> <out> [pistol rifle bolt shotgun]
+npx -y @gltf-transform/cli@4 meshopt <out>/<id>.raw.glb web/models/viewmodel/<id>.glb
 ```
 
-Исходные GLB кладутся как `<id>.glb` (`Jyn9qex4ba.glb`, `Bgvuu4CUMV.glb`). Положение в кадре задаётся
-в `viewmodel.js` (`WEAPONS[*].pos`), а `view` в `tools/viewmodel/build.py` — только ракурс превью.
+Исходные GLB кладутся под их id с poly.pizza: `uxko5LkGia.glb`, `U6l6wjxFhC.glb`, `ntijptIGIw.glb`, `29FXKu7G91.glb`.
+Размеры после meshopt: 140–260 КБ, текстур нет (цвета материалов).

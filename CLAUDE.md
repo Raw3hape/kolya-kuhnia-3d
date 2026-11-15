@@ -83,7 +83,8 @@
     Ролики — плейлисты в `spec/tv.json`, каждый проверен на встраивание (oEmbed + показ в Chrome).
   - `viewmodel.js` — оружие в прогулке: пистолет (2), автомат (3), винтовка (4), двустволка (5), 1 — убрать;
     ПКМ — прицел, R — перезарядка; попадания в зверей через `getHunt` (noise, raycast). `impacts.js` — дырки от пуль
-    и частицы (только растр, кнопка «Убрать следы»). Модели `web/models/viewmodel/`, конвейер `tools/viewmodel/`.
+    и частицы (только растр, кнопка «Убрать следы»). Вьюмодели — риги рук с оружием с poly.pizza (J-Toastie, AdamKokrito —
+    CC-BY 3.0; Quaternius — CC0); подпись в `web/models/viewmodel/SOURCE.md` и в панели, сборка `tools/viewmodel/build.py`.
   - `hunt.js` + `spec/hunt.json` — охота: кабаны на поле за балконом и на газонах справа, клинья гусей и стаи птиц, очки, раунды; таблица рекордов —
     `api/scores.js` (Vercel Blob `kolya-kuhnia-hunt`, переменная `BLOB_READ_WRITE_TOKEN`), без неё — только в браузере.
   - `decor.js` + `spec/decor/*.json` — обстановка комнат (реальные вещи IKEA и др.), контракт

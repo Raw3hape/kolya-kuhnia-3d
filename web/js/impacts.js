@@ -3,7 +3,8 @@
 //
 // createImpacts({ THREE, scene, camera, renderer, pipe, requestRender })
 //   -> { shoot({ spread, pellets, range, hunt, weapon, damage }) -> сколько пуль попало в зверей (hunt.js)
-//          лучи из центра экрана (прицел): pellets штук (дробь — много), каждый со своим отклонением в конусе spread (рад),
+//          лучи из камеры через центр экрана (прицел): pellets штук (дробь — много), каждый со своим отклонением в конусе
+//          spread (рад) в осях экрана: пуля — гуще к центру (радиус ∝ случайному числу), дробь — равномерно по кругу;
 //          дальность range, м; hunt — объект охоты или null: hunt.raycast(raycaster) -> { distance, point, normal,
 //          hit(weapon, damage) } | null; зверь ближе стены — hit(weapon, damage) и брызги без следа, иначе след как обычно;
 //        update(dt) -> bool   true, пока летят частицы или меняется видимость следов (в покое — false, ноль работы);
@@ -255,7 +256,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
 
   // ---------- выстрел ----------
   // списки переиспользуются: на выстрел — ни одного нового массива, кроме того, что создаёт сам three.js на попадание
-  const centre = new THREE.Vector2(0, 0), nrm = V3(), list = [], hits = [];
+  const centre = new THREE.Vector2(0, 0), nrm = V3(), list = [], hits = [], ax = V3(), ay = V3();
   const FLESH = { albedo: new THREE.Color(0.32, 0.04, 0.03), metal: false, solid: true, flesh: true };
   const collect = o => {
     if (!o.isMesh || o.userData.impact || o.userData.shadowOnly) return;
@@ -270,7 +271,11 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     let struck = 0;
     for (let i = 0; i < pellets; i++) {
       ray.setFromCamera(centre, camera);
-      if (spread > 0) ray.ray.direction.addScaledVector(randomUnit(rnd), Math.tan(spread) * Math.sqrt(Math.random())).normalize();
+      if (spread > 0) {
+        const a = Math.random() * Math.PI * 2, u = Math.random(), r = Math.tan(spread) * (pellets > 1 ? Math.sqrt(u) : u);
+        ax.setFromMatrixColumn(camera.matrixWorld, 0); ay.setFromMatrixColumn(camera.matrixWorld, 1);
+        ray.ray.direction.addScaledVector(ax, Math.cos(a) * r).addScaledVector(ay, Math.sin(a) * r).normalize();
+      }
       hits.length = 0;
       ray.intersectObjects(list, false, hits);
       let hit = null;
