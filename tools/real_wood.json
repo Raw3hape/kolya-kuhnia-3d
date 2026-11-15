@@ -827,6 +827,35 @@
      "src": "https://bilder.obi.pl/659f1491-11a5-4d43-a148-869ef9b78a99/prZZK/image.jpeg"
     }
    ]
+  },
+  {
+   "id": "w_berryalloc_select_sand_natural",
+   "name": "BerryAlloc Ocean 12 XL Select Sand Natural",
+   "brand": "BerryAlloc",
+   "model": "Ocean 12 XL Select Sand Natural",
+   "type": "laminate",
+   "pattern": "planks",
+   "size_mm": [
+    2038,
+    241,
+    12
+   ],
+   "class": "AC5, Klasa 33",
+   "finish": "Ultramat",
+   "bevel": "4V",
+   "article": "62002515",
+   "shop": "BerryAlloc (производитель)",
+   "url": "https://www.berryalloc.com/en/products/ocean-plus/62002515",
+   "date": "2026-11-16",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_berryalloc_select_sand_natural/face-0.jpg",
+     "src": "https://mediacenter.bintg.com/api/wedia/dam/variation/c3aic83pi1iqd1jtdrsa3i5ak5ecyd4akdwed9o/beaulieu_1000w,default/select_sand_natural_lam_v4_2038x241_berryalloc_psh",
+     "rotate": 90,
+     "rows_px": 200,
+     "flatten": false
+    }
+   ]
   }
  ]
 }

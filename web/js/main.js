@@ -85,12 +85,12 @@ const SCHEMA_V1 = [
 
 const BATH_FLOOR = MATERIALS.bathFloor[0].id;   // пол ванной уже уложен, в код не входит
 const SPLIT = { min: 0.7, max: 5.5 };
-const clampSplit = v => Math.min(SPLIT.max, Math.max(SPLIT.min, Number(v) || 2.6));
 const DEFAULT = {
   ...PRESETS[0].state, floorBath: BATH_FLOOR, light: 'day', floorDir: 'z',
   aisle: kit.island.aisle, gapW: kit.island.gapToWindowWall, sunAz: 25, sunEl: 40, exposure: 1.0,
-  ...LAMP_DEFAULTS, ...LAMP_ROOM_DEFAULTS, ...FURN_DEFAULTS, ...DECOR_DEFAULTS, sunDate: todayISO(), sunTime: 14,
+  ...LAMP_DEFAULTS, ...LAMP_ROOM_DEFAULTS, ...FURN_DEFAULTS, ...DECOR_DEFAULTS, sunDate: todayISO(), sunTime: 13,
 };
+const clampSplit = v => Math.min(SPLIT.max, Math.max(SPLIT.min, Number(v) || DEFAULT.split));
 export const state = { ...DEFAULT };
 
 function encode(s) {

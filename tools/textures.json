@@ -1,5 +1,14 @@
 {
-  "_note": "Список текстур. Все CC0. tools/fetch_textures.py скачивает их в web/textures/<id>/ (color.jpg, normal.jpg, rough.jpg). Процедурные генерирует tools/make_procedural.py.",
+  "_note": "tools/fetch_textures.py скачивает CC0-текстуры в web/textures/<id>/. Процедурные генерирует tools/make_procedural.py. В manufacturer указаны источники текстур производителей.",
+  "manufacturer": [
+    {
+      "id": "egger_h1386_st40",
+      "name": "EGGER H1386 ST40 Dąb Casella brązowy",
+      "url": "https://www.egger.com/en/furniture-interior-design/decors/H1386_40",
+      "color_source": "https://cdn.egger.com/img/pim/8854530818078/8854530850846/original.png",
+      "size_m": [1.3, 2.8]
+    }
+  ],
   "polyhaven": [
     {
       "id": "laminate_floor_02",
