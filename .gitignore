@@ -8,3 +8,4 @@ blender/*.blend
 dist/
 .vercel/
 .claude/
+.env*

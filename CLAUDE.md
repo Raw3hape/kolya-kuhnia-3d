@@ -105,4 +105,6 @@ blender -b -P blender/render.py -- --glb exports/<file>.glb --view living --out 
 ## Порядок
 
 - `exports/` и `renders/` временные: держать последние, тестовые удалять.
+- Онлайн-версия: Vercel-проект `kolya-kuhnia-3d`, собирается из `main` (GitHub Raw3hape/kolya-kuhnia-3d, приватный)
+  командой `node tools/build_static.mjs` → `dist/`; каркас страницы общий с serve.py: `tools/skeleton.html`.
 - Сервер запускать через preview_start (имя `kitchen` в `Research/.claude/launch.json`), после работы останавливать.
