@@ -1,5 +1,6 @@
-// Охота «как в тире» за балконом: кабаны (dziki) с поросятами (warchlaki) бегают по полю и лугу под домом, над полем
-// кружат стаи голубей и грачей, иногда пролетает клин гусей или уток. Стреляют из оружия прогулки (viewmodel.js).
+// Охота «как в тире» за балконом: кабаны (dziki) с поросятами (warchlaki) пасутся на поле и лугу под домом (больше всего —
+// в 40–150 м от балкона) и на газонах справа, у дорог и парковок; над полем низко тянутся клинья больших гусей, гуси
+// пасутся на поле, реже — стайки голубей и грачей, утки. Стреляют из оружия прогулки (viewmodel.js).
 // Очки, серии, опыт и уровни, раунд «охота» на spec.round секунд с первого выстрела, таблица рекордов: своя в браузере
 // и общая онлайн (api/scores.js, Vercel Blob), если она отвечает. Настройка браузера, в код варианта не входит.
 //
@@ -12,11 +13,15 @@
 // registerHuntUI(addSection, getHunt) — раздел «Охота» во вкладке 'view' после «Оружия».
 //
 // Звери — два InstancedMesh (кабаны и птицы, по одному вызову отрисовки) + пятна тени под кабанами. Геометрия своя,
-// процедурная (поза в вершинном шейдере: шаг, рысь, галоп, пасутся, тревога, падение; взмахи крыльев) — без скелетов
-// и без загрузки моделей. Затухание — сеткой отбрасывания (без прозрачности). Шейдеры компилируются один раз при старте,
-// новые звери берут свободные экземпляры. В покое ничего не выделяется.
-// Кадры: звери двигаются и просят кадр, только пока видны — в кадре камеры, а из квартиры в прогулке — сквозь окно
-// или балконную дверь. Иначе живут грубо (4 шага в секунду) и кадров не просят. В облёте — не чаще spec.orbitFps.
+// процедурная (поза в вершинном шейдере: шаг, рысь, галоп, пасутся, тревога, падение; взмахи крыльев, полнота гуся) —
+// без скелетов и без загрузки моделей. Появление и затухание — сеткой отбрасывания (без прозрачности). Шейдеры
+// компилируются один раз при старте, новые звери берут свободные экземпляры. В покое ничего не выделяется; звери вне
+// кадра схлопнуты (не рисуются).
+// Кадры: звери видны — в кадре камеры, а из квартиры — сквозь окно или балконную дверь; иначе живут грубо (4 шага
+// в секунду) и кадров не просят. Плавно (каждый кадр, в облёте — spec.orbitFps) — только пока идёт раунд, кто-то
+// бежит или падает. В покое шагают в кадрах, которые и так рисуются (камера сдвинулась), а сами просят кадр лишь
+// в прогулке и не чаще spec.idleFps; в облёте — ни одного своего кадра.
+// Попадания: объёмы по частям тела в позе шейдера с запасом (hitPad, perMetre) и с учётом запаздывания (hit.lag).
 // Фото-режим, снимок PNG и GLB: зверей нет (userData.rasterOnly, pipe.photo, pipe.onLive) — путевой трассировщик
 // не умеет вершинную анимацию, а в кадре квартиры звери не нужны. Лучи сцены их не задевают (raycast пустой).
 // Оси квартиры: X вдоль окон, Z от окон вглубь, Y вверх; земля y = −site.floorY; поле и луг — site.areas (spec.region).
@@ -28,6 +33,7 @@ const PREF = 'kitchen-hunt-v1';   // { on, name, xp, best, last, board }
 const TAU = Math.PI * 2;
 const BIRD_KINDS = ['pigeon', 'crow', 'duck', 'goose'];   // номер вида в шейдере птиц (клюв, окрас)
 const COARSE = 0.25;              // шаг жизни, пока зверей не видно, с
+const HIST = 6, HIST_DT = 0.035;  // история положений зверя: 6 снимков через 35 мс (попадания «как увидел»)
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = r => rand(r[0], r[1]);
@@ -284,11 +290,13 @@ void hDeform( inout vec3 p, inout vec3 n ) {
 	hRotX( p, n, vec3( 0.0, 0.55, 0.0 ), gf * 0.1 * sin( PI2 * ph ) );
 	if ( aSt.x > 0.0 ) hRotZ( p, n, vec3( 0.25, 0.0, 0.0 ), -aSt.x * 1.45 );   // падает на бок
 }`;
-// aMot: фаза взмаха, размах взмаха (рад), сложены 0..1, клюёт 0..1; aSt: —, растворение, вид, вспышка
+// aMot: фаза взмаха, размах взмаха (рад), сложены 0..1, клюёт 0..1; aSt: полнота тела, растворение, вид, вспышка
 const BIRD_VERT = `
 void hDeform( inout vec3 p, inout vec3 n ) {
-	float part = aPart;
+	float part = aPart, fat = aSt.x > 0.0 ? aSt.x : 1.0;
 	if ( part < 0.5 || part > 4.5 ) {
+		if ( part < 0.5 ) p.xy *= mix( fat, 1.0, smoothstep( 0.08, 0.15, p.z ) );   // толстое тело (гусь), шея и голова — как были
+		if ( p.z > 0.12 ) { p.z += ( fat - 1.0 ) * 0.12; p.y += ( fat - 1.0 ) * 0.03; }   // и шея длиннее
 		if ( p.z > 0.12 ) { p.y -= aMot.w * 0.06; p.z += aMot.w * 0.02; }
 		return;
 	}
@@ -367,49 +375,108 @@ function rayCapsule(ox, oy, oz, dx, dy, dz, ax, ay, az, bx, by, bz, r) {
   return y <= 0 ? raySphere(ox, oy, oz, dx, dy, dz, ax, ay, az, r) : raySphere(ox, oy, oz, dx, dy, dz, bx, by, bz, r);
 }
 
-// ---------- угодья: поле и луг из site.json ----------
+// ---------- угодья: поле и луг под балконом, газоны справа (site.json) ----------
 
-function buildRegion(site, R) {
-  const polys = (site.areas ?? []).filter(a => R.kinds.includes(a.kind)).map(a => a.poly).filter(p => {
-    const cx = p.reduce((s, v) => s + v[0], 0) / p.length, cz = p.reduce((s, v) => s + v[1], 0) / p.length;
-    return Math.hypot(cx, cz) < R.radius;
-  });
-  const own = site.own?.footprint ?? [];
-  const inPoly = (p, x, z) => {
-    let c = false;
-    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
-      const a = p[i], b = p[j];
-      if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
-    }
-    return c;
-  };
-  const segDist = (p, x, z) => {
-    let d = Infinity;
-    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
-      const ax = p[j][0], az = p[j][1], bx = p[i][0] - ax, bz = p[i][1] - az;
-      const t = clamp(((x - ax) * bx + (z - az) * bz) / (bx * bx + bz * bz || 1), 0, 1);
-      d = Math.min(d, Math.hypot(x - ax - t * bx, z - az - t * bz));
-    }
-    return d;
-  };
+const FOOT = new Set(['footway', 'cycleway', 'path', 'pedestrian']);   // дорожки кабанам не помеха, дороги — да
+function inPoly(p, x, z) {
+  let c = false;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+    const a = p[i], b = p[j];
+    if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+function segDist(ax, az, bx, bz, x, z) {
+  const dx = bx - ax, dz = bz - az, t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1), 0, 1);
+  return Math.hypot(x - ax - t * dx, z - az - t * dz);
+}
+function ringDist(p, x, z) {
+  let d = Infinity;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) d = Math.min(d, segDist(p[j][0], p[j][1], p[i][0], p[i][1], x, z));
+  return d;
+}
+function bboxOf(pts) {
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  for (const p of polys) for (const [x, z] of p) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  for (const [x, z] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  return { x0, x1, z0, z1 };
+}
+const centroid = p => [p.reduce((s, v) => s + v[0], 0) / p.length, p.reduce((s, v) => s + v[1], 0) / p.length];
+
+// Угодье: объединение многоугольников минус запреты (blocked). home — середина балкона: точки выбираются с весом
+// по расстоянию от него (spec.region.near — основная полоса, ближе и дальше — реже).
+//   inside(x, z), safe(x, z, m), clear(x0, z0, x1, z1) — путь по прямой без запретов,
+//   point({ near: [x, z], r, far }) -> [x, z] (рядом с near — только куда дойти по прямой), dist(x, z)
+function makeRegion(kind, polys, R, blocked, home, margin) {
+  const box = bboxOf(polys.flat());
   const inside = (x, z) => {
-    if (x < x0 || x > x1 || z < z0 || z > z1) return false;
+    if (x < box.x0 || x > box.x1 || z < box.z0 || z > box.z1) return false;
     let ok = false;
     for (let i = 0; i < polys.length && !ok; i++) ok = inPoly(polys[i], x, z);
-    return ok && (inPoly(own, x, z) ? false : segDist(own, x, z) > R.keepOut);
+    return ok && !blocked(x, z);
   };
-  // внутри с запасом margin: точка и четыре соседние
-  const safe = (x, z, m = R.margin) => inside(x, z) && inside(x + m, z) && inside(x - m, z) && inside(x, z + m) && inside(x, z - m);
-  const point = (zMin = -Infinity, zMax = Infinity, near = null, r = Infinity) => {
+  // внутри с запасом m: точка и четыре соседние
+  const safe = (x, z, m = margin) => inside(x, z) && inside(x + m, z) && inside(x - m, z) && inside(x, z + m) && inside(x, z - m);
+  const clear = (x0, z0, x1, z1) => {
+    const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 1.5);
+    for (let i = 1; i < n; i++) if (!inside(x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n)) return false;
+    return true;
+  };
+  const dist = (x, z) => Math.hypot(x - home[0], z - home[1]);
+  const weight = d => (d > R.maxDist ? 0.02 : d < R.near[0] ? R.closeWeight : d > R.near[1] ? R.farWeight : 1);
+  // far — пополнение: за основной полосой (приходят издалека)
+  const point = ({ near = null, r = Infinity, far = false } = {}) => {
+    const local = near && r < Infinity;
+    let any = null;
     for (let i = 0; i < 400; i++) {
-      const x = near && r < Infinity ? near[0] + rand(-r, r) : rand(x0, x1), z = near && r < Infinity ? near[1] + rand(-r, r) : rand(z0, z1);
-      if (z >= zMin && z <= zMax && safe(x, z)) return [x, z];
+      const x = local ? near[0] + rand(-r, r) : rand(box.x0, box.x1), z = local ? near[1] + rand(-r, r) : rand(box.z0, box.z1);
+      if (!safe(x, z) || local && !clear(near[0], near[1], x, z)) continue;
+      any ??= [x, z];
+      const d = dist(x, z);
+      if (Math.random() < (far ? (d > R.near[1] ? 1 : 0.03) : weight(d))) return [x, z];
     }
-    return near && r < Infinity ? point(zMin, zMax) : [(x0 + x1) / 2, (z0 + z1) / 2];
+    return any ?? (local ? [near[0], near[1]] : [(box.x0 + box.x1) / 2, (box.z0 + box.z1) / 2]);
   };
-  return { polys, inside, safe, point, box: { x0, x1, z0, z1 }, ok: polys.length > 0 };
+  // площадь свободной части (оценка по выборке)
+  let free = 0;
+  for (let i = 0; i < 400; i++) if (safe(rand(box.x0, box.x1), rand(box.z0, box.z1))) free++;
+  const area = free / 400 * (box.x1 - box.x0) * (box.z1 - box.z0);
+  return { kind, polys, inside, safe, clear, point, dist, box, area, ok: polys.length > 0 && free > 0 };
+}
+
+// Все угодья: поле с лугами перед домом и «город» справа — открытая земля и газоны между дорогами, парковками,
+// домами и заборами (spec.region.city.box). Запреты города заранее растрированы сеткой 1 м: проверка — один взгляд в массив.
+function buildRegions(site, R, home) {
+  const own = site.own?.footprint ?? [];
+  const ownOff = (x, z) => inPoly(own, x, z) || ringDist(own, x, z) < R.keepOut;
+  const front = p => { const [cx, cz] = centroid(p); return cz < 0 && Math.hypot(cx - home[0], cz - home[1]) < R.radius; };   // перед домом
+  const fieldPolys = (site.areas ?? []).filter(a => R.kinds.includes(a.kind) && front(a.poly)).map(a => a.poly);
+  const out = [];
+  const field = makeRegion('field', fieldPolys, R, ownOff, home, R.margin);
+  if (field.ok) out.push(field);
+  const C = R.city;
+  if (!C) return out;
+  const [x0, x1, z0, z1] = C.box, pad = 12;
+  const touches = pts => { const o = bboxOf(pts); return o.x1 > x0 - pad && o.x0 < x1 + pad && o.z1 > z0 - pad && o.z0 < z1 + pad; };
+  const segs = [];   // [ax, az, bx, bz, запас]
+  const addLine = (line, r) => { for (let i = 0; i < line.length - 1; i++) if (touches([line[i], line[i + 1]])) segs.push([line[i][0], line[i][1], line[i + 1][0], line[i + 1][1], r]); };
+  for (const r of site.roads ?? []) if (!FOOT.has(r.kind)) addLine(r.line, r.w / 2 + C.roadPad);
+  for (const f of site.fences ?? []) addLine(f.line, 0.8);
+  const lots = (site.areas ?? []).filter(a => !C.kinds.includes(a.kind) && !R.kinds.includes(a.kind) && touches(a.poly)).map(a => a.poly);   // парковки, площадки
+  const blds = (site.neighbours ?? []).map(n => n.poly).filter(touches);
+  const W = Math.ceil(x1 - x0), H = Math.ceil(z1 - z0), mask = new Uint8Array(W * H);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const x = x0 + i + 0.5, z = z0 + j + 0.5;
+    if (Math.hypot(x - home[0], z - home[1]) > C.maxDist || ownOff(x, z) || fieldPolys.some(p => inPoly(p, x, z))) continue;
+    let ok = true;
+    for (let k = 0; k < segs.length && ok; k++) { const s = segs[k]; if (segDist(s[0], s[1], s[2], s[3], x, z) < s[4]) ok = false; }
+    for (let k = 0; k < lots.length && ok; k++) if (inPoly(lots[k], x, z)) ok = false;
+    for (let k = 0; k < blds.length && ok; k++) if (inPoly(blds[k], x, z) || ringDist(blds[k], x, z) < C.buildingPad) ok = false;
+    if (ok) mask[j * W + i] = 1;
+  }
+  const blocked = (x, z) => !mask[Math.floor(z - z0) * W + Math.floor(x - x0)];
+  const city = makeRegion('city', [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]], R, blocked, home, C.margin);
+  if (city.ok && city.area >= C.minArea) out.push(city);
+  return out;
 }
 
 // ---------- охота ----------
@@ -421,7 +488,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   root.userData.rasterOnly = true;   // GLB и фото — без зверей
   root.visible = false;
   scene.add(root);
-  let S = null, region = null, ground = 0, ready = false, disposed = false;
+  let S = null, region = null, regions = [], home = [0, 0], ground = 0, ready = false, disposed = false;
   let enabled = shared.pref.on !== false, capturing = false;
   const uniforms = { uTime: { value: 0 }, uHip: { value: HIPS.map(h => new THREE.Vector3(...h)) } };
 
@@ -463,17 +530,20 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   let streak = 0, lastKill = -1e9, shown = { score: -1, kills: -1, sec: -1, combo: -1, xp: -1, best: -1, on: null };
 
   // --- видимость
-  const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), box = new THREE.Box3(), samples = Array.from({ length: 9 }, () => new THREE.Vector3());
+  const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), box = new THREE.Box3(), cull = new THREE.Sphere(), samples = Array.from({ length: 9 }, () => new THREE.Vector3());
   let exterior = [], rooms = [], ceiling = 2.64;
-  let acc = 0, coarse = 0, wasSeen = false, time = 0;
+  let acc = 0, wasSeen = false, alarm = false, time = 0;
   const offLive = pipe?.onLive?.(live => { capturing = !live; syncVisible(); });
 
   // --- загрузка: спецификация, план, окружение; затем геометрия и стада
   Promise.all([loadSpec(), site || fetch(SITE_URL).then(r => r.json()), plan || fetch(PLAN_URL).then(r => r.json())]).then(([spec, st, pl]) => {
     if (disposed) return;
     S = spec; ground = -st.floorY;
-    region = buildRegion(st, S.region);
-    if (!region.ok) { console.warn('hunt: на карте нет поля и луга'); return; }
+    const bal = pl.balcony;
+    home = bal ? [(bal.x0 + bal.x1) / 2, (bal.z0 + bal.z1) / 2] : [0, 0];
+    regions = buildRegions(st, S.region, home);
+    region = regions.find(r => r.kind === 'field') ?? null;
+    if (!region) { console.warn('hunt: на карте нет поля и луга'); return; }
     rooms = Object.entries(pl.rooms).filter(([id]) => id !== 'shaft').flatMap(([, r]) => r.rects);
     ceiling = pl.ceiling ?? ceiling;
     exterior = pl.openings.filter(o => o.type === 'window' || /balcony/.test(o.id));
@@ -485,7 +555,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
   function build() {
     const B = S.boars, nB = B.count + 8;
-    const NB = 64;
+    const NB = S.birds.pool;
     // кабаны
     const bg = boarGeometry(THREE);
     boarMot = new THREE.InstancedBufferAttribute(new Float32Array(nB * 4), 4); boarMot.setUsage(THREE.DynamicDrawUsage);
@@ -519,14 +589,15 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     owned.push(blobTex);
     boarMesh.setColorAt(0, new THREE.Color(1, 1, 1)); birdMesh.setColorAt(0, new THREE.Color(1, 1, 1));
     boarMesh.instanceColor.setUsage(THREE.DynamicDrawUsage); birdMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-    for (let i = 0; i < nB; i++) boars.push({ i, active: false, dead: false });
-    for (let i = 0; i < NB; i++) birds.push({ i, active: false, dead: false });
-    // стада: группы с вожаком-самкой, поросята при ней
+    // у каждого зверя — короткая история положений (для попаданий с учётом запаздывания глаза и экрана)
+    for (let i = 0; i < nB; i++) boars.push({ i, active: false, dead: false, hist: new Float32Array(HIST * 5), histN: 0, histT: -1 });
+    for (let i = 0; i < NB; i++) birds.push({ i, active: false, dead: false, hist: new Float32Array(HIST * 5), histN: 0, histT: -1 });
+    // стада: группы с вожаком-самкой, поросята при ней; часть — на газонах справа
     let left = B.count;
     while (left > 0) {
       const n = Math.min(left, Math.round(pick(B.group)));
-      const [x, z] = region.point(S.region.homeZ, -8);
-      spawnGroup(n, x, z, false);
+      const reg = herdRegion();
+      spawnGroup(reg, n, reg.point(), false);
       left -= n;
     }
     // птицы: местные стаи на поле и в небе над ним
@@ -541,19 +612,31 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   let respawnTimer = 0;
 
   function freeBoar() { for (const b of boars) if (!b.active) return b; return null; }
-  function spawnGroup(n, x, z, walkIn) {
-    const g = { leader: null, members: [], tx: x, tz: z, wait: 0 };
+  // где родиться новому стаду: газонам справа — их доля spec.region.city.share, остальное — поле
+  function herdRegion() {
+    const city = regions.filter(r => r.kind === 'city');
+    if (!city.length) return region;
+    let inCity = 0;
+    for (const b of boars) if (b.active && !b.dead && b.group.region.kind === 'city') inCity++;
+    const want = Math.round(S.boars.count * S.region.city.share);
+    if (inCity >= want) return region;
+    let s = Math.random() * city.reduce((a, r) => a + r.area, 0);
+    for (const r of city) if ((s -= r.area) <= 0) return r;
+    return city[0];
+  }
+  function spawnGroup(reg, n, [x, z], walkIn) {
+    const g = { region: reg, leader: null, members: [], tx: x, tz: z, wait: 0 };
     const piglets = Math.random() < S.boars.piglets && n >= 3;
     for (let k = 0; k < n; k++) {
       const b = freeBoar(); if (!b) break;
       const pig = piglets && k > 0 && k < n - (n > 4 ? 1 : 0);
-      const [px, pz] = region.point(-Infinity, -8, [x, z], 6);
+      const [px, pz] = reg.point({ near: [x, z], r: 6 });
       Object.assign(b, {
         active: true, dead: false, group: g, pig, x: px, z: pz, yaw: rand(0, TAU), speed: 0, want: 0, turn: 0,
         mode: CALM, t: 0, hp: pig ? S.boars.hp.piglet : S.boars.hp.adult,
         scale: pig ? pick(S.boars.size.piglet) : pick(S.boars.size.adult),
-        phase: Math.random(), gait: 0, graze: 0, alert: 0, fall: 0, fade: 0, flash: 0, deadT: 0,
-        grazeT: rand(2, 8), zig: 1, zigT: 0, react: -1, tx: 0, tz: 0, ox: rand(-4, 4), oz: rand(-5, 1), seen: 0,
+        phase: Math.random(), gait: 0, graze: 0, alert: 0, fall: 0, fade: 1, flash: 0, deadT: 0, born: true,
+        grazeT: rand(2, 8), zig: 1, zigT: 0, react: -1, tx: 0, tz: 0, ox: rand(-4, 4), oz: rand(-5, 1), seen: 0, histN: 0, histT: -1,
       });
       if (pig) { b.ox *= 0.4; b.oz = rand(-2.5, -0.8); }
       const c = pig ? [1.9 * rand(0.95, 1.05), 1.45, 1.0] : [rand(0.85, 1.18), rand(0.85, 1.12), rand(0.82, 1.1)];
@@ -563,7 +646,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     }
     if (!g.members.length) return;
     g.leader ??= g.members[0];
-    if (walkIn) { const [hx, hz] = region.point(S.region.homeZ, -8); g.tx = hx; g.tz = hz; g.wait = 0; }
+    if (walkIn) { const [hx, hz] = reg.point(); g.tx = hx; g.tz = hz; g.wait = 0; }
     groups.push(g);
     boarMesh.instanceColor.needsUpdate = true;
   }
@@ -572,6 +655,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function alertBoar(b, x, z, t) { if (b.mode === CALM) { b.mode = ALERT; b.t = t; } b.tx = x; b.tz = z; }
   function fleeBoar(b, x, z, delay = 0, gallop = true) {
     if (b.dead) return;
+    alarm = true;
     b.tx = x; b.tz = z; b.wantGallop = gallop || b.mode === FLEE;
     if (b.mode === FLEE) { b.t = Math.max(b.t, pick(S.boars.trotTime) + pick(S.boars.gallopTime) * 0.6); b.gallop = Math.max(b.gallop, pick(S.boars.gallopTime) * 0.7); return; }
     if (b.react < 0 || b.react > delay) b.react = delay;
@@ -583,16 +667,17 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     for (const m of b.group.members) if (m !== b && !m.dead && m.mode !== FLEE) fleeBoar(m, b.tx, b.tz, rand(0.12, 0.5), b.wantGallop);
   }
 
-  // желаемое направление -> поворот с ограничением, обход края угодий, скорость
+  // желаемое направление -> поворот с ограничением, обход края угодья, скорость
   function steerBoar(b, dx, dz, want, turnRate, dt) {
+    const reg = b.group.region;
     if (dx || dz) {
       let yaw = Math.atan2(dx, dz);
       const look = 3 + b.speed * 0.7;
-      if (!region.safe(b.x + Math.sin(yaw) * look, b.z + Math.cos(yaw) * look, 1)) {
+      if (!reg.safe(b.x + Math.sin(yaw) * look, b.z + Math.cos(yaw) * look, 1)) {
         let found = false;
         for (let k = 2; k <= 13 && !found; k++) {
           const y = yaw + (k & 1 ? -1 : 1) * (k >> 1) * 0.5;
-          if (region.safe(b.x + Math.sin(y) * look, b.z + Math.cos(y) * look, 1)) { yaw = y; found = true; }
+          if (reg.safe(b.x + Math.sin(y) * look, b.z + Math.cos(y) * look, 1)) { yaw = y; found = true; }
         }
         if (!found) yaw += Math.PI;
       }
@@ -602,11 +687,11 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     const acc = want > b.speed ? (want > 5 ? 14 : 3) : 8;
     b.speed += clamp(want - b.speed, -acc * dt, acc * dt);
     const nx = b.x + Math.sin(b.yaw) * b.speed * dt, nz = b.z + Math.cos(b.yaw) * b.speed * dt;
-    if (region.inside(nx, nz)) { b.x = nx; b.z = nz; } else b.speed *= 0.5;
+    if (reg.inside(nx, nz)) { b.x = nx; b.z = nz; } else b.speed *= 0.5;
   }
 
   function stepBoars(dt, cam, walk) {
-    const B = S.boars;
+    const B = S.boars, nearMax = S.region.near[1];
     // центры групп для сплочённости при бегстве
     for (const g of groups) {
       g.cx = 0; g.cz = 0; g.n = 0;
@@ -619,6 +704,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       if (!b.active) continue;
       if (b.flash > 0) b.flash = Math.max(0, b.flash - dt * 5);
       if (b.dead) { stepDead(b, dt, B); continue; }
+      if (b.born) { b.fade = Math.max(0, b.fade - dt / B.fadeTime); if (!b.fade) b.born = false; }   // появляется из ряби, а не вдруг
       if (b.react >= 0) { b.react -= dt; if (b.react < 0) startFlee(b); }
       const g = b.group, lead = g.leader;
       let dx = 0, dz = 0, want = 0, turn = 1.6, graze = 0, alert = 0;
@@ -640,7 +726,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
           const px = lead.x + b.ox * c + b.oz * s, pz = lead.z - b.ox * s + b.oz * c;
           const d = Math.hypot(px - b.x, pz - b.z);
           b.grazeT -= dt;
-          if (d > (b.pig ? 1.5 : 3)) { dx = px - b.x; dz = pz - b.z; want = d > 10 ? B.speed.trot * 0.7 : B.speed.walk * (b.pig ? 1.4 : 1.1); }
+          if (d > (b.pig ? 1.5 : 3)) { dx = px - b.x; dz = pz - b.z; want = d > 10 ? B.speed.trot * 0.8 : B.speed.walk * (b.pig ? 1.4 : 1.1); }
           else if (b.grazeT < 0) { b.grazeT = rand(3, 9); b.ox += rand(-1.5, 1.5); b.oz += rand(-1.5, 1.5); b.ox = clamp(b.ox, -5, 5); b.oz = clamp(b.oz, -6, 2); }
           else graze = 1;
         }
@@ -650,18 +736,25 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
         if (b.t <= 0) b.mode = CALM;
       } else {
         b.t -= dt; b.gallop -= dt; alert = 1; turn = 4.5;
-        // от угрозы, вглубь поля, держась своих, зигзагами
+        // от угрозы, держась своих, зигзагами; уже далеко от балкона — вбок, а не дальше (их должно быть видно)
         let ax = b.x - b.tx, az = b.z - b.tz; const al = Math.hypot(ax, az) || 1; ax /= al; az /= al;
-        dx = ax; dz = az - 0.45;   // и вглубь поля (−z)
-        if (g.n > 1) { const cx = g.cx - b.x, cz = g.cz - b.z, cl = Math.hypot(cx, cz); if (cl > 4) { dx += cx / cl * 0.35; dz += cz / cl * 0.35; } }
+        dx = ax; dz = az;
+        const rx = b.x - home[0], rz = b.z - home[1], rl = Math.hypot(rx, rz) || 1;
+        if (rl > nearMax * 0.8) {
+          const out = (dx * rx + dz * rz) / rl;
+          if (out > 0) { dx -= rx / rl * out * 1.2; dz -= rz / rl * out * 1.2; }
+          if (Math.hypot(dx, dz) < 0.3) { dx += -rz / rl * b.zig; dz += rx / rl * b.zig; }
+        }
+        if (g.n > 1) { const cx = g.cx - b.x, cz = g.cz - b.z, cl = Math.hypot(cx, cz); if (cl > 4) { dx += cx / cl * 0.45; dz += cz / cl * 0.45; } }
         if (b.gallop > 0) {
           b.zigT -= dt;
           if (b.zigT <= 0) { b.zig = -b.zig; b.zigT = rand(0.45, 1.1); }
           const a = b.zig * 0.6, c = Math.cos(a), s = Math.sin(a);
-          const rx = dx * c + dz * s, rz = -dx * s + dz * c; dx = rx; dz = rz;
+          const qx = dx * c + dz * s, qz = -dx * s + dz * c; dx = qx; dz = qz;
           want = b.pig ? B.speed.pigletGallop : B.speed.gallop * (0.85 + 0.15 * Math.sin(b.i));
         } else want = B.speed.trot;
-        if (b.t <= 0) { b.mode = CALM; if (b === lead) { g.tx = b.x; g.tz = b.z; g.wait = rand(4, 10); } }
+        // бег кончился — стадо сбивается в кучу у вожака и скоро снова пасётся
+        if (b.t <= 0) { b.mode = CALM; if (b === lead) { g.tx = b.x; g.tz = b.z; g.wait = pick(B.regroup); } }
       }
       steerBoar(b, dx, dz, want, turn, dt);
       // поза
@@ -676,32 +769,32 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     for (let i = 0; i < boars.length; i++) {
       const a = boars[i]; if (!a.active || a.dead) continue;
       for (let j = i + 1; j < boars.length; j++) {
-        const b = boars[j]; if (!b.active || b.dead) continue;
+        const b = boars[j]; if (!b.active || b.dead || b.group.region !== a.group.region) continue;
         const dx = b.x - a.x, dz = b.z - a.z, d2 = dx * dx + dz * dz, r = 0.75 * (a.scale + b.scale);
         if (d2 > r * r || d2 < 1e-6) continue;
         const d = Math.sqrt(d2), push = (r - d) * 0.5 / d;
         const ax = a.x - dx * push, az = a.z - dz * push, bx = b.x + dx * push, bz = b.z + dz * push;
-        if (region.inside(ax, az)) { a.x = ax; a.z = az; }
-        if (region.inside(bx, bz)) { b.x = bx; b.z = bz; }
+        if (a.group.region.inside(ax, az)) { a.x = ax; a.z = az; }
+        if (b.group.region.inside(bx, bz)) { b.x = bx; b.z = bz; }
       }
     }
-    // пополнение стада с дальнего края поля
+    // пополнение стада: с дальнего края угодья
     let alive = 0;
     for (const b of boars) if (b.active && !b.dead) alive++;
     if (alive < B.count) {
       respawnTimer -= dt;
       if (respawnTimer <= 0) {
         respawnTimer = pick(B.respawn);
-        const [x, z] = region.point(-Infinity, S.region.farZ);
-        spawnGroup(Math.min(B.count - alive, Math.round(pick(B.group))), x, z, true);
+        const reg = herdRegion();
+        spawnGroup(reg, Math.min(B.count - alive, Math.round(pick(B.group))), reg.point({ far: true }), true);
       }
     }
     for (let i = groups.length - 1; i >= 0; i--) if (!groups[i].members.length) groups.splice(i, 1);
   }
+  // куда идти пастись: рядом (до 35 м), с весом к основной полосе расстояний; ушли далеко — назад, ближе к балкону
   function pickTarget(g, lead) {
-    const home = S.region.homeZ;
-    const far = lead.z < home;
-    const [x, z] = far ? region.point(home, -8) : region.point(home, -8, [lead.x, lead.z], 35);
+    const far = g.region.dist(lead.x, lead.z) > S.region.near[1];
+    const [x, z] = far ? g.region.point() : g.region.point({ near: [lead.x, lead.z], r: 35 });
     g.tx = x; g.tz = z;
   }
   function stepDead(b, dt, B) {
@@ -739,7 +832,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       x: f.lx + rand(-4, 4), y: perch ? ground : f.kind === 'pass' ? f.py : ground + 20, z: f.lz + rand(-4, 4), vx: 0, vy: 0, vz: 0, yaw: rand(0, TAU), pitch: 0, roll: 0,
       mode: perch ? 'perch' : 'fly', phase: Math.random(), amp: 0, fold: perch ? 1 : 0, peck: 0, peckT: rand(0.5, 3), glide: 0,
       off: k / Math.max(1, f.n) * TAU + rand(-0.3, 0.3), offR: rand(0.7, 1.3), offY: rand(-3, 3), delay: 0, fade: 0, flash: 0, deadT: 0,
-      lsx: rand(-4, 4), lsz: rand(-4, 4),
+      lsx: rand(-4, 4) * Math.max(1, spec.span), lsz: rand(-4, 4) * Math.max(1, spec.span), fat: spec.fat ?? 1, histN: 0, histT: -1,
     });
     if (f.kind === 'local' && !region.inside(b.x, b.z)) { b.x = f.lx; b.z = f.lz; }
     const c = lin(spec.color).map(v => v / BIRD_BASE);   // цвет вершин тела -> оперение вида
@@ -747,9 +840,10 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   }
   function spawnPass() {
     const P = S.birds.pass, sp = P.species[Math.floor(Math.random() * P.species.length)];
-    const side = Math.random() < 0.5 ? -1 : 1, z = -pick(P.dist), y = ground + pick(P.alt), ang = rand(-0.25, 0.25);
-    const dx = -side * Math.cos(ang), dz = Math.sin(ang);
-    spawnFlock(sp, Math.round(pick(P.n)), { px: side * 420, py: y, pz: z, dx, dz, travelled: 0, lx: side * 420, lz: z });
+    // низкий ленивый клин поперёк вида с балкона: заходит сбоку за P.from метров и уходит на столько же за другой край
+    const side = Math.random() < 0.5 ? -1 : 1, z = home[1] - pick(P.dist), y = ground + pick(P.alt), ang = rand(-0.2, 0.2);
+    const dx = -side * Math.cos(ang), dz = Math.sin(ang), x = home[0] + side * P.from;
+    spawnFlock(sp, Math.round(pick(P.n)), { px: x, py: y, pz: z, dx, dz, travelled: 0, lx: x, lz: z });
   }
   function takeOff(f, tx, tz) {
     if (f.kind !== 'local') return;
@@ -758,9 +852,10 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     let cx, cz;
     if (tx != null) {   // прочь от выстрела
       const ax = f.lx - tx, az = f.lz - tz, l = Math.hypot(ax, az) || 1;
-      [cx, cz] = region.point(-Infinity, Infinity, [f.lx + ax / l * rand(50, 110), f.lz + az / l * rand(50, 110)], 40);
+      [cx, cz] = region.point({ near: [f.lx + ax / l * rand(30, 70), f.lz + az / l * rand(30, 70)], r: 40 });
     } else [cx, cz] = region.point();
-    f.cx = cx; f.cz = cz; f.alt = pick(B.alt); f.R = rand(18, 40); f.ang = Math.random() * TAU; f.angV = S.species[f.sp].speed * 0.75 / f.R * (Math.random() < 0.5 ? 1 : -1);
+    const spec = S.species[f.sp];
+    f.cx = cx; f.cz = cz; f.alt = pick(spec.alt ?? B.alt); f.R = rand(18, 40) * Math.max(1, spec.span * 0.8); f.ang = Math.random() * TAU; f.angV = spec.speed * 0.75 / f.R * (Math.random() < 0.5 ? 1 : -1);
     for (const b of f.members) if (!b.dead && b.mode !== 'fly') {
       b.mode = 'fly'; b.delay = rand(0, 0.35); b.vy = rand(2.5, 4.5);
       if (tx != null) { const ax = b.x - tx, az = b.z - tz, l = Math.hypot(ax, az) || 1; b.vx = ax / l * 4; b.vz = az / l * 4; }
@@ -769,7 +864,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function stepBirds(dt) {
     const B = S.birds;
     passTimer -= dt;
-    if (passTimer <= 0) { passTimer = pick(B.pass.every); if (freeCount(birds) >= 11) spawnPass(); }
+    if (passTimer <= 0) { passTimer = pick(B.pass.every); if (freeCount(birds) >= B.pass.n[1]) spawnPass(); }
     for (const f of flocks) {
       const spec = S.species[f.sp];
       if (f.kind === 'local') {
@@ -777,7 +872,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
         if (f.mode === 'ground' && f.t <= 0) takeOff(f);
         else if (f.mode === 'circle') {
           f.ang += f.angV * dt;
-          if (f.t <= 0) { f.mode = 'land'; const [x, z] = region.point(-Infinity, Infinity, [f.cx, f.cz], 60); f.lx = x; f.lz = z; f.t = 40; }
+          if (f.t <= 0) { f.mode = 'land'; const [x, z] = region.point({ near: [f.cx, f.cz], r: 60 }); f.lx = x; f.lz = z; f.t = 40; }
         } else if (f.mode === 'land') {
           let all = true; for (const b of f.members) if (!b.dead && b.mode !== 'perch') all = false;
           if (all || f.t <= 0) { f.mode = 'ground'; f.t = rand(20, 55); }
@@ -831,12 +926,12 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       // цель полёта
       let tx, ty, tz, arrive = false;
       if (f.kind === 'pass') {
-        const rank = Math.ceil(b.k / 2), side = b.k % 2 ? 1 : -1, jit = f.panic > 0 ? 3 : 0;
-        // клин: каждый следующий — назад и вбок от направляющего
-        tx = f.px - f.dx * rank * 2.4 + -f.dz * side * rank * 1.7 + Math.sin(time * 1.3 + b.k) * jit;
-        tz = f.pz - f.dz * rank * 2.4 + f.dx * side * rank * 1.7 + Math.cos(time * 1.1 + b.k) * jit;
+        const rank = Math.ceil(b.k / 2), side = b.k % 2 ? 1 : -1, jit = f.panic > 0 ? 3 : 0, sp = spec.span;
+        // клин: каждый следующий — назад и вбок от направляющего, шаг по размаху крыльев
+        tx = f.px - f.dx * rank * 1.5 * sp + -f.dz * side * rank * 1.05 * sp + Math.sin(time * 1.3 + b.k) * jit;
+        tz = f.pz - f.dz * rank * 1.5 * sp + f.dx * side * rank * 1.05 * sp + Math.cos(time * 1.1 + b.k) * jit;
         ty = f.py + Math.sin(time * 0.7 + b.k) * 0.4;
-        if (f.travelled > 840) { b.active = false; const k = f.members.indexOf(b); if (k >= 0) f.members.splice(k, 1); continue; }
+        if (f.travelled > 2 * B.pass.from) { b.active = false; const k = f.members.indexOf(b); if (k >= 0) f.members.splice(k, 1); continue; }
       } else if (f.mode === 'circle') {
         const a = f.ang + b.off;
         tx = f.cx + Math.cos(a) * f.R * b.offR; tz = f.cz + Math.sin(a) * f.R * b.offR; ty = ground + f.alt + b.offY;
@@ -849,10 +944,11 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       let sp = spec.speed * (f.kind === 'pass' ? (f.panic > 0 ? 1.35 : 1) * clamp(d / 6, 0.85, 1.25) : 1);
       if (arrive) sp = Math.min(sp, Math.max(1.2, d * 0.9));
       let wx = dx / d * sp, wy = dy / d * sp, wz = dz / d * sp;
+      const sep = Math.max(2.2, spec.span * spec.span);
       for (const o of f.members) {
         if (o === b || o.dead || !o.active) continue;
         const ox = b.x - o.x, oy = b.y - o.y, oz = b.z - o.z, q = ox * ox + oy * oy + oz * oz;
-        if (q < 2.2 && q > 1e-4) { const k = (2.2 - q) * 1.5; wx += ox * k; wy += oy * k; wz += oz * k; }
+        if (q < sep && q > 1e-4) { const k = (sep - q) * 1.5 / sep * 2.2; wx += ox * k; wy += oy * k; wz += oz * k; }
       }
       const k = Math.min(1, dt * (arrive ? 2.2 : 1.6));
       const pvx = b.vx, pvz = b.vz;
@@ -890,22 +986,27 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     for (const b of boars) {
       const o = b.i * 16, q = b.i * 4;
       if (!b.active) { if (E[o + 15]) { E.fill(0, o, o + 16); L.fill(0, o, o + 16); } continue; }
+      expand(b.x, ground, b.z, 1.2 * b.scale);
+      // вне кадра — экземпляр схлопнут (не рисуется), поза не пишется
+      cull.center.set(b.x, ground + 0.6 * b.scale, b.z); cull.radius = 1.2 * b.scale;
+      if (!frustum.intersectsSphere(cull)) { if (E[o + 15]) { E.fill(0, o, o + 16); L.fill(0, o, o + 16); } continue; }
       writeMatrix(E, o, b.x, ground, b.z, b.yaw, 0, 0, b.scale);
       const bs = b.scale * (1 - b.fade);
       writeMatrix(L, o, b.x, ground + 0.02, b.z, b.yaw, 0, 0, 1);
       L[o] *= bs * 0.75; L[o + 2] *= bs * 0.75; L[o + 8] *= bs * 1.55; L[o + 10] *= bs * 1.55;
       M[q] = b.phase; M[q + 1] = b.gait; M[q + 2] = b.graze; M[q + 3] = b.alert;
       T[q] = b.fall; T[q + 1] = b.fade; T[q + 2] = b.pig ? 1 : 0; T[q + 3] = b.flash;
-      expand(b.x, ground, b.z, 1.2);
     }
     const W = birdMesh.instanceMatrix.array, BM = birdMot.array, BS = birdSt.array;
     for (const b of birds) {
       const o = b.i * 16, q = b.i * 4;
       if (!b.active) { if (W[o + 15]) W.fill(0, o, o + 16); continue; }
+      if (b.f.kind === 'local' || Math.abs(b.x - home[0]) < 250) expand(b.x, b.y, b.z, b.scale);
+      cull.center.set(b.x, b.y, b.z); cull.radius = b.scale;
+      if (!frustum.intersectsSphere(cull)) { if (W[o + 15]) W.fill(0, o, o + 16); continue; }
       writeMatrix(W, o, b.x, b.y + (b.mode === 'perch' ? 0.07 * b.scale : 0), b.z, b.yaw, b.pitch, b.roll, b.scale);
       BM[q] = b.phase; BM[q + 1] = b.amp; BM[q + 2] = b.fold; BM[q + 3] = b.peck;
-      BS[q] = 0; BS[q + 1] = b.fade; BS[q + 2] = b.kind; BS[q + 3] = b.flash;
-      if (b.f.kind === 'local' || Math.abs(b.x) < 250) expand(b.x, b.y, b.z, 1);
+      BS[q] = b.fat; BS[q + 1] = b.fade; BS[q + 2] = b.kind; BS[q + 3] = b.flash;
     }
     boarMesh.instanceMatrix.needsUpdate = blobMesh.instanceMatrix.needsUpdate = birdMesh.instanceMatrix.needsUpdate = true;
     boarMot.needsUpdate = boarSt.needsUpdate = birdMot.needsUpdate = birdSt.needsUpdate = true;
@@ -913,8 +1014,8 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   }
   function boundsOnly() {   // габарит стада без записи в буферы (пока зверей не видно)
     box.makeEmpty();
-    for (const b of boars) if (b.active) expand(b.x, ground, b.z, 1.2);
-    for (const b of birds) if (b.active && (b.f.kind === 'local' || Math.abs(b.x) < 250)) expand(b.x, b.y, b.z, 1);
+    for (const b of boars) if (b.active) expand(b.x, ground, b.z, 1.2 * b.scale);
+    for (const b of birds) if (b.active && (b.f.kind === 'local' || Math.abs(b.x - home[0]) < 250)) expand(b.x, b.y, b.z, b.scale);
   }
   function expand(x, y, z, r) {
     const n = box.min, m = box.max;
@@ -971,14 +1072,23 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     updateRound(walk);
     if (!enabled) return need;
     time += dt;
+    acc += dt;
     const vis = !pipe?.photo && seen(walk);
     if (!vis) {
       wasSeen = false;
-      coarse += dt;
-      if (coarse >= COARSE) { step(coarse, walk); coarse = 0; boundsOnly(); }
+      if (acc >= COARSE) { step(acc, walk); acc = 0; boundsOnly(); }
       return need;
     }
-    acc += dt + coarse; coarse = 0;
+    if (!round.on && !alarm) {
+      // покой (пасутся, летят): шаг в кадре, который и так рисуется (камера сдвинулась), иначе редко — в прогулке
+      // spec.idleFps и свой кадр, в облёте раз в COARSE и без своего кадра (рендер по требованию)
+      const moved = camMoved(), walking = !!walk?.active;
+      if (!moved && acc < (walking ? 1 / S.idleFps : COARSE)) return need;
+      step(Math.min(acc, COARSE), walk); acc = 0;
+      writeBuffers(); wasSeen = true;
+      return need || walking;
+    }
+    // раунд, бегство, падение подстреленного: плавно (в облёте — не чаще spec.orbitFps)
     if (!walk?.active && wasSeen && acc < 1 / S.orbitFps) return need;
     step(Math.min(acc, 0.1), walk); acc = 0;
     writeBuffers();
@@ -988,6 +1098,23 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function step(dt, walk) {
     const cam = camera.position;
     for (let t = dt; t > 1e-6; t -= 0.1) { const h = Math.min(0.1, t); stepBoars(h, cam, walk); stepBirds(h); }
+    recordAll();
+    alarm = busy();
+  }
+  // кто-то бежит, падает или стая шарахнулась — нужны плавные кадры
+  function busy() {
+    for (const b of boars) if (b.active && (b.dead ? b.deadT < 1.5 : b.mode === FLEE)) return true;
+    for (const b of birds) if (b.active && b.dead && b.y > ground + 0.04) return true;
+    for (const f of flocks) if (f.panic > 0) return true;
+    return false;
+  }
+  const lastCam = new Float64Array(16);
+  function camMoved() {
+    const e = camera.matrixWorld.elements;
+    let moved = camera.projectionMatrix.elements[0] !== lastCam[15];
+    for (let i = 0; i < 15; i++) if (e[i] !== lastCam[i]) { moved = true; lastCam[i] = e[i]; }
+    lastCam[15] = camera.projectionMatrix.elements[0];
+    return moved;
   }
 
   // ---------- выстрел: слух ----------
@@ -1012,60 +1139,113 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   }
 
   // ---------- выстрел: попадание ----------
+  // Объёмы попадания — по позе, как её рисует шейдер (голова опущена/поднята, бег), в мировых осях зверя, с запасом:
+  // части × spec.*.hitPad и ещё spec.hit.perMetre метра на метр дальности (далёкий зверь — пара пикселей). Луч проверяет
+  // нынешнее положение и снимки за последние spec.hit.lag с: стрелок жмёт по тому, что видел кадр-два назад.
 
   const tmpP = new THREE.Vector3();
+  let hitZone = null;   // зона последнего попадания в boarPose/birdPose (без выделений на выстрел)
+  // Луч (o, d — мир) против кабана в положении (x, z, yaw) -> расстояние или −1; зону пишет в hitZone
+  function boarPose(b, x, z, yaw, ox, oy, oz, dx, dy, dz, pad) {
+    const s = b.scale, P = S.boars.hitPad, e = pad / s;
+    const c = Math.cos(yaw), sn = Math.sin(yaw);
+    const rx = ox - x, ry = oy - ground, rz = oz - z;
+    const lx = (c * rx - sn * rz) / s, ly = ry / s, lz = (sn * rx + c * rz) / s;
+    const ldx = c * dx - sn * dz, ldy = dy, ldz = sn * dx + c * dz;
+    // голова поворачивается у шеи (0, 0.62, 0.36) на тот же угол, что в BOAR_VERT: пасётся — вниз, тревога и галоп — вверх
+    const a = b.graze * 0.72 - b.alert * 0.32 + clamp(b.gait - 2, 0, 1) * 0.12, ca = Math.cos(a), sa = Math.sin(a);
+    const hy = 0.62 + ca * -0.09 - sa * 0.24, hz = 0.36 + sa * -0.09 + ca * 0.24;
+    const tHead = raySphere(lx, ly, lz, ldx, ldy, ldz, 0, hy, hz, 0.19 * P + e);
+    const tBody = rayCapsule(lx, ly, lz, ldx, ldy, ldz, 0, 0.62, -0.58, 0, 0.62, 0.34, 0.28 * P + e);
+    const tHeart = raySphere(lx, ly, lz, ldx, ldy, ldz, 0, 0.5, 0.2, 0.14 * P + e * 0.5);
+    const tLegF = rayCapsule(lx, ly, lz, ldx, ldy, ldz, -0.12, 0.2, 0.2, 0.12, 0.2, 0.2, 0.17 * P + e);
+    const tLegR = rayCapsule(lx, ly, lz, ldx, ldy, ldz, -0.12, 0.2, -0.5, 0.12, 0.2, -0.5, 0.18 * P + e);
+    hitZone = null;
+    let t = -1;
+    if (tHead >= 0 && (tBody < 0 || tHead <= tBody + 0.05)) { hitZone = 'head'; t = tHead; }
+    else if (tBody >= 0) { hitZone = tHeart >= 0 ? 'heart' : 'body'; t = tBody; }
+    else {
+      const tl = tLegF >= 0 && (tLegR < 0 || tLegF < tLegR) ? tLegF : tLegR;
+      if (tl >= 0) { hitZone = 'legs'; t = tl; }
+    }
+    return t < 0 ? -1 : t * s;
+  }
+  // Птица в (x, y, z, yaw): эллипсоид по размаху крыльев, длине и взмаху (× hitPad), голова — шар впереди
+  function birdPose(b, x, y, z, yaw, ox, oy, oz, dx, dy, dz, pad) {
+    const sp = b.scale, P = S.birds.hitPad, c = Math.cos(yaw), sn = Math.sin(yaw);
+    const rx = ox - x, ry = oy - y, rz = oz - z;
+    const ax = 0.5 * sp * P + pad, ay = 0.22 * sp * P + pad, az = 0.3 * sp * P * Math.max(1, b.fat * 0.85) + pad;
+    const px = (c * rx - sn * rz) / ax, py = ry / ay, pz = (sn * rx + c * rz) / az;
+    const qx = (c * dx - sn * dz) / ax, qy = dy / ay, qz = (sn * dx + c * dz) / az;
+    const A = qx * qx + qy * qy + qz * qz, B2 = px * qx + py * qy + pz * qz, C = px * px + py * py + pz * pz - 1, h = B2 * B2 - A * C;
+    hitZone = null;
+    if (h < 0) return -1;
+    let t = (-B2 - Math.sqrt(h)) / A;
+    if (t < 0) { if (C >= 0) return -1; t = 0; }
+    const f = (0.2 + (b.fat - 1) * 0.12) * sp;
+    hitZone = raySphere(ox, oy, oz, dx, dy, dz, x + sn * f, y + 0.035 * sp, z + c * f, 0.09 * sp * P + pad) >= 0 ? 'head' : 'body';
+    return t;
+  }
+  // снимок положения раз в HIST_DT: [x, y, z, yaw, время] × HIST, новый — первым
+  function record(a, y) {
+    if (time - a.histT < HIST_DT) return;
+    a.histT = time;
+    const h = a.hist;
+    h.copyWithin(5, 0, (HIST - 1) * 5);
+    h[0] = a.x; h[1] = y; h[2] = a.z; h[3] = a.yaw; h[4] = time;
+    if (a.histN < HIST) a.histN++;
+  }
+  function recordAll() {
+    for (const b of boars) if (b.active && !b.dead) record(b, ground);
+    for (const b of birds) if (b.active && !b.dead) record(b, b.y);
+  }
+  // нынешняя поза, затем снимки не старше lag -> расстояние или −1 (зона — в hitZone)
+  function poseHit(a, bird, ox, oy, oz, dx, dy, dz, pad) {
+    let t = bird ? birdPose(a, a.x, a.y, a.z, a.yaw, ox, oy, oz, dx, dy, dz, pad) : boarPose(a, a.x, a.z, a.yaw, ox, oy, oz, dx, dy, dz, pad);
+    if (t >= 0) return t;
+    const h = a.hist, lag = S.hit.lag;
+    for (let k = 0; k < a.histN; k++) {
+      const o = k * 5, age = time - h[o + 4];
+      if (age > lag) break;
+      if (age < HIST_DT * 0.5) continue;
+      t = bird ? birdPose(a, h[o], h[o + 1], h[o + 2], h[o + 3], ox, oy, oz, dx, dy, dz, pad) : boarPose(a, h[o], h[o + 2], h[o + 3], ox, oy, oz, dx, dy, dz, pad);
+      if (t >= 0) return t;
+    }
+    return -1;
+  }
   function raycast(raycaster) {
     if (!ready || !enabled || !root.visible) return null;
     const r = raycaster.ray, ox = r.origin.x, oy = r.origin.y, oz = r.origin.z;
     const dl = Math.hypot(r.direction.x, r.direction.y, r.direction.z) || 1;
     const dx = r.direction.x / dl, dy = r.direction.y / dl, dz = r.direction.z / dl;
-    const near = raycaster.near ?? 0, far = raycaster.far ?? Infinity;
-    let best = null, bt = far;
+    const near = raycaster.near ?? 0, far = raycaster.far ?? Infinity, lag = S.hit.lag, per = S.hit.perMetre;
+    let best = null, bz = null, bt = far;
     for (const b of boars) {
       if (!b.active || b.dead) continue;
-      const s = b.scale, cy = ground + 0.55 * s;
+      const s = b.scale, cy = ground + 0.55 * s, pad = Math.hypot(b.x - ox, cy - oy, b.z - oz) * per;
+      const reach = 1.05 * s * S.boars.hitPad + pad + b.speed * lag;
       // быстрая проверка: сфера вокруг зверя; заодно пуля мимо в паре метров пугает
-      const t0 = raySphere(ox, oy, oz, dx, dy, dz, b.x, cy, b.z, 3.5 * Math.max(s, 0.6));
+      const t0 = raySphere(ox, oy, oz, dx, dy, dz, b.x, cy, b.z, Math.max(reach, 3.5 * Math.max(s, 0.6)));
       if (t0 < 0 || t0 > bt) continue;
-      if (raySphere(ox, oy, oz, dx, dy, dz, b.x, cy, b.z, 0.95 * s) < 0) { fleeBoar(b, ox, oz, rand(0.05, 0.2)); continue; }
-      // луч в осях зверя (модель взрослого кабана)
-      const c = Math.cos(b.yaw), sn = Math.sin(b.yaw);
-      const rx = ox - b.x, ry = oy - ground, rz = oz - b.z;
-      const lx = (c * rx - sn * rz) / s, ly = ry / s, lz = (sn * rx + c * rz) / s;
-      const ldx = c * dx - sn * dz, ldy = dy, ldz = sn * dx + c * dz;
-      const gz = b.graze;
-      const tHead = raySphere(lx, ly, lz, ldx, ldy, ldz, 0, 0.53 - 0.2 * gz, 0.6 - 0.03 * gz, 0.17);
-      const tBody = rayCapsule(lx, ly, lz, ldx, ldy, ldz, 0, 0.62, -0.55, 0, 0.62, 0.32, 0.27);
-      const tHeart = raySphere(lx, ly, lz, ldx, ldy, ldz, 0, 0.5, 0.2, 0.14);
-      const tLegF = rayCapsule(lx, ly, lz, ldx, ldy, ldz, -0.12, 0.17, 0.2, 0.12, 0.17, 0.2, 0.16);
-      const tLegR = rayCapsule(lx, ly, lz, ldx, ldy, ldz, -0.12, 0.17, -0.5, 0.12, 0.17, -0.5, 0.17);
-      let zone = null, t = Infinity;
-      if (tHead >= 0 && (tBody < 0 || tHead <= tBody + 0.05)) { zone = 'head'; t = tHead; }
-      else if (tBody >= 0) { zone = tHeart >= 0 ? 'heart' : 'body'; t = tBody; }
-      else {
-        const tl = tLegF >= 0 && (tLegR < 0 || tLegF < tLegR) ? tLegF : tLegR;
-        if (tl >= 0) { zone = 'legs'; t = tl; }
-      }
-      if (!zone) { fleeBoar(b, ox, oz, rand(0.05, 0.2)); continue; }
-      const tw = t * s;
-      if (tw < near || tw >= bt) continue;
-      bt = tw; best = { animal: b, bird: false, zone };
+      const t = raySphere(ox, oy, oz, dx, dy, dz, b.x, cy, b.z, reach) < 0 ? -1 : poseHit(b, false, ox, oy, oz, dx, dy, dz, pad);
+      if (t < 0) { fleeBoar(b, ox, oz, rand(0.05, 0.2)); continue; }
+      if (t < near || t >= bt) continue;
+      bt = t; best = b; bz = hitZone;
     }
-    const pad = S.birds.hitPad;
+    let bird = false;
     for (const b of birds) {
       if (!b.active || b.dead) continue;
-      const rad = 0.12 * b.scale * pad;
-      const t = raySphere(ox, oy, oz, dx, dy, dz, b.x, b.y + 0.02 * b.scale, b.z, rad);
+      const pad = Math.hypot(b.x - ox, b.y - oy, b.z - oz) * per;
+      const reach = 0.6 * b.scale * S.birds.hitPad + pad + Math.hypot(b.vx, b.vy, b.vz) * lag;
+      if (raySphere(ox, oy, oz, dx, dy, dz, b.x, b.y, b.z, reach) < 0) continue;
+      const t = poseHit(b, true, ox, oy, oz, dx, dy, dz, pad);
       if (t < 0 || t < near || t >= bt) continue;
-      const fx = Math.sin(b.yaw) * Math.cos(b.pitch), fz = Math.cos(b.yaw) * Math.cos(b.pitch), fy = -Math.sin(b.pitch);
-      const th = raySphere(ox, oy, oz, dx, dy, dz, b.x + fx * 0.2 * b.scale, b.y + fy * 0.2 * b.scale + 0.035 * b.scale, b.z + fz * 0.2 * b.scale, 0.05 * b.scale * pad);
-      bt = t; best = { animal: b, bird: true, zone: th >= 0 ? 'head' : 'body' };
+      bt = t; best = b; bz = hitZone; bird = true;
     }
     if (!best) return null;
     const point = new THREE.Vector3(ox + dx * bt, oy + dy * bt, oz + dz * bt);
-    const a = best.animal;
+    const a = best, zone = bz;
     const normal = new THREE.Vector3(-dx, -dy, -dz);
-    const { zone, bird } = best;
     let used = false;
     return {
       distance: bt, point, normal, object: bird ? birdMesh : boarMesh, instanceId: a.i, zone, animal: bird ? a.sp : a.pig ? 'piglet' : 'boar',
@@ -1089,7 +1269,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     }
     // убит
     const moving = bird ? a.mode !== 'perch' && a.y > ground + 0.5 : a.speed > 3;
-    a.dead = true; a.deadT = 0; a.fall = 0; a.fade = 0;
+    a.dead = true; a.deadT = 0; a.fall = 0; a.fade = 0; a.born = false; alarm = true;
     if (bird) { a.vx *= 0.4; a.vz *= 0.4; a.vy = Math.min(a.vy, 1); a.mode = 'fall'; }
     else { for (const m of a.group.members) if (m !== a && !m.dead) fleeBoar(m, camera.position.x, camera.position.z, rand(0.05, 0.3)); }
     const key = bird ? a.sp : a.pig ? 'piglet' : 'boar';
@@ -1232,7 +1412,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
         level: S ? levelOf(p.xp, S.levels).level : 1, board: shared.status };
     },
     // для проверок из консоли: звери и их состояние
-    get debug() { return { boars, birds, flocks, groups, region, box, finishRound, spawnPass }; },
+    get debug() { return { boars, birds, flocks, groups, region, regions, home, box, finishRound, spawnPass }; },
   };
   shared.hunt = api;
   return api;

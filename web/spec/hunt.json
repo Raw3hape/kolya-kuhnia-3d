@@ -1,52 +1,58 @@
 {
-  "_about": "Охота в прогулке (web/js/hunt.js): кабаны на поле и лугу под балконом, стаи птиц, очки, уровни, таблица рекордов. Координаты — как в plan.generated.json; поле и луг берутся из site.json (areas). Сервер таблицы api/scores.js читает отсюда же round, score и species: границы правдоподобия.",
+  "_about": "Охота в прогулке (web/js/hunt.js): кабаны на поле и лугу под балконом и на газонах справа (у дорог), клинья гусей, стаи птиц, очки, уровни, таблица рекордов. Координаты — как в plan.generated.json; угодья берутся из site.json (areas). Расстояния — по земле от середины балкона. Сервер таблицы api/scores.js читает отсюда же round, score и species: границы правдоподобия.",
   "round": 120,
   "region": {
     "kinds": ["field", "meadow"],
     "radius": 320,
     "margin": 3,
     "keepOut": 7,
-    "homeZ": -130,
-    "farZ": -170
+    "near": [40, 150],
+    "farWeight": 0.22,
+    "closeWeight": 0.08,
+    "maxDist": 260,
+    "city": { "box": [74, 250, -200, -4], "kinds": ["grass", "scrub"], "maxDist": 230, "minArea": 1500, "roadPad": 1.2, "buildingPad": 1.5, "margin": 1.2, "share": 0.25 }
   },
   "boars": {
-    "count": 26,
-    "group": [3, 7],
+    "count": 40,
+    "group": [4, 8],
     "piglets": 0.55,
     "hp": { "adult": 100, "piglet": 40 },
-    "size": { "adult": [0.88, 1.12], "piglet": [0.36, 0.44] },
-    "speed": { "walk": 1.0, "trot": 4.2, "gallop": 11.0, "pigletGallop": 8.5 },
+    "size": { "adult": [1.22, 1.5], "piglet": [0.46, 0.56] },
+    "speed": { "walk": 1.0, "trot": 3.6, "gallop": 9.5, "pigletGallop": 8.0 },
     "hear": 240,
-    "panic": 95,
+    "panic": 80,
     "sight": 28,
-    "gallopTime": [3, 6],
-    "trotTime": [5, 9],
-    "calm": [12, 22],
-    "respawn": [6, 14],
+    "gallopTime": [1.4, 2.6],
+    "trotTime": [1.8, 3.5],
+    "regroup": [3, 7],
+    "respawn": [5, 11],
     "corpse": 4.5,
-    "fadeTime": 1.4
+    "fadeTime": 1.4,
+    "hitPad": 1.3
   },
   "birds": {
+    "pool": 96,
     "flocks": [
-      { "species": "pigeon", "n": [9, 14] },
-      { "species": "crow", "n": [5, 8] },
-      { "species": "pigeon", "n": [6, 10] }
+      { "species": "goose", "n": [6, 9] },
+      { "species": "pigeon", "n": [5, 8] },
+      { "species": "crow", "n": [4, 6] }
     ],
-    "pass": { "species": ["goose", "duck", "goose"], "every": [45, 95], "n": [7, 11], "alt": [32, 55], "dist": [50, 150] },
+    "pass": { "species": ["goose", "goose", "goose", "duck"], "every": [16, 32], "n": [7, 13], "alt": [16, 30], "dist": [45, 140], "from": 330 },
     "hear": 260,
     "alt": [12, 34],
-    "hitPad": 1.8,
+    "hitPad": 1.5,
     "respawn": [10, 20],
     "corpse": 3,
     "fadeTime": 1.2
   },
+  "hit": { "lag": 0.16, "perMetre": 0.0012 },
   "species": {
     "boar":   { "name": "кабан", "points": 100 },
     "piglet": { "name": "warchlak", "points": 60 },
     "pigeon": { "name": "голубь", "points": 120, "span": 0.66, "speed": 13, "flap": 6.5, "color": "9aa1aa" },
     "crow":   { "name": "грач", "points": 150, "span": 0.92, "speed": 11, "flap": 4.2, "color": "2c2d33" },
-    "duck":   { "name": "кряква", "points": 200, "span": 0.9, "speed": 17, "flap": 7.5, "color": "7b6a52" },
-    "goose":  { "name": "гусь", "points": 250, "span": 1.6, "speed": 15, "flap": 3.2, "color": "8f8a80" }
+    "duck":   { "name": "кряква", "points": 200, "span": 0.9, "speed": 15, "flap": 7.5, "color": "7b6a52" },
+    "goose":  { "name": "гусь", "points": 250, "span": 2.05, "speed": 8.5, "flap": 2.3, "color": "8f8a80", "fat": 1.5, "alt": [9, 20] }
   },
   "damage": { "pistol": 35, "rifle": 55, "default": 50 },
   "score": {
@@ -60,5 +66,6 @@
   },
   "levels": { "base": 400, "pow": 1.6 },
   "orbitFps": 20,
+  "idleFps": 12,
   "leaderboard": { "url": "/api/scores", "local": 10, "online": 100, "show": 10, "nameMax": 24 }
 }
