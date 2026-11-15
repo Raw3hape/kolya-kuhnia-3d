@@ -1,0 +1,61 @@
+{
+  "_about": "Мебель гостиной для web/js/furniture.js. Метры, оси как в plan.generated.json. Авторский файл, править можно. defaults — стартовое состояние (поля state, порядок в коде ссылки задаёт FURN_SCHEMA в furniture.js). Остальное — размеры по рынку.",
+
+  "defaults": {
+    "sofa": "straight2", "sofaFabric": "linen-sand", "sofaX": 2.86, "sofaZ": 1.14, "sofaRot": 0,
+    "tv": "wall", "tvSize": "65", "tvY": 1.10, "tvAlong": 1.14, "tvOn": "off", "tvLink": "on",
+    "console": "low-long", "consoleFinish": "oak", "consoleW": 1.80, "consoleAlong": 1.14,
+    "rug": "wool-light", "rugSize": "300x200",
+    "table": "round", "tableX": 4.00, "tableZ": 1.14, "tableRot": 0,
+    "sofaModel": "auto", "sofaCover": "default", "sofaSnap": "island",
+    "rugModel": "auto", "rugDim": "auto", "rugX": 3.93, "rugZ": 1.14, "rugRot": "auto",
+    "rugTarget": [2.40, 1.70]
+  },
+  "_defaults_why": [
+    "Стена ТВ — правая стена кухни-гостиной X = 6.171 (слот wallAccent). Остров (X 1.78–2.38, Z 0.24–2.04, высота 0.90) стоит торцом к ней.",
+    "Диван спинкой вплотную к стороне острова в гостиную, по центру острова (Z 1.14), лицом к ТВ: sofaSnap = island, позиция считается от острова и глубины модели. sofaX/sofaZ — для свободного режима.",
+    "sofaModel = auto: модель из sofas.json, чья ширина ближе всего к длине острова 1.80 и спинка не выше 0.90. Каталога нет или модель не загрузилась — диван-схема, прямой двухместный 180 см, как длина острова.",
+    "ТВ и тумба на оси дивана (Z 1.14). Тумба 1.80, иначе упирается в радиатор у балконной двери (Z ≤ 0.16).",
+    "Столик в 30 см от переда дивана. Ковёр rugModel/rugDim = auto: первый ковёр каталога, размер ближе к 240 × 170 (rugTarget), длинной стороной вдоль дивана, передние ножки на ковре. Ковёр не коллайдер.",
+    "Створка балконной двери (X 4.61–5.56, внутрь, ~95 см): столик и тумба вне её, тонкий ковёр может заходить."
+  ],
+
+  "room": "kitchen_living",
+  "tvWall": { "_about": "стена с ТВ: край комнаты room по оси (x1 = правая стена, грань смотрит в −X)", "edge": "x1" },
+  "clearance": { "passage": 0.90, "wallMargin": 0.02, "doorSwing": true, "tvAboveConsole": 0.06 },
+  "extraObstacles": [
+    { "id": "panel_radiator", "_about": "низкий радиатор справа от балконной двери (model.js buildFixtures)", "x0": 5.62, "x1": 6.02, "z0": 0.0, "z1": 0.16 }
+  ],
+
+  "sofas": {
+    "_about": "w — длина вдоль спинки, d — глубина основного блока, h — по спинке, seatH — по сиденью. chaise — оттоманка углового (side: left/right — с какой руки сидящего).",
+    "straight3":   { "w": 2.20, "d": 0.95, "h": 0.84, "seatH": 0.45, "cushionH": 0.16, "legH": 0.12, "armW": 0.18, "armH": 0.62, "backD": 0.20, "backFrameH": 0.70, "backCushionD": 0.18, "backTilt": 0.14, "seats": 3 },
+    "straight2":   { "w": 1.80, "d": 0.90, "h": 0.82, "seatH": 0.45, "cushionH": 0.16, "legH": 0.12, "armW": 0.16, "armH": 0.60, "backD": 0.19, "backFrameH": 0.68, "backCushionD": 0.17, "backTilt": 0.14, "seats": 2 },
+    "corner-l":    { "w": 2.60, "d": 0.95, "h": 0.84, "seatH": 0.45, "cushionH": 0.16, "legH": 0.12, "armW": 0.18, "armH": 0.62, "backD": 0.20, "backFrameH": 0.70, "backCushionD": 0.18, "backTilt": 0.14, "seats": 2, "chaise": { "w": 0.95, "d": 1.60, "side": "left" } },
+    "corner-r":    { "w": 2.60, "d": 0.95, "h": 0.84, "seatH": 0.45, "cushionH": 0.16, "legH": 0.12, "armW": 0.18, "armH": 0.62, "backD": 0.20, "backFrameH": 0.70, "backCushionD": 0.18, "backTilt": 0.14, "seats": 2, "chaise": { "w": 0.95, "d": 1.60, "side": "right" } },
+    "modular-low": { "w": 2.40, "d": 1.05, "h": 0.68, "seatH": 0.38, "cushionH": 0.18, "legH": 0.04, "plinth": true, "armW": 0.28, "armH": 0.50, "backD": 0.22, "backFrameH": 0.50, "backCushionD": 0.24, "backTilt": 0.10, "seats": 2 }
+  },
+
+  "tv": {
+    "_about": "Экран 16:9 по диагонали в дюймах. Глубина панели как у OLED, сзади короб электроники. mountGap — кронштейн. y — центр экрана.",
+    "bezel": 0.006, "depth": 0.026, "backDepth": 0.03, "mountGap": 0.02,
+    "standH": 0.065, "floorStandD": 0.35, "yMin": 0.60, "yMax": 1.80
+  },
+
+  "consoles": {
+    "_about": "h — верх тумбы от пола. base: plinth (утопленный цоколь), wall (подвесная, низ на mountY), legs (ножки baseH).",
+    "low-long": { "d": 0.40, "h": 0.45, "base": "plinth", "baseH": 0.06, "wallGap": 0.015 },
+    "floating": { "d": 0.38, "h": 0.32, "base": "wall", "mountY": 0.26, "wallGap": 0.003 },
+    "legs":     { "d": 0.42, "h": 0.52, "base": "legs", "baseH": 0.18, "wallGap": 0.015 }
+  },
+  "consoleW": { "min": 1.20, "max": 2.80, "step": 0.10 },
+
+  "rug": { "thickness": 0.012, "underSofa": 0.55, "sizes": { "240x170": [2.40, 1.70], "300x200": [3.00, 2.00], "340x240": [3.40, 2.40] } },
+
+  "tables": {
+    "_about": "w — по длинной стороне (параллельно дивану при tableRot = 0), d — поперёк, h — высота.",
+    "round": { "w": 0.75, "d": 0.75, "h": 0.38 },
+    "oval":  { "w": 1.20, "d": 0.65, "h": 0.36 },
+    "rect":  { "w": 1.10, "d": 0.60, "h": 0.38 }
+  }
+}

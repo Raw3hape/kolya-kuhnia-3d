@@ -1,0 +1,447 @@
+{
+ "_note": "Real floor tiles from carrea.pl, collected 2026-11-15 for the floor material configurator. Faces are the shop's flat straight-on product images (largest available, no room scenes). face_is_full_tile=true means the image is (or very likely is) one whole tile face at the right aspect ratio; false means a crop or a face of a different format, see notes. Most scans are seamless, so tile edges are not drawn in the image. finish: 'natural' = manufacturer's 'naturale' matte surface, 'mat' = matte. price_pln_m2 is the shop's current price per m² incl. VAT (null = price on request). Shop wording kept in color_pl / availability_pl.",
+ "source": "carrea.pl",
+ "tiles": [
+  {
+   "id": "carrea_medley_white_rock_60",
+   "name": "Medley White Rock 60×60",
+   "brand": "Emil Ceramica",
+   "url": "https://www.carrea.pl/produkty/medley-white-rock-60x60-plytka-lastryko-23974",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 9.5,
+   "finish": "natural",
+   "rectified": true,
+   "cat": "terrazzo",
+   "faces": [
+    "source/refs/tiles/carrea/medley-white-rock-60/face-1.jpg",
+    "source/refs/tiles/carrea/medley-white-rock-60/face-2.jpg",
+    "source/refs/tiles/carrea/medley-white-rock-60/face-3.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 129.0,
+   "color_pl": "Biały",
+   "availability_pl": "Produkt na wyczerpaniu",
+   "notes": "Ergon (Emil Group). White terrazzo with large white marble shards on light ground; 28 random face patterns in production. face-1 = 60×60 face (506 px, low-res). face-2/3 = left/right halves of the 1200×600 face of the sibling Medley White Rock 60×120 (same design and scale), added for variation. Scans are seamless, tile edges not visible. Listed as 'produkt na wyczerpaniu' (running out). Old price 169 zł/m², 129 zł/m² is a promo."
+  },
+  {
+   "id": "carrea_medley_white_minimal_60",
+   "name": "Medley White Minimal 60×60",
+   "brand": "Emil Ceramica",
+   "url": "https://www.carrea.pl/produkty/medley-white-minimal-60x60-plytka-lastryko-23908",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 9.5,
+   "finish": "natural",
+   "rectified": true,
+   "cat": "terrazzo",
+   "faces": [
+    "source/refs/tiles/carrea/medley-white-minimal-60/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 129.0,
+   "color_pl": "Biały",
+   "availability_pl": "Mała ilość na magazynie",
+   "notes": "Ergon (Emil Group). Base tile of the Medley family, almost plain warm white with micro grain; quiet companion to White Rock. Seamless scan, 600 px."
+  },
+  {
+   "id": "carrea_miscela_nacar_60",
+   "name": "Miscela Nacar 60×60",
+   "brand": "Arcana",
+   "url": "https://www.carrea.pl/produkty/miscela-nacar-60x60-plytka-lastryko-14403",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 10.0,
+   "finish": "mat",
+   "rectified": false,
+   "cat": "terrazzo",
+   "faces": [
+    "source/refs/tiles/carrea/miscela-nacar-60/face-1.jpg",
+    "source/refs/tiles/carrea/miscela-nacar-60/face-2.jpg",
+    "source/refs/tiles/carrea/miscela-nacar-60/face-3.jpg",
+    "source/refs/tiles/carrea/miscela-nacar-60/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 105.0,
+   "color_pl": "Biały",
+   "availability_pl": "Duża ilość na magazynie",
+   "notes": "Arcana. Light grey-white fine terrazzo with small chips and few larger pale shards. face-1 = flat 600 px face; face-2..4 = three separate tiles cut from the shop's 3×3 layout image (180×180 cm), grout trimmed, 585 px each, so they show real face variation. Not rectified."
+  },
+  {
+   "id": "carrea_lombarda_bianco_60x120",
+   "name": "Lombarda Bianco 60×120 mat",
+   "brand": "Emil Ceramica",
+   "url": "https://www.carrea.pl/produkty/lombarda-bianco-60x120-mat-plytka-imitujaca-lastryko-29819",
+   "size_m": [
+    0.6,
+    1.2
+   ],
+   "thickness_mm": 9.5,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "terrazzo",
+   "faces": [
+    "source/refs/tiles/carrea/lombarda-bianco-60x120/face-1.jpg"
+   ],
+   "face_is_full_tile": false,
+   "price_pln_m2": 154.0,
+   "color_pl": "Biały",
+   "availability_pl": "Produkt na wyczerpaniu",
+   "notes": "Ergon (Emil Group). Light grey ceppo-style terrazzo with mixed pebble sizes. Only image is a 1920×800 crop from the 90×90 face, so it is a crop, not a whole 60×120 tile. Running out."
+  },
+  {
+   "id": "carrea_flodsten_artic_60",
+   "name": "Flodsten Artic 60×60",
+   "brand": "Argenta",
+   "url": "https://www.carrea.pl/produkty/flodsten-artic-60x60-plytki-lastryko-7040",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": null,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "terrazzo",
+   "faces": [
+    "source/refs/tiles/carrea/flodsten-artic-60/face-1.jpg"
+   ],
+   "face_is_full_tile": false,
+   "price_pln_m2": 35.0,
+   "color_pl": "Beżowy",
+   "availability_pl": "Produkt na wyczerpaniu",
+   "notes": "Argenta. Off-white ceppo-style terrazzo, soft grey chips. Only flat image is a 425 px crop (low-res); other shop images are angled studio photos of the tile and were skipped. Very cheap (35 zł/m²), running out."
+  },
+  {
+   "id": "carrea_genoa_grey_60",
+   "name": "Genoa Grey 60×60",
+   "brand": "PŁYTOMEX",
+   "url": "https://www.carrea.pl/produkty/genoa-grey-60x60-plytka-lastryko-29002",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": null,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "terrazzo",
+   "faces": [
+    "source/refs/tiles/carrea/genoa-grey-60/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 99.0,
+   "color_pl": "Szary",
+   "availability_pl": "Duża ilość na magazynie",
+   "notes": "Płytomex. Mid grey fine-grain terrazzo / concrete look with dark specks. Face cut from a straight-on studio photo of one whole tile on white (bounding box, 4% inset), 2484 px. Photo has a light hotspot in the centre and slight perspective; flatten the lighting before tiling."
+  },
+  {
+   "id": "carrea_ground_perla_120",
+   "name": "Ground Perla 120×120",
+   "brand": "Geotiles",
+   "url": "https://www.carrea.pl/produkty/ground-perla-120x120-plytka-imitujaca-beton-10551",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": null,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/carrea/ground-perla-120/face-1.jpg"
+   ],
+   "face_is_full_tile": false,
+   "price_pln_m2": 118.0,
+   "color_pl": "Szary",
+   "availability_pl": "Średnia ilość na magazynie",
+   "notes": "Geotiles. Light pearl-grey cement look, soft clouding. The shop image is the 60×60 face of the same series (file '60x60-ground-perla'), 800 px; scale accordingly (it covers 60 cm, not 120)."
+  },
+  {
+   "id": "carrea_ground_gris_120",
+   "name": "Ground Gris 120×120",
+   "brand": "Geotiles",
+   "url": "https://www.carrea.pl/produkty/ground-gris-120x120-plytka-imitujaca-beton-10550",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": null,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/carrea/ground-gris-120/face-1.jpg"
+   ],
+   "face_is_full_tile": false,
+   "price_pln_m2": 146.0,
+   "color_pl": "Szary",
+   "availability_pl": "Mała ilość na magazynie",
+   "notes": "Geotiles. Mid grey cement look with darker trowel clouds. 1000 px image named '120x120_90x90', unclear if whole 120 face or 90 crop."
+  },
+  {
+   "id": "carrea_asphalt_off_white_120",
+   "name": "Asphalt Off-White 120×120",
+   "brand": "Baldocer",
+   "url": "https://www.carrea.pl/produkty/asphalt-off-white-120x120-plytka-imitujaca-beton-28409",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": null,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/carrea/asphalt-off-white-120/face-1.jpg"
+   ],
+   "face_is_full_tile": false,
+   "price_pln_m2": 124.0,
+   "color_pl": "Biały",
+   "availability_pl": "Średnia ilość na magazynie",
+   "notes": "Baldocer. Warm off-white micro-concrete with fine aggregate specks. 808 px square of unclear origin (likely a crop), no edges visible."
+  },
+  {
+   "id": "carrea_claire_cemento_100",
+   "name": "Claire Cemento mat 100×100",
+   "brand": "Carrea",
+   "url": "https://www.carrea.pl/produkty/claire-cemento-mat-100x100-plytka-imitujaca-beton-34330",
+   "size_m": [
+    1.0,
+    1.0
+   ],
+   "thickness_mm": null,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/carrea/claire-cemento-100/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 77.0,
+   "color_pl": "Szary",
+   "availability_pl": "Produkt na wyczerpaniu",
+   "notes": "Carrea own brand. Mid/dark grey cement with pinholes and clouding; the darker concrete option. 3543 px square face, sharpest scan in the set. Running out."
+  },
+  {
+   "id": "carrea_purestone_white_120",
+   "name": "Unique Infinity Purestone White Naturale 120×120",
+   "brand": "Emil Ceramica",
+   "url": "https://www.carrea.pl/produkty/unique-intensity-purestone-white-naturale-120x120-plytka-imitujaca-kamien-33266",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 9.0,
+   "finish": "natural",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/carrea/purestone-white-120/face-1.jpg"
+   ],
+   "face_is_full_tile": false,
+   "price_pln_m2": 169.0,
+   "color_pl": "Biały",
+   "availability_pl": "Duża ilość na magazynie",
+   "notes": "Emil Ceramica. Warm white limestone-look with fine fractures. Image is a 120×120 square cut from the 60×120 face (file name says so), 800 px."
+  },
+  {
+   "id": "carrea_mapierre_noble_blanc_120",
+   "name": "Mapierre Noble Blanc Naturale 120×120",
+   "brand": "Emil Ceramica",
+   "url": "https://www.carrea.pl/produkty/mapierre-noble-blanc-naturale-120x120-plytka-imitujaca-kamien-32546",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 9.5,
+   "finish": "natural",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/carrea/mapierre-noble-blanc-120/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 155.0,
+   "color_pl": "Biały",
+   "availability_pl": "Duża ilość na magazynie",
+   "notes": "Emil Ceramica. Light beige-white French limestone look with fossil texture. 800 px manufacturer face of the 120×120 (seamless, edges not visible)."
+  },
+  {
+   "id": "carrea_lavica_pearl_100",
+   "name": "Pietre Maxfine Lavica Pearl Naturale 100×100",
+   "brand": "Iris Ceramica",
+   "url": "https://www.carrea.pl/produkty/pietre-maxfine-lavica-pearl-naturale-100x100-plytka-imitujaca-kamien-34340",
+   "size_m": [
+    1.0,
+    1.0
+   ],
+   "thickness_mm": 6.0,
+   "finish": "natural",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/carrea/lavica-pearl-100/face-1.jpg",
+    "source/refs/tiles/carrea/lavica-pearl-100/face-2.jpg",
+    "source/refs/tiles/carrea/lavica-pearl-100/face-3.jpg",
+    "source/refs/tiles/carrea/lavica-pearl-100/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 232.0,
+   "color_pl": "Beżowy",
+   "availability_pl": "Średnia ilość na magazynie",
+   "notes": "Iris Ceramica (Maxfine). Pearl/ivory sandstone-look with soft horizontal veining. 4 different manufacturer faces, 1000 px each. Thin 6 mm slab."
+  },
+  {
+   "id": "carrea_lavica_grey_100",
+   "name": "Pietre Maxfine Lavica Grey Naturale 100×100",
+   "brand": "Iris Ceramica",
+   "url": "https://www.carrea.pl/produkty/pietre-maxfine-lavica-grey-naturale-100x100-plytka-imitujaca-kamien-34349",
+   "size_m": [
+    1.0,
+    1.0
+   ],
+   "thickness_mm": 6.0,
+   "finish": "natural",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/carrea/lavica-grey-100/face-1.jpg",
+    "source/refs/tiles/carrea/lavica-grey-100/face-2.jpg",
+    "source/refs/tiles/carrea/lavica-grey-100/face-3.jpg",
+    "source/refs/tiles/carrea/lavica-grey-100/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 222.0,
+   "color_pl": "Szary",
+   "availability_pl": "Średnia ilość na magazynie",
+   "notes": "Iris Ceramica (Maxfine). Mid grey sandstone-look with horizontal bands. 4 different manufacturer faces, 1000 px each. Thin 6 mm slab."
+  },
+  {
+   "id": "carrea_boost_icor_bone_120",
+   "name": "Boost Icor Bone 120×120 Matte Sensitech",
+   "brand": "Atlas Concorde",
+   "url": "https://www.carrea.pl/produkty/boost-icor-bone-120x120-matte-sensitech-plytka-imitujaca-kamien-39751",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 9.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/carrea/boost-icor-bone-120/face-1.jpg",
+    "source/refs/tiles/carrea/boost-icor-bone-120/face-2.jpg",
+    "source/refs/tiles/carrea/boost-icor-bone-120/face-3.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": null,
+   "color_pl": "Beżowy",
+   "availability_pl": "Średnia ilość na magazynie",
+   "notes": "Atlas Concorde. Ivory/bone limestone look, very calm. 3 different faces, 1280 px. Price on request in the shop."
+  },
+  {
+   "id": "carrea_blade_grafito_100",
+   "name": "Blade Grafito mate 100×100",
+   "brand": "Alaplana",
+   "url": "https://www.carrea.pl/produkty/blade-grafito-mate-100x100-plytka-imitujaca-kamien-29021",
+   "size_m": [
+    1.0,
+    1.0
+   ],
+   "thickness_mm": 10.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/carrea/blade-grafito-100/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 85.0,
+   "color_pl": "Grafitowy",
+   "availability_pl": "Średnia ilość na magazynie",
+   "notes": "Alaplana. Dark graphite slate/marble look with thin white veins; the dark option. 700 px face."
+  },
+  {
+   "id": "carrea_mimesis_ecru_20x120",
+   "name": "Mimesis Ecru 20×120",
+   "brand": "Emil Ceramica",
+   "url": "https://www.carrea.pl/produkty/mimesis-ecru-19-7x119-5-plytka-drewnopodobna-19650",
+   "size_m": [
+    0.197,
+    1.195
+   ],
+   "thickness_mm": 9.5,
+   "finish": "natural",
+   "rectified": true,
+   "cat": "wood",
+   "faces": [
+    "source/refs/tiles/carrea/mimesis-ecru-20x120/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 126.0,
+   "color_pl": "Beżowy",
+   "availability_pl": "Średnia ilość na magazynie",
+   "notes": "Emil Ceramica. Light-natural oak plank, warm. One whole plank, 1315×219 px (real size 19.7×119.5 cm)."
+  },
+  {
+   "id": "carrea_log_select_ivory_20x120",
+   "name": "Log Select Ivory Pure 20×120 Matte Sensitech",
+   "brand": "Atlas Concorde",
+   "url": "https://www.carrea.pl/produkty/log-select-ivory-pure-20x120-matte-sensitech-plytka-drewnopodobna-42428",
+   "size_m": [
+    0.2,
+    1.2
+   ],
+   "thickness_mm": 9.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "wood",
+   "faces": [
+    "source/refs/tiles/carrea/log-select-ivory-20x120/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": null,
+   "color_pl": "Beżowy",
+   "availability_pl": "Produkt pod zamówienie,",
+   "notes": "Atlas Concorde. Pale ivory oak plank, Scandinavian look. One whole plank, 2560×427 px. Made to order, price on request."
+  },
+  {
+   "id": "domus_manhattan_floor_white_60",
+   "name": "Manhattan Floor White AS Rect. 60×60",
+   "brand": "Peronda",
+   "url": "https://domus-sklep.pl/plytki-podlogowe-imitujace-jasny-beton-manhattan-floor-white-as-rect-60x60",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 9.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/manhattan-floor-white-60/face-1.jpg",
+    "source/refs/tiles/manhattan-floor-white-60/face-2.jpg",
+    "source/refs/tiles/manhattan-floor-white-60/face-3.jpg",
+    "source/refs/tiles/manhattan-floor-white-60/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 169.0,
+   "color_pl": "Biały",
+   "availability_pl": "Na zamówienie (~14 dni)",
+   "n": [
+    4,
+    4
+   ],
+   "rough": 0.75,
+   "grout": "#cac9c5",
+   "gain": 0.8,
+   "notes": "Shop: domus-sklep.pl (not carrea; page behind Cloudflare, price from search snippets, 182,52 zł per 1.08 m² box). Peronda Manhattan Floor, code 34873, AS = 'All in One' matt slip-resistant finish. Light-grey concrete with fine aggregate. face-1/2 = 60×60 faces cr26/cr03 (estile.pl, eplytki24.pl), face-3/4 = halves of the 60×120 White AS face cr12 (alewnetrze.com.pl), same scale. Scans are over-exposed, gain 0.8 matches the shop room photo. Sources: source/refs/tiles/manhattan-floor-white-60/SOURCE.md."
+  }
+ ]
+}

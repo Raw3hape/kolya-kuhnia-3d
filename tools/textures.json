@@ -1,0 +1,230 @@
+{
+  "_note": "Список текстур. Все CC0. tools/fetch_textures.py скачивает их в web/textures/<id>/ (color.jpg, normal.jpg, rough.jpg). Процедурные генерирует tools/make_procedural.py.",
+  "polyhaven": [
+    {
+      "id": "laminate_floor_02",
+      "res": "2k"
+    },
+    {
+      "id": "wood_floor",
+      "res": "2k"
+    },
+    {
+      "id": "herringbone_parquet",
+      "res": "2k"
+    },
+    {
+      "id": "oak_veneer_01",
+      "res": "2k"
+    },
+    {
+      "id": "white_oak_veneer",
+      "res": "2k"
+    },
+    {
+      "id": "washed_grey_oak_veneer",
+      "res": "2k"
+    },
+    {
+      "id": "smoked_walnut_veneer",
+      "res": "2k"
+    },
+    {
+      "id": "black_oak_veneer",
+      "res": "2k"
+    },
+    {
+      "id": "marble_01",
+      "res": "2k"
+    },
+    {
+      "id": "white_stucco",
+      "res": "1k"
+    },
+    {
+      "id": "plastered_wall_04",
+      "res": "1k"
+    },
+    {
+      "id": "grey_plaster",
+      "res": "1k"
+    },
+    {
+      "id": "long_white_tiles",
+      "res": "1k"
+    },
+    {
+      "id": "oak_veneer_02",
+      "res": "2k"
+    },
+    {
+      "id": "oak_veneer_04",
+      "res": "2k"
+    },
+    {
+      "id": "ash_veneer",
+      "res": "2k"
+    },
+    {
+      "id": "white_maple_veneer",
+      "res": "2k"
+    },
+    {
+      "id": "grey_oak_veneer_01",
+      "res": "2k"
+    },
+    {
+      "id": "silver_oak_veneer_01",
+      "res": "2k"
+    },
+    {
+      "id": "mocha_oak_veneer",
+      "res": "2k"
+    },
+    {
+      "id": "natural_walnut_veneer",
+      "res": "2k"
+    },
+    {
+      "id": "smooth_concrete_floor",
+      "res": "2k"
+    },
+    {
+      "id": "scuffed_cement",
+      "res": "2k"
+    }
+  ],
+  "ambientcg": [
+    {
+      "id": "Marble019",
+      "res": "2K"
+    },
+    {
+      "id": "Marble012",
+      "res": "2K"
+    },
+    {
+      "id": "Marble017",
+      "res": "2K"
+    },
+    {
+      "id": "Travertine004",
+      "res": "2K"
+    },
+    {
+      "id": "Terrazzo011",
+      "res": "2K"
+    },
+    {
+      "id": "Terrazzo013",
+      "res": "2K"
+    },
+    {
+      "id": "Concrete046",
+      "res": "2K"
+    },
+    {
+      "id": "Concrete048",
+      "res": "2K"
+    },
+    {
+      "id": "Concrete030",
+      "res": "2K"
+    },
+    {
+      "id": "Concrete015",
+      "res": "2K"
+    },
+    {
+      "id": "Concrete014",
+      "res": "2K"
+    },
+    {
+      "id": "Concrete034",
+      "res": "2K"
+    },
+    {
+      "id": "Tiles107",
+      "res": "2K"
+    },
+    {
+      "id": "Tiles108",
+      "res": "2K"
+    },
+    {
+      "id": "Tiles141",
+      "res": "2K"
+    },
+    {
+      "id": "Tiles142",
+      "res": "2K"
+    },
+    {
+      "id": "Tiles139",
+      "res": "2K"
+    },
+    {
+      "id": "Tiles071",
+      "res": "2K"
+    },
+    {
+      "id": "Tiles072",
+      "res": "2K"
+    },
+    {
+      "id": "Tiles036",
+      "res": "2K"
+    }
+  ],
+  "hdri": [
+    {
+      "id": "hay_bales",
+      "res": "2k",
+      "as": "day",
+      "why": "Польша (Судеты, 50.5° с. ш.), сжатое поле как на фото из окна, ровный горизонт, солнце с облаками"
+    },
+    {
+      "id": "farmland_overcast",
+      "res": "2k",
+      "as": "overcast",
+      "why": "Польша (Опольское, 50.4° с. ш.), плоская пашня, сплошная облачность"
+    },
+    {
+      "id": "evening_field",
+      "res": "1k",
+      "as": "evening",
+      "why": "сухое поле в сумерках, ровный горизонт; вечером небо почти не светит, хватит 1k"
+    }
+  ],
+  "generated": [
+    {"id": "g_plank_oak_bleached", "pattern": "planks", "base": "silver_oak_veneer_01", "L": 2.2, "w": 0.2, "color": "#d9cbb6", "rough": 0.55, "grain": 0.09},
+    {"id": "g_plank_oak_natural", "pattern": "planks", "base": "oak_veneer_02", "L": 2.2, "w": 0.2, "color": "#c19a6b", "rough": 0.5, "grain": 0.13},
+    {"id": "g_plank_oak_honey", "pattern": "planks", "base": "oak_veneer_04", "L": 2.2, "w": 0.2, "color": "#b5834f", "rough": 0.5, "grain": 0.13},
+    {"id": "g_plank_ash", "pattern": "planks", "base": "ash_veneer", "L": 2.2, "w": 0.2, "color": "#d6c3a5", "rough": 0.5, "grain": 0.12},
+    {"id": "g_plank_maple", "pattern": "planks", "base": "white_maple_veneer", "L": 2.2, "w": 0.2, "color": "#e2cfae", "rough": 0.5, "grain": 0.07},
+    {"id": "g_plank_oak_grey", "pattern": "planks", "base": "grey_oak_veneer_01", "L": 2.2, "w": 0.2, "color": "#a89d90", "rough": 0.55, "grain": 0.11},
+    {"id": "g_plank_oak_smoked", "pattern": "planks", "base": "mocha_oak_veneer", "L": 2.2, "w": 0.2, "color": "#6e5644", "rough": 0.5, "grain": 0.14},
+    {"id": "g_plank_walnut", "pattern": "planks", "base": "natural_walnut_veneer", "L": 2.2, "w": 0.2, "color": "#6b4a35", "rough": 0.45, "grain": 0.2},
+    {"id": "g_plank_oak_wide", "pattern": "planks", "base": "oak_veneer_01", "L": 3.0, "w": 0.3, "color": "#c6a27a", "rough": 0.5, "grain": 0.14},
+    {"id": "g_herring_oak_light", "pattern": "herringbone", "base": "silver_oak_veneer_01", "L": 0.6, "w": 0.12, "color": "#d4c0a2", "rough": 0.55, "grain": 0.09},
+    {"id": "g_herring_oak_natural", "pattern": "herringbone", "base": "oak_veneer_02", "L": 0.6, "w": 0.12, "color": "#bf976a", "rough": 0.5, "grain": 0.13},
+    {"id": "g_herring_oak_smoked", "pattern": "herringbone", "base": "mocha_oak_veneer", "L": 0.6, "w": 0.12, "color": "#725a47", "rough": 0.5, "grain": 0.14},
+    {"id": "g_chevron_oak_light", "pattern": "chevron", "base": "oak_veneer_04", "L": 0.6, "w": 0.12, "color": "#d0b893", "rough": 0.5, "grain": 0.1},
+    {"id": "g_chevron_oak_grey", "pattern": "chevron", "base": "grey_oak_veneer_01", "L": 0.6, "w": 0.12, "color": "#b0a597", "rough": 0.55, "grain": 0.11},
+    {"id": "g_mc_white", "pattern": "solid", "base": "Concrete034", "color": "#e6e3dd", "contrast": 0.35, "rough": 0.6},
+    {"id": "g_mc_sand", "pattern": "solid", "base": "Concrete048", "color": "#d6cbb8", "contrast": 0.5, "rough": 0.6},
+    {"id": "g_mc_grey", "pattern": "solid", "base": "Concrete014", "color": "#b4b2ad", "contrast": 0.6, "rough": 0.6},
+    {"id": "g_conc_graphite", "pattern": "solid", "base": "Concrete015", "color": "#6d6c69", "contrast": 0.7, "rough": 0.55},
+    {"id": "g_conc_polished", "pattern": "solid", "base": "Concrete030", "color": "#9d9a95", "contrast": 0.7, "rough": 0.35},
+    {"id": "g_tile_conc_light_60", "pattern": "tiles", "base": "Concrete014", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "color": "#cfccc6", "grout": "#bdb9b2", "contrast": 0.5, "rough": 0.65},
+    {"id": "g_tile_conc_grey_120x60", "pattern": "tiles", "base": "Concrete030", "tw": 1.2, "th": 0.6, "nx": 2, "ny": 4, "color": "#a3a09b", "grout": "#8f8c87", "contrast": 0.6, "rough": 0.6},
+    {"id": "g_tile_warm_120", "pattern": "tiles", "base": "Concrete048", "tw": 1.2, "th": 1.2, "nx": 2, "ny": 2, "color": "#d8d0c4", "grout": "#c5bdb1", "contrast": 0.5, "rough": 0.6},
+    {"id": "g_tile_graphite_60", "pattern": "tiles", "base": "Concrete015", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "color": "#5e5d5b", "grout": "#454443", "contrast": 0.6, "rough": 0.55},
+    {"id": "g_tile_white_60", "pattern": "tiles", "base": "Concrete034", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "color": "#ecebe8", "grout": "#d9d7d2", "contrast": 0.4, "rough": 0.6},
+    {"id": "g_tile_travertine_60x120", "pattern": "tiles", "base": "Travertine004", "tw": 1.2, "th": 0.6, "nx": 2, "ny": 4, "bond": 0.5, "rot": [0, 180], "color": "#d9c9b0", "grout": "#cbbda6", "contrast": 0.75, "chroma": 0.4, "rough": 0.5},
+    {"id": "g_tile_terrazzo_60", "pattern": "tiles", "base": "Terrazzo013", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "grade": false, "grout": "#d4cfc7", "rough": 0.35},
+    {"id": "g_tile_marble_60", "pattern": "tiles", "base": "Marble019", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "grade": false, "grout": "#dcdad6", "rough": 0.2},
+    {"id": "g_tile_limestone_60", "pattern": "tiles", "base": "Concrete048", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "color": "#ddd5c8", "grout": "#cdc5b8", "contrast": 0.45, "rough": 0.6},
+    {"id": "g_tile_halcon_torcello_60", "pattern": "photo", "name": "Halcon Doge Torcello mat 60x60", "faces": ["source/refs/tiles/halcon-doge-torcello-60x60.png"], "size_m": [0.6, 0.6], "n": [3, 3], "finish": "mat", "rough": 0.7, "grout": "#c8c7c3", "gain": 0.85}
+  ]
+}

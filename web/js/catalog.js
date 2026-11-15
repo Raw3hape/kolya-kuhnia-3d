@@ -1,0 +1,335 @@
+// Каталог материалов, слотов и готовых сочетаний.
+// tex — папка web/textures/<tex>/ (color.jpg, normal.jpg, rough.jpg, thumb.jpg), size — метры на один повтор.
+// gen: true — текстура сгенерирована, рядом лежит meta.json {size, sizeV, rough}: размер берётся оттуда,
+//   rough из каталога (если есть) умножается на meta.rough.
+// color — однотонный материал (краска, лак). Для краски normal берётся у штукатурки white_stucco.
+// cat — категория пола для фильтра: wood | concrete | tile | stone.
+// rotation / rotate — собственный поворот текстуры (ёлочка нарисована по осям, кладётся под 45°).
+//
+// ВАЖНО: код варианта (#v2-…) хранит номер материала в группе. Новые материалы добавлять
+// только в КОНЕЦ группы, старые не удалять и не переставлять, иначе сохранённые варианты поедут.
+
+// Слоты: id = поле состояния и userData.slot в 3D. sec — раздел панели, short — подпись внутри раздела.
+// same — «как у другого слота» (значение 'same' в состоянии).
+export const SLOTS = [
+  { id: 'floorA',     label: 'Пол: вход и кухня',   short: 'Вход и кухня',   group: 'floor',      sec: 'floor' },
+  { id: 'floorB',     label: 'Пол: гостиная',       short: 'Гостиная',       group: 'floor',      sec: 'floor' },
+  { id: 'floorRoom2', label: 'Пол: комната 2',      short: 'Комната 2',      group: 'floor',      sec: 'floor', same: 'floorB', sameName: 'Как в гостиной' },
+  { id: 'floorRoom3', label: 'Пол: комната 3',      short: 'Комната 3',      group: 'floor',      sec: 'floor', same: 'floorB', sameName: 'Как в гостиной' },
+  { id: 'floorBath',  label: 'Пол: ванная',         short: 'Ванная',         group: 'bathFloor',  sec: 'floor', locked: true, lockedText: 'Пол ванной: уже уложен · плитка 20×20, чёрно-белые треугольники' },
+  { id: 'walls',      label: 'Стены: кухня и холл', short: 'Кухня и холл',   group: 'walls',      sec: 'walls' },
+  { id: 'wallAccent', label: 'Стена у дивана/ТВ',   short: 'У дивана и ТВ',  group: 'walls',      sec: 'walls', same: 'walls', sameName: 'Как стены' },
+  { id: 'wallsRoom2', label: 'Стены: комната 2',    short: 'Комната 2',      group: 'walls',      sec: 'walls', same: 'walls', sameName: 'Как в гостиной' },
+  { id: 'wallsRoom3', label: 'Стены: комната 3',    short: 'Комната 3',      group: 'walls',      sec: 'walls', same: 'walls', sameName: 'Как в гостиной' },
+  { id: 'wallsBath',  label: 'Стены ванной: краска (плитка уже уложена)', short: 'Ванная',         group: 'bathWalls',  sec: 'walls' },
+  { id: 'counter',    label: 'Столешница',          short: 'Столешница',     group: 'stone',      sec: 'kitchen' },
+  { id: 'fronts',     label: 'Фасады кухни',        short: 'Фасады',         group: 'fronts',     sec: 'kitchen' },
+  { id: 'island',     label: 'Фасады острова',      short: 'Фасады острова', group: 'fronts',     sec: 'kitchen', same: 'fronts', sameName: 'Как фасады кухни' },
+  { id: 'islandTop',  label: 'Столешница острова',  short: 'Столешница острова', group: 'stone',  sec: 'kitchen', same: 'counter', sameName: 'Как столешница кухни' },
+  { id: 'backsplash', label: 'Фартук',              short: 'Фартук',         group: 'backsplash', sec: 'kitchen' },
+  { id: 'metal',      label: 'Смеситель и ручки',   short: 'Металл',         group: 'metal',      sec: 'kitchen' },
+  { id: 'doors',      label: 'Межкомнатные двери',  short: 'Полотна',        group: 'doors',      sec: 'doors' },
+];
+
+export const FLOOR_CATS = [
+  { id: 'all', name: 'Все' }, { id: 'shop', name: 'Магазины' }, { id: 'wood', name: 'Дерево' }, { id: 'concrete', name: 'Бетон' },
+  { id: 'tile', name: 'Плитка' }, { id: 'stone', name: 'Камень' },
+];
+
+const PAINT_NORMAL = { normal: 'white_stucco', normalScale: 0.18, size: 1.6 };
+const paint = (id, name, color, extra = {}) => ({ id, name, color, rough: 0.92, ...PAINT_NORMAL, ...extra });
+const G = (id, name, cat, extra = {}) => ({ id, name, tex: id, gen: true, cat, ...extra });
+const HERRING = Math.PI / 4;   // ёлочка в текстуре нарисована по осям
+
+// Плитка и камень, общие для пола в квартире и ванной
+const T = {
+  white125: { id: 'Tiles107', name: 'Плитка белая 12,5×12,5', tex: 'Tiles107', size: 1.0, rough: 0.4, cat: 'tile' },
+  black125: { id: 'Tiles108', name: 'Плитка чёрная 12,5×12,5', tex: 'Tiles108', size: 1.0, rough: 0.45, cat: 'tile' },
+  hexW:     { id: 'Tiles071', name: 'Шестигранник белый', tex: 'Tiles071', size: 0.45, rough: 0.4, cat: 'tile' },
+  hexB:     { id: 'Tiles072', name: 'Шестигранник чёрный', tex: 'Tiles072', size: 0.45, rough: 0.45, cat: 'tile' },
+  square:   { id: 'Tiles036', name: 'Плитка белая квадрат', tex: 'Tiles036', size: 1.0, rough: 0.35, cat: 'tile' },
+  stoneW:   { id: 'Tiles141', name: 'Камень белый 50×50', tex: 'Tiles141', size: 2.0, rough: 0.6, cat: 'stone' },
+  limeB:    { id: 'Tiles142', name: 'Известняк беж 50×50', tex: 'Tiles142', size: 2.0, rough: 0.6, cat: 'stone' },
+  cream:    { id: 'Tiles139', name: 'Камень кремовый 50×50', tex: 'Tiles139', size: 2.0, rough: 0.6, cat: 'stone' },
+};
+
+export const MATERIALS = {
+  // Пол: порядок в панели задаёт фильтр по категориям, порядок здесь — только для кода варианта.
+  floor: [
+    { id: 'oak-light',  name: 'Дуб светлый',         tex: 'laminate_floor_02',   size: 1.7, rough: 0.55, cat: 'wood', note: 'как в эскизе' },
+    { id: 'oak-nat',    name: 'Дуб натуральный',     tex: 'wood_floor',          size: 1.7, rough: 0.5,  cat: 'wood' },
+    { id: 'herring',    name: 'Ёлочка',              tex: 'herringbone_parquet', size: 3.4, rough: 0.45, cat: 'wood', tint: '#e9dccb' },
+    { id: 'microcem',   name: 'Микроцемент',         tex: 'grey_plaster',        size: 1.4, rough: 0.7,  cat: 'concrete', tint: '#d8d4cd' },
+    { id: 'terrazzo-f', name: 'Терраццо',            tex: 'Terrazzo013',         size: 1.2, rough: 0.35, cat: 'stone' },
+    { id: 'marble-f',   name: 'Керамогранит мрамор', tex: 'marble_01',           size: 1.5, rough: 0.25, cat: 'stone' },
+    { id: 'travert-f',  name: 'Травертин',           tex: 'Travertine004',       size: 1.4, rough: 0.5,  cat: 'stone' },
+    // дерево
+    G('g_plank_oak_bleached', 'Дуб беленый, доска', 'wood'),
+    G('g_plank_oak_natural',  'Дуб натуральный, доска', 'wood'),
+    G('g_plank_oak_honey',    'Дуб медовый, доска', 'wood'),
+    G('g_plank_ash',          'Ясень светлый', 'wood'),
+    G('g_plank_maple',        'Клён', 'wood'),
+    G('g_plank_oak_grey',     'Дуб серый', 'wood'),
+    G('g_plank_oak_smoked',   'Дуб копчёный', 'wood'),
+    G('g_plank_walnut',       'Орех', 'wood'),
+    G('g_plank_oak_wide',     'Дуб, широкая доска 30 см', 'wood'),
+    G('g_herring_oak_light',   'Ёлочка, светлый дуб', 'wood', { rotation: HERRING }),
+    G('g_herring_oak_natural', 'Ёлочка, натуральный дуб', 'wood', { rotation: HERRING }),
+    G('g_herring_oak_smoked',  'Ёлочка, копчёный дуб', 'wood', { rotation: HERRING }),
+    G('g_chevron_oak_light',   'Французская ёлка, светлый дуб', 'wood'),
+    G('g_chevron_oak_grey',    'Французская ёлка, серый дуб', 'wood'),
+    // бетон
+    G('g_mc_white',      'Микроцемент белый', 'concrete'),
+    G('g_mc_sand',       'Микроцемент песочный', 'concrete'),
+    G('g_mc_grey',       'Микроцемент светло-серый', 'concrete'),
+    G('g_conc_graphite', 'Бетон графит', 'concrete'),
+    G('g_conc_polished', 'Полированный бетон', 'concrete'),
+    { id: 'Concrete046',    name: 'Бетон светлый',    tex: 'Concrete046',    size: 2.4,  rough: 0.75, cat: 'concrete' },
+    { id: 'Concrete048',    name: 'Бетон бежевый',    tex: 'Concrete048',    size: 2.0,  rough: 0.75, cat: 'concrete' },
+    { id: 'Concrete014',    name: 'Бетон серый',      tex: 'Concrete014',    size: 2.0,  rough: 0.75, cat: 'concrete' },
+    { id: 'Concrete030',    name: 'Бетон тёплый серый', tex: 'Concrete030',  size: 2.0,  rough: 0.75, cat: 'concrete' },
+    { id: 'scuffed_cement', name: 'Цемент тёплый',    tex: 'scuffed_cement', size: 1.62, rough: 0.8,  cat: 'concrete' },
+    // плитка
+    G('g_tile_halcon_torcello_60', 'Halcon Doge Torcello мат 60×60', 'tile', { note: 'реальная плитка' }),
+    G('g_tile_white_60',         'Керамогранит белый мат 60×60', 'tile'),
+    G('g_tile_conc_light_60',    'Керамогранит под бетон, светлый 60×60', 'tile'),
+    G('g_tile_conc_grey_120x60', 'Керамогранит под бетон, серый 120×60', 'tile'),
+    G('g_tile_warm_120',         'Керамогранит тёплый беж 120×120', 'tile'),
+    G('g_tile_graphite_60',      'Керамогранит графит 60×60', 'tile'),
+    T.hexW, T.hexB, T.white125,
+    // камень
+    G('g_tile_limestone_60',     'Известняк 60×60', 'stone'),
+    G('g_tile_travertine_60x120','Травертин 60×120', 'stone'),
+    G('g_tile_terrazzo_60',      'Терраццо 60×60', 'stone'),
+    G('g_tile_marble_60',        'Мрамор 60×60', 'stone'),
+    T.stoneW, T.limeB, T.cream,
+    // реальная плитка из carrea.pl (tools/real_tiles.json → tools/make_floors.py); Genoa Grey и Log Select не взяты: плохие исходники
+    G('carrea_medley_white_rock_60', 'Medley White Rock 60×60', 'shop', { note: 'Carrea · 129 zł/m²' }),
+    G('carrea_medley_white_minimal_60', 'Medley White Minimal 60×60', 'shop', { note: 'Carrea · 129 zł/m²' }),
+    G('carrea_miscela_nacar_60', 'Miscela Nacar 60×60', 'shop', { note: 'Carrea · 105 zł/m²' }),
+    G('carrea_lombarda_bianco_60x120', 'Lombarda Bianco 60×120', 'shop', { note: 'Carrea · 154 zł/m²' }),
+    G('carrea_flodsten_artic_60', 'Flodsten Artic 60×60', 'shop', { note: 'Carrea · 35 zł/m²' }),
+    G('carrea_ground_perla_120', 'Ground Perla 120×120', 'shop', { note: 'Carrea · 118 zł/m²' }),
+    G('carrea_ground_gris_120', 'Ground Gris 120×120', 'shop', { note: 'Carrea · 146 zł/m²' }),
+    G('carrea_asphalt_off_white_120', 'Asphalt Off-White 120×120', 'shop', { note: 'Carrea · 124 zł/m²' }),
+    G('carrea_claire_cemento_100', 'Claire Cemento 100×100', 'shop', { note: 'Carrea · 77 zł/m²' }),
+    G('carrea_purestone_white_120', 'Purestone White 120×120', 'shop', { note: 'Carrea · 169 zł/m²' }),
+    G('carrea_mapierre_noble_blanc_120', 'Mapierre Noble Blanc 120×120', 'shop', { note: 'Carrea · 155 zł/m²' }),
+    G('carrea_lavica_pearl_100', 'Lavica Pearl 100×100', 'shop', { note: 'Carrea · 232 zł/m²' }),
+    G('carrea_lavica_grey_100', 'Lavica Grey 100×100', 'shop', { note: 'Carrea · 222 zł/m²' }),
+    G('carrea_boost_icor_bone_120', 'Boost Icor Bone 120×120', 'shop', { note: 'Carrea' }),
+    G('carrea_blade_grafito_100', 'Blade Grafito 100×100', 'shop', { note: 'Carrea · 85 zł/m²' }),
+    G('carrea_mimesis_ecru_20x120', 'Mimesis Ecru 20×120', 'shop', { note: 'Carrea · 126 zł/m²' }),
+    G('domus_manhattan_floor_white_60', 'Manhattan Floor White 60×60', 'shop', { note: 'Domus · 169 zł/m²' }),
+  ],
+  walls: [
+    paint('white-warm', 'Белый тёплый', '#f1ede6'),
+    paint('white-cool', 'Белый чистый', '#f4f5f4'),
+    paint('greige',     'Грейдж',       '#d7cfc3'),
+    paint('cashmere',   'Кашемир',      '#e3d6c6'),
+    paint('sage-w',     'Шалфей',       '#bcc4b1'),
+    paint('clay-w',     'Глина',        '#c9a991'),
+    paint('stone-grey', 'Тёплый серый', '#b9b3aa'),
+    { id: 'limewash',   name: 'Известковая штукатурка', tex: 'plastered_wall_04', size: 3.2, rough: 0.95, tint: '#efe9e0' },
+    { id: 'microcem-w', name: 'Микроцемент',   tex: 'grey_plaster', size: 1.4, rough: 0.8, tint: '#dcd8d1' },
+    paint('white-snow',   'Белый холодный',   '#f7f7f5'),
+    paint('white-milk',   'Молочный',         '#f3efe7'),
+    paint('linen',        'Лён',              '#ece6db'),
+    paint('grey-light',   'Светло-серый',     '#dfdedb'),
+    paint('grey-mid',     'Серый',            '#c4c3bf'),
+    paint('greige-light', 'Светлый грейдж',   '#e2dbd0'),
+    paint('sand-w',       'Песочный',         '#dccbb2'),
+    paint('mushroom-w',   'Грибной',          '#bfb2a3'),
+    paint('sage-light',   'Светлый шалфей',   '#d3d8c9'),
+    paint('clay-light',   'Светлая глина',    '#dcc3b0'),
+    paint('taupe',        'Тауп',             '#a39385'),
+    paint('graphite-w',   'Графит',           '#55585a'),
+    G('g_mc_white', 'Микроцемент белый'),
+    G('g_mc_sand',  'Микроцемент песочный'),
+    G('g_mc_grey',  'Микроцемент светло-серый'),
+    { id: 'Concrete046', name: 'Бетон светлый', tex: 'Concrete046', size: 2.4, rough: 0.85 },
+    { id: 'Concrete014', name: 'Бетон серый',   tex: 'Concrete014', size: 2.0, rough: 0.85 },
+    paint('flugger-white-03', 'Flügger White 03 (FL0103), выбран', '#eeede3', { note: 'Flügger · FL0103' }),
+  ],
+  stone: [
+    { id: 'calacatta-rust', name: 'Белый с рыжими прожилками', tex: 'calacatta_rust', size: 2.8, sizeV: 1.4, rough: 0.12, clearcoat: 0.6, note: 'как в эскизе' },
+    { id: 'carrara',    name: 'Каррара',            tex: 'marble_01',    size: 1.5, rough: 0.15, clearcoat: 0.5 },
+    { id: 'statuario',  name: 'Белый мрамор',       tex: 'Marble019',    size: 1.5, rough: 0.14, clearcoat: 0.5 },
+    { id: 'grey-vein',  name: 'Серые прожилки',     tex: 'Marble012',    size: 1.5, rough: 0.15, clearcoat: 0.5 },
+    { id: 'nero',       name: 'Неро Маркина',       tex: 'Marble017',    size: 1.5, rough: 0.12, clearcoat: 0.6 },
+    { id: 'travertine', name: 'Травертин',          tex: 'Travertine004',size: 1.5, rough: 0.35 },
+    { id: 'terrazzo',   name: 'Терраццо',           tex: 'Terrazzo011',  size: 1.0, rough: 0.25 },
+    { id: 'quartz-w',   name: 'Кварц белый',        color: '#ecebe7', rough: 0.22, clearcoat: 0.3 },
+    { id: 'compact-b',  name: 'Компакт чёрный',     color: '#1e1e1f', rough: 0.55 },
+    { id: 'oak-top',    name: 'Массив дуба',        tex: 'oak_veneer_01', size: 1.83, rough: 0.45, rotate: true },
+    { id: 'steel-top',  name: 'Нержавейка',         color: '#c9cacb', rough: 0.32, metal: 1 },
+    { id: 'q-white',    name: 'Кварц белый мат',          color: '#efeeea', rough: 0.4 },
+    { id: 'q-warm',     name: 'Кварц тёплый белый',       color: '#ece6dc', rough: 0.4 },
+    { id: 'q-concrete', name: 'Кварц бетонно-серый',      color: '#a9a7a2', rough: 0.5 },
+    { id: 'q-sand',     name: 'Кварц песочный',           color: '#d6cab7', rough: 0.45 },
+    { id: 'q-black',    name: 'Кварц чёрный мат',         color: '#232324', rough: 0.55 },
+    G('g_mc_grey',  'Микроцемент светло-серый', undefined, { rough: 0.8 }),
+    G('g_mc_white', 'Микроцемент белый', undefined, { rough: 0.8 }),
+    { id: 'Concrete046', name: 'Бетон светлый', tex: 'Concrete046', size: 2.4, rough: 0.6 },
+  ],
+  fronts: [
+    { id: 'oak-01',     name: 'Шпон дуба светлый',  tex: 'oak_veneer_01',          size: 1.83, rough: 0.5, note: 'как в эскизе' },
+    { id: 'oak-white',  name: 'Шпон белого дуба',   tex: 'white_oak_veneer',       size: 0.5,  rough: 0.5 },
+    { id: 'oak-grey',   name: 'Дуб беленый серый',  tex: 'washed_grey_oak_veneer', size: 1.0,  rough: 0.55 },
+    { id: 'walnut',     name: 'Орех',               tex: 'smoked_walnut_veneer',   size: 1.0,  rough: 0.45 },
+    { id: 'oak-black',  name: 'Дуб чёрный',         tex: 'black_oak_veneer',       size: 1.0,  rough: 0.5 },
+    { id: 'p-white',    name: 'Белый мат',          color: '#efeeea', rough: 0.6 },
+    { id: 'p-cashmere', name: 'Кашемир мат',        color: '#d9cbb8', rough: 0.6 },
+    { id: 'p-sage',     name: 'Шалфей мат',         color: '#9fa98f', rough: 0.6 },
+    { id: 'p-olive',    name: 'Олива',              color: '#6f6f4e', rough: 0.6 },
+    { id: 'p-terra',    name: 'Терракота',          color: '#a8644a', rough: 0.6 },
+    { id: 'p-navy',     name: 'Глубокий синий',     color: '#2c3a4a', rough: 0.55 },
+    { id: 'p-graphite', name: 'Графит',             color: '#3d3e3f', rough: 0.6 },
+    { id: 'oak-nat-v',  name: 'Шпон дуба натуральный', tex: 'oak_veneer_02',        size: 1.0, rough: 0.5 },
+    { id: 'oak-pale-v', name: 'Шпон дуба светлый, ровный', tex: 'oak_veneer_04',    size: 1.0, rough: 0.5 },
+    { id: 'ash-v',      name: 'Ясень',              tex: 'ash_veneer',            size: 1.0, rough: 0.5 },
+    { id: 'maple-v',    name: 'Клён',               tex: 'white_maple_veneer',    size: 1.0, rough: 0.5 },
+    { id: 'oak-grey-v', name: 'Серый дуб',          tex: 'grey_oak_veneer_01',    size: 1.0, rough: 0.55, tint: '#dcdad6' },
+    { id: 'oak-silver', name: 'Серебристый дуб',    tex: 'silver_oak_veneer_01',  size: 1.0, rough: 0.55, tint: '#dfe0e0' },
+    { id: 'oak-smoked', name: 'Дуб копчёный',       tex: 'mocha_oak_veneer',      size: 1.0, rough: 0.5,  tint: '#b3a595' },
+    { id: 'walnut-nat', name: 'Орех натуральный',   tex: 'natural_walnut_veneer', size: 1.0, rough: 0.45 },
+    { id: 'p-milk',      name: 'Молочный мат',       color: '#f2eee6', rough: 0.6 },
+    { id: 'p-lightgrey', name: 'Светло-серый мат',   color: '#d9d9d6', rough: 0.6 },
+    { id: 'p-warmgrey',  name: 'Тёплый серый мат',   color: '#b8b1a7', rough: 0.6 },
+    { id: 'p-mushroom',  name: 'Грибной мат',        color: '#a99c8d', rough: 0.6 },
+    { id: 'p-sand',      name: 'Песочный мат',       color: '#d8c8b0', rough: 0.6 },
+    { id: 'p-black',     name: 'Чёрный мат',         color: '#232325', rough: 0.6 },
+  ],
+  backsplash: [
+    { id: 'none',       name: 'Как стены' },
+    { id: 'slab',       name: 'Камень как столешница' },
+    { id: 'tiles-v',    name: 'Плитка вертикальная', tex: 'long_white_tiles', size: 1.27, rough: 0.2, rotate: true },
+    { id: 'Tiles036',   name: 'Плитка белая квадрат', tex: 'Tiles036', size: 1.0, rough: 0.25 },
+    { id: 'Tiles107',   name: 'Плитка белая 12,5×12,5', tex: 'Tiles107', size: 1.0, rough: 0.25 },
+    { id: 'Tiles071',   name: 'Шестигранник белый', tex: 'Tiles071', size: 0.45, rough: 0.3 },
+    { id: 'Tiles072',   name: 'Шестигранник чёрный', tex: 'Tiles072', size: 0.45, rough: 0.35 },
+    G('g_mc_white', 'Микроцемент белый', undefined, { rough: 0.8 }),
+    G('g_mc_sand',  'Микроцемент песочный', undefined, { rough: 0.8 }),
+  ],
+  metal: [
+    { id: 'black',  name: 'Чёрный мат',     color: '#1b1b1c', rough: 0.45, metal: 0.6 },
+    { id: 'steel',  name: 'Сталь',          color: '#c4c6c8', rough: 0.28, metal: 1 },
+    { id: 'brass',  name: 'Латунь',         color: '#c3a064', rough: 0.3,  metal: 1 },
+    { id: 'gun',    name: 'Оружейная сталь',color: '#55575a', rough: 0.35, metal: 1 },
+  ],
+  // Пол ванной уже уложен (Equipe, 20×20, чёрно-белые треугольники): не выбирается, не входит в код варианта.
+  bathFloor: [
+    { id: 'bath_equipe_triangles_20', name: 'Плитка 20×20, чёрно-белые треугольники', tex: 'bath_equipe_triangles_20', gen: true, note: 'уже уложен' },
+  ],
+  // Стены ванной: только краска. Плитка 15×7,5 уже куплена и строится в bath.js; старые варианты плитки
+  // остаются в списке (legacy: в панели скрыты), чтобы не сдвинуть номера в коде ссылки.
+  // Стены ванной: только краска. Плитка 15×7,5 уже куплена и строится в bath.js; старые варианты плитки
+  // остаются в списке с legacy: true (в панели скрыты), чтобы не сдвинуть номера в коде ссылки.
+  bathWalls: [
+    G('g_tile_white_60', 'Керамогранит белый мат 60×60', undefined, { legacy: true }),
+    { id: 'Tiles036', name: 'Плитка белая квадрат', tex: 'Tiles036', size: 1.0, rough: 0.25, legacy: true },
+    { id: 'Tiles107', name: 'Плитка белая 12,5×12,5', tex: 'Tiles107', size: 1.0, rough: 0.25, legacy: true },
+    { id: 'tiles-v',  name: 'Плитка вертикальная', tex: 'long_white_tiles', size: 1.27, rough: 0.2, rotate: true, legacy: true },
+    { id: 'Tiles071', name: 'Шестигранник белый', tex: 'Tiles071', size: 0.45, rough: 0.3, legacy: true },
+    G('g_tile_conc_light_60', 'Керамогранит под бетон, светлый 60×60', undefined, { legacy: true }),
+    G('g_mc_white', 'Микроцемент белый', undefined, { legacy: true }),
+    G('g_mc_grey', 'Микроцемент светло-серый', undefined, { legacy: true }),
+    G('g_mc_sand', 'Микроцемент песочный', undefined, { legacy: true }),
+    paint('white-cool', 'Влагостойкая краска, белый чистый', '#f4f5f4'),
+    paint('white-warm', 'Влагостойкая краска, белый тёплый', '#f1ede6'),
+    paint('grey-light', 'Влагостойкая краска, светло-серый', '#dfdedb'),
+    { id: 'Tiles108', name: 'Плитка чёрная 12,5×12,5', tex: 'Tiles108', size: 1.0, rough: 0.3, legacy: true },
+    G('g_tile_graphite_60', 'Керамогранит графит 60×60', undefined, { legacy: true }),
+    paint('flugger-white-03', 'Влагостойкая краска, Flügger White 03', '#eeede3'),
+  ],
+  // follow: 'walls' — полотно красится в цвет стен кухни и холла
+  doors: [
+    { id: 'd-white',      name: 'Белые матовые',         color: '#f1f0ec', rough: 0.55 },
+    { id: 'd-paint',      name: 'Под покраску, как стены', follow: 'walls' },
+    { id: 'd-oak',        name: 'Шпон дуба',             tex: 'oak_veneer_02',    size: 1.0,  rough: 0.5, rotate: true },
+    { id: 'd-oak-light',  name: 'Шпон светлого дуба',    tex: 'white_oak_veneer', size: 0.5,  rough: 0.5, rotate: true },
+    { id: 'd-oak-smoked', name: 'Шпон копчёного дуба',   tex: 'mocha_oak_veneer', size: 1.0,  rough: 0.5, rotate: true, tint: '#b3a595' },
+    { id: 'd-walnut',     name: 'Шпон ореха',            tex: 'natural_walnut_veneer', size: 1.0, rough: 0.45, rotate: true },
+    { id: 'd-grey-light', name: 'Светло-серые',          color: '#d3d3d0', rough: 0.55 },
+    { id: 'd-grey',       name: 'Серые',                 color: '#8e8e8b', rough: 0.55 },
+    { id: 'd-graphite',   name: 'Графит',                color: '#3a3b3d', rough: 0.55 },
+    { id: 'd-black',      name: 'Чёрные',                color: '#1f1f20', rough: 0.55 },
+  ],
+};
+
+export const OPTIONS = {
+  light:     [ { id: 'day', name: 'День' }, { id: 'overcast', name: 'Пасмурно' }, { id: 'evening', name: 'Вечер' } ],
+  floorDir:  [ { id: 'z', name: 'К окнам' }, { id: 'x', name: 'Вдоль окон' } ],
+  frames:    [ { id: 'white', name: 'Белые' }, { id: 'anthracite', name: 'Антрацит' } ],
+  handles:   [ { id: 'none', name: 'Без ручек' }, { id: 'bar', name: 'Скобы' } ],
+  // подвесы над островом: тот же список, что в lamps.js (порядок важен для кода варианта)
+  pendants:  [ { id: 'off', name: 'Нет' }, { id: 'dome', name: 'Купола' }, { id: 'globe', name: 'Шары' }, { id: 'linear', name: 'Линейный' }, { id: 'cone', name: 'Конусы' } ],
+  threshold: [ { id: 'none', name: 'Без порожка' }, { id: 'profile', name: 'Профиль' } ],
+  fridge:    [ { id: 'under', name: 'Встроенный под столешницей' }, { id: 'under-free', name: 'Отдельностоящий под столешницей' }, { id: 'none', name: 'Без холодильника' } ],
+};
+
+// Готовые сочетания. Ключи совпадают с полями состояния в main.js; каждое задаёт все материалы.
+const ROOMS_SAME = { floorRoom2: 'same', floorRoom3: 'same', wallsRoom2: 'same', wallsRoom3: 'same' };
+export const PRESETS = [
+  { id: 'sketch', name: 'Как в эскизе', state: { ...ROOMS_SAME,
+      floorA: 'oak-light', floorB: 'oak-light', split: 2.6, threshold: 'none',
+      walls: 'flugger-white-03', wallAccent: 'same', wallsBath: 'flugger-white-03', doors: 'd-white',
+      counter: 'calacatta-rust', fronts: 'oak-01', island: 'same', islandTop: 'same', backsplash: 'none', metal: 'black',
+      fridge: 'under', frames: 'white', handles: 'none', pendants: 'off' } },
+  { id: 'tile-oak', name: 'Плитка в кухне, дуб в гостиной', state: { ...ROOMS_SAME,
+      floorA: 'g_tile_halcon_torcello_60', floorB: 'g_plank_oak_natural', split: 2.6, threshold: 'profile',
+      walls: 'flugger-white-03', wallAccent: 'same', wallsBath: 'flugger-white-03', doors: 'd-white',
+      counter: 'q-white', fronts: 'p-white', island: 'oak-nat-v', islandTop: 'same', backsplash: 'slab', metal: 'steel',
+      fridge: 'under', frames: 'white', handles: 'none', pendants: 'globe' } },
+  { id: 'mc-herring', name: 'Микроцемент и ёлочка', state: { ...ROOMS_SAME,
+      floorA: 'g_mc_sand', floorB: 'g_herring_oak_light', split: 2.8, threshold: 'none',
+      walls: 'flugger-white-03', wallAccent: 'sand-w', wallsBath: 'flugger-white-03', doors: 'd-paint',
+      counter: 'g_mc_grey', fronts: 'p-sand', island: 'oak-smoked', islandTop: 'same', backsplash: 'g_mc_sand', metal: 'brass',
+      fridge: 'under', frames: 'white', handles: 'none', pendants: 'dome' } },
+  { id: 'concrete', name: 'Светлый бетон целиком', state: { ...ROOMS_SAME,
+      floorA: 'g_mc_grey', floorB: 'g_mc_grey', split: 2.6, threshold: 'none',
+      walls: 'flugger-white-03', wallAccent: 'g_mc_grey', wallsBath: 'flugger-white-03', doors: 'd-grey-light',
+      counter: 'q-concrete', fronts: 'p-lightgrey', island: 'oak-grey-v', islandTop: 'same', backsplash: 'slab', metal: 'steel',
+      fridge: 'under-free', frames: 'anthracite', handles: 'none', pendants: 'globe' } },
+  { id: 'scandi', name: 'Светлый сканди', state: { ...ROOMS_SAME,
+      floorA: 'g_plank_oak_bleached', floorB: 'g_plank_oak_bleached', split: 2.6, threshold: 'none',
+      walls: 'flugger-white-03', wallAccent: 'same', wallsBath: 'flugger-white-03', doors: 'd-white',
+      counter: 'statuario', fronts: 'p-white', island: 'oak-white', islandTop: 'same', backsplash: 'slab', metal: 'steel',
+      fridge: 'under', frames: 'white', handles: 'none', pendants: 'globe' } },
+  { id: 'warm', name: 'Тёплый минимализм', state: { ...ROOMS_SAME,
+      floorA: 'g_tile_warm_120', floorB: 'g_plank_oak_natural', split: 2.6, threshold: 'none',
+      walls: 'flugger-white-03', wallAccent: 'same', wallsBath: 'flugger-white-03', doors: 'd-paint',
+      counter: 'travertine', fronts: 'p-cashmere', island: 'walnut', islandTop: 'same', backsplash: 'slab', metal: 'brass',
+      fridge: 'under', frames: 'white', handles: 'none', pendants: 'dome' } },
+  { id: 'graphite', name: 'Графит и орех', state: { ...ROOMS_SAME,
+      floorA: 'g_conc_polished', floorB: 'g_plank_walnut', split: 2.6, threshold: 'profile',
+      walls: 'flugger-white-03', wallAccent: 'graphite-w', wallsBath: 'flugger-white-03', doors: 'd-graphite',
+      counter: 'nero', fronts: 'p-graphite', island: 'walnut', islandTop: 'same', backsplash: 'slab', metal: 'black',
+      fridge: 'under-free', frames: 'anthracite', handles: 'bar', pendants: 'dome' } },
+  { id: 'terrazzo', name: 'Терраццо и шалфей', state: { ...ROOMS_SAME,
+      floorA: 'g_tile_terrazzo_60', floorB: 'g_plank_ash', split: 2.6, threshold: 'profile',
+      walls: 'flugger-white-03', wallAccent: 'sage-light', wallsBath: 'flugger-white-03', doors: 'd-white',
+      counter: 'terrazzo', fronts: 'p-sage', island: 'oak-white', islandTop: 'same', backsplash: 'none', metal: 'brass',
+      fridge: 'under', frames: 'white', handles: 'bar', pendants: 'globe' } },
+  { id: 'herring', name: 'Ёлочка и олива', state: { ...ROOMS_SAME,
+      floorA: 'g_herring_oak_natural', floorB: 'g_herring_oak_natural', split: 2.6, threshold: 'none',
+      walls: 'flugger-white-03', wallAccent: 'same', wallsBath: 'flugger-white-03', doors: 'd-oak',
+      counter: 'carrara', fronts: 'p-olive', island: 'same', islandTop: 'same', backsplash: 'tiles-v', metal: 'brass',
+      fridge: 'under', frames: 'white', handles: 'bar', pendants: 'dome' } },
+];
+
+export function findMat(group, id) {
+  return MATERIALS[group].find(m => m.id === id) || MATERIALS[group][0];
+}
+
+export const slotById = id => SLOTS.find(s => s.id === id);
+
+// Итоговая запись каталога для слота с учётом 'same' («как у другого слота») и follow у дверей.
+export function resolveItem(state, slotId) {
+  const slot = slotById(slotId);
+  const val = state[slotId];
+  if (val === 'same' && slot.same) return resolveItem(state, slot.same);
+  const it = findMat(slot.group, val);
+  if (it.follow) return { ...resolveItem(state, it.follow), id: it.id, name: it.name };
+  return it;
+}

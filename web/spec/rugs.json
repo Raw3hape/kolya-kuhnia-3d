@@ -1,0 +1,416 @@
+{
+  "rugs": [
+    {
+      "id": "stoense_cream",
+      "name": "STOENSE, низкий ворс, кремовый",
+      "brand": "IKEA",
+      "article": "504.255.29",
+      "url": "https://www.ikea.com/pl/pl/p/stoense-dywan-z-krotkim-wlosiem-kremowy-50425529/",
+      "pile": "low",
+      "height": 0.018,
+      "tex": "textures/rugs/stoense_cream/",
+      "tile": 0.933,
+      "tileV": 1.488,
+      "fringe": false,
+      "color": "#cfbdae",
+      "sizes": [
+        {
+          "w": 0.8,
+          "d": 1.5,
+          "pricePLN": 99.99,
+          "article": "504.268.02"
+        },
+        {
+          "w": 1.33,
+          "d": 1.95,
+          "pricePLN": 199.0,
+          "article": "104.255.26"
+        },
+        {
+          "w": 1.7,
+          "d": 2.4,
+          "pricePLN": 299.0,
+          "article": "504.255.29"
+        },
+        {
+          "w": 2.0,
+          "d": 3.0,
+          "pricePLN": 399.0,
+          "article": "204.268.08"
+        }
+      ]
+    },
+    {
+      "id": "stoense_grey",
+      "name": "STOENSE, низкий ворс, серый",
+      "brand": "IKEA",
+      "article": "004.268.28",
+      "url": "https://www.ikea.com/pl/pl/p/stoense-dywan-z-krotkim-wlosiem-srednioszary-00426828/",
+      "pile": "low",
+      "height": 0.018,
+      "tex": "textures/rugs/stoense_grey/",
+      "tile": 0.931,
+      "tileV": 1.381,
+      "fringe": false,
+      "color": "#8e8d8b",
+      "sizes": [
+        {
+          "w": 0.8,
+          "d": 1.5,
+          "pricePLN": 99.99,
+          "article": "504.268.35"
+        },
+        {
+          "w": 1.33,
+          "d": 1.95,
+          "pricePLN": 199.0,
+          "article": "404.270.05"
+        },
+        {
+          "w": 1.7,
+          "d": 2.4,
+          "pricePLN": 299.0,
+          "article": "004.268.28"
+        },
+        {
+          "w": 2.0,
+          "d": 3.0,
+          "pricePLN": 399.0,
+          "article": "304.268.36"
+        }
+      ]
+    },
+    {
+      "id": "tversted_beige",
+      "name": "TVERSTED, низкий ворс, бежевый с ромбами",
+      "brand": "IKEA",
+      "article": "205.608.06",
+      "url": "https://www.ikea.com/pl/pl/p/tversted-dywan-z-krotkim-wlosiem-bezowy-20560806/",
+      "pile": "low",
+      "height": 0.016,
+      "tex": "textures/rugs/tversted_beige/",
+      "tile": null,
+      "tileV": null,
+      "fringe": false,
+      "color": "#eae6da",
+      "sizes": [
+        {
+          "w": 1.7,
+          "d": 2.4,
+          "pricePLN": 499.0,
+          "article": "205.608.06"
+        }
+      ]
+    },
+    {
+      "id": "bronden_beige",
+      "name": "BRÖNDEN, шерсть ручной работы, бежевый",
+      "brand": "IKEA",
+      "article": "104.805.51",
+      "url": "https://www.ikea.com/pl/pl/p/broenden-dywan-z-krotkim-wlosiem-wykonano-recznie-bezowy-10480551/",
+      "pile": "low",
+      "height": 0.012,
+      "tex": "textures/rugs/bronden_beige/",
+      "tile": null,
+      "tileV": null,
+      "fringe": false,
+      "color": "#ddd0c6",
+      "sizes": [
+        {
+          "w": 1.33,
+          "d": 1.95,
+          "pricePLN": 899.0,
+          "article": "305.329.31"
+        },
+        {
+          "w": 1.7,
+          "d": 2.4,
+          "pricePLN": 1299.0,
+          "article": "104.805.51"
+        }
+      ]
+    },
+    {
+      "id": "aerende_cream",
+      "name": "ÄRENDE, длинный ворс, кремовый",
+      "brand": "IKEA",
+      "article": "205.764.35",
+      "url": "https://www.ikea.com/pl/pl/p/aerende-dywan-z-dlugim-wlosiem-kremowy-20576435/",
+      "pile": "high",
+      "height": 0.025,
+      "tex": "textures/rugs/aerende_cream/",
+      "tile": 0.844,
+      "tileV": 1.355,
+      "fringe": false,
+      "color": "#e3dbd0",
+      "sizes": [
+        {
+          "w": 0.8,
+          "d": 0.8,
+          "pricePLN": 49.99,
+          "article": "706.287.76"
+        },
+        {
+          "w": 1.2,
+          "d": 1.8,
+          "pricePLN": 129.0,
+          "article": "106.050.75"
+        },
+        {
+          "w": 1.6,
+          "d": 2.3,
+          "pricePLN": 249.0,
+          "article": "205.764.35"
+        },
+        {
+          "w": 2.0,
+          "d": 3.0,
+          "pricePLN": 349.0,
+          "article": "906.287.80"
+        }
+      ]
+    },
+    {
+      "id": "vollerslev_white",
+      "name": "VOLLERSLEV, высокий ворс, белый",
+      "brand": "IKEA",
+      "article": "304.925.72",
+      "url": "https://www.ikea.com/pl/pl/p/vollerslev-dywan-z-dlugim-wlosiem-bialy-30492572/",
+      "pile": "high",
+      "height": 0.029,
+      "tex": "textures/rugs/vollerslev_white/",
+      "tile": 1.162,
+      "tileV": 1.684,
+      "fringe": false,
+      "color": "#e7d8cd",
+      "sizes": [
+        {
+          "w": 1.33,
+          "d": 1.95,
+          "pricePLN": 499.0,
+          "article": "704.925.70"
+        },
+        {
+          "w": 1.6,
+          "d": 2.3,
+          "pricePLN": 699.0,
+          "article": "304.925.72"
+        }
+      ]
+    },
+    {
+      "id": "vollerslev_beige",
+      "name": "VOLLERSLEV, высокий ворс, бежевый",
+      "brand": "IKEA",
+      "article": "506.142.52",
+      "url": "https://www.ikea.com/pl/pl/p/vollerslev-dywan-z-dlugim-wlosiem-bezowy-50614252/",
+      "pile": "high",
+      "height": 0.029,
+      "tex": "textures/rugs/vollerslev_beige/",
+      "tile": 0.95,
+      "tileV": 1.48,
+      "fringe": false,
+      "color": "#9c8575",
+      "sizes": [
+        {
+          "w": 1.33,
+          "d": 1.95,
+          "pricePLN": 499.0,
+          "article": "106.142.54"
+        },
+        {
+          "w": 1.6,
+          "d": 2.3,
+          "pricePLN": 699.0,
+          "article": "506.142.52"
+        }
+      ]
+    },
+    {
+      "id": "tidtabell_beige",
+      "name": "TIDTABELL, шерсть, безворсовый, бежевый",
+      "brand": "IKEA",
+      "article": "305.552.82",
+      "url": "https://www.ikea.com/pl/pl/p/tidtabell-dywan-tkany-na-plasko-bezowy-30555282/",
+      "pile": "flat",
+      "height": 0.006,
+      "tex": "textures/rugs/tidtabell_beige/",
+      "tile": 1.181,
+      "tileV": 1.954,
+      "fringe": false,
+      "color": "#e5ddc8",
+      "sizes": [
+        {
+          "w": 0.8,
+          "d": 1.5,
+          "pricePLN": 149.0,
+          "article": "105.618.68"
+        },
+        {
+          "w": 0.8,
+          "d": 2.0,
+          "pricePLN": 199.0,
+          "article": "605.618.75"
+        },
+        {
+          "w": 1.33,
+          "d": 1.95,
+          "pricePLN": 299.0,
+          "article": "105.618.49"
+        },
+        {
+          "w": 1.7,
+          "d": 2.4,
+          "pricePLN": 399.0,
+          "article": "305.552.82"
+        }
+      ]
+    },
+    {
+      "id": "lohals_jute",
+      "name": "LOHALS, джут, безворсовый, натуральный",
+      "brand": "IKEA",
+      "article": "502.773.93",
+      "url": "https://www.ikea.com/pl/pl/p/lohals-dywan-tkany-na-plasko-naturalny-50277393/",
+      "pile": "flat",
+      "height": 0.013,
+      "tex": "textures/rugs/lohals_jute/",
+      "tile": 1.057,
+      "tileV": 1.715,
+      "fringe": false,
+      "color": "#a88b75",
+      "sizes": [
+        {
+          "w": 0.8,
+          "d": 1.5,
+          "pricePLN": 99.99,
+          "article": "203.074.81"
+        },
+        {
+          "w": 1.33,
+          "d": 1.95,
+          "pricePLN": 199.0,
+          "article": "305.112.88"
+        },
+        {
+          "w": 1.6,
+          "d": 2.3,
+          "pricePLN": 299.0,
+          "article": "502.773.93"
+        },
+        {
+          "w": 2.0,
+          "d": 3.0,
+          "pricePLN": 399.0,
+          "article": "002.773.95"
+        }
+      ]
+    },
+    {
+      "id": "morum_beige",
+      "name": "MORUM, безворсовый, бежевый",
+      "brand": "IKEA",
+      "article": "202.035.63",
+      "url": "https://www.ikea.com/pl/pl/p/morum-dywan-tkany-na-plasko-wewn-zewn-bezowy-20203563/",
+      "pile": "flat",
+      "height": 0.005,
+      "tex": "textures/rugs/morum_beige/",
+      "tile": 0.866,
+      "tileV": 1.259,
+      "border": {
+        "color": "#c5b8af",
+        "w": 0.008
+      },
+      "fringe": false,
+      "color": "#bdaea0",
+      "sizes": [
+        {
+          "w": 0.6,
+          "d": 1.5,
+          "pricePLN": 79.99,
+          "article": "906.241.69"
+        },
+        {
+          "w": 0.8,
+          "d": 2.0,
+          "pricePLN": 99.99,
+          "article": "806.241.60"
+        },
+        {
+          "w": 1.2,
+          "d": 1.8,
+          "pricePLN": 149.0,
+          "article": "106.241.87"
+        },
+        {
+          "w": 1.6,
+          "d": 2.3,
+          "pricePLN": 249.0,
+          "article": "202.035.63"
+        },
+        {
+          "w": 2.0,
+          "d": 3.0,
+          "pricePLN": 349.0,
+          "article": "801.982.95"
+        }
+      ]
+    },
+    {
+      "id": "tidtabell_green",
+      "name": "TIDTABELL, шерсть, безворсовый, зелёный",
+      "brand": "IKEA",
+      "article": "405.693.92",
+      "url": "https://www.ikea.com/pl/pl/p/tidtabell-dywan-tkany-na-plasko-zielony-40569392/",
+      "pile": "flat",
+      "height": 0.006,
+      "tex": "textures/rugs/tidtabell_green/",
+      "tile": 1.146,
+      "tileV": 1.679,
+      "fringe": false,
+      "color": "#839472",
+      "sizes": [
+        {
+          "w": 1.33,
+          "d": 1.95,
+          "pricePLN": 299.0,
+          "article": "005.693.89"
+        },
+        {
+          "w": 1.7,
+          "d": 2.4,
+          "pricePLN": 399.0,
+          "article": "405.693.92"
+        }
+      ]
+    },
+    {
+      "id": "stockholm_stripe",
+      "name": "STOCKHOLM, шерсть, полосы чёрный/белый",
+      "brand": "IKEA",
+      "article": "801.048.62",
+      "url": "https://www.ikea.com/pl/pl/p/stockholm-dywan-tkany-na-plasko-wykonano-recznie-w-paski-czarny-zlamana-biel-80104862/",
+      "pile": "flat",
+      "height": 0.006,
+      "tex": "textures/rugs/stockholm_stripe/",
+      "tile": null,
+      "tileV": null,
+      "fringe": false,
+      "color": "#a4a19e",
+      "sizes": [
+        {
+          "w": 1.7,
+          "d": 2.4,
+          "pricePLN": 799.0,
+          "article": "801.048.62"
+        },
+        {
+          "w": 2.5,
+          "d": 3.5,
+          "pricePLN": 1299.0,
+          "article": "901.032.54"
+        }
+      ]
+    }
+  ]
+}

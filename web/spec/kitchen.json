@@ -1,0 +1,31 @@
+{
+  "_about": "Кухня по эскизу SketchUp (source/refs/sketchup-*.webp). Править можно, это авторский файл. Метры, оси как в plan.generated.json.",
+  "worktop": { "height": 0.90, "thickness": 0.02, "overhang": 0.02 },
+  "plinth": { "height": 0.10, "recess": 0.05 },
+  "frontGap": 0.003,
+  "run": {
+    "_about": "Ряд вдоль стены с мойкой (X=0), от вентшахты (Z=2.769) к окну (Z=0). Модули перечислены от шахты. fridge — место холодильника (только крайний у шахты): state.fridge column/freestanding ставит туда колонну, none — обычный модуль.",
+    "wallX": 0.0,
+    "startZ": 2.769,
+    "depth": 0.60,
+    "modules": [
+      { "w": 0.60,   "front": "door", "fridge": true },
+      { "w": 0.60,   "front": "door", "sink": true },
+      { "w": 0.45,   "front": "door" },
+      { "w": 0.60,   "front": "drawers3", "hob": true },
+      { "w": 0.5187, "front": "door" }
+    ]
+  },
+  "island": {
+    "_about": "Остров 1.80×0.60×0.90 из трёх модулей по 0.60. Позиция оценена по видам SketchUp, точно задаётся ползунками в интерфейсе.",
+    "length": 1.80,
+    "depth": 0.60,
+    "aisle": 1.18,
+    "gapToWindowWall": 0.24,
+    "kitchenSide": [ "door", "door", "drawers2" ],
+    "livingSide": "panel"
+  },
+  "sink": { "w": 0.50, "d": 0.40, "depth": 0.20 },
+  "hob": { "w": 0.59, "d": 0.52 },
+  "radiator": { "_about": "Вертикальный трубчатый радиатор на простенке между окном и балконной дверью, как в эскизе.", "centerX": 2.40, "w": 0.36, "h": 1.60, "bottom": 0.20, "depth": 0.09 }
+}

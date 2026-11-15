@@ -1,0 +1,10 @@
+exports/
+renders/test-*
+*.blend1
+.DS_Store
+__pycache__/
+renders/
+blender/*.blend
+dist/
+.vercel/
+.claude/
