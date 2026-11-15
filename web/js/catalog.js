@@ -196,6 +196,7 @@ export const MATERIALS = {
     G('w_barlinek_tartuffo_jodelka', 'Barlinek Dąb Tartuffo Bianco jodełka klasyczna 130 · ёлочка 13×72,5 см', 'wood', { note: 'Barlinek · 364 zł/m² · Komfort', rotation: HERRING }),
     G('w_barlinek_various_bielony', 'Barlinek Dąb Various bielony · доска 18×72,5 см', 'wood', { note: 'Barlinek · 189 zł/m² · OBI' }),
     G('w_barlinek_country', 'Barlinek Dąb Country 1-lamelowa · доска 13×72,5 см', 'wood', { note: 'Barlinek · 125,79 zł/m² · OBI' }),
+    G('w_berryalloc_select_sand_natural', 'BerryAlloc Ocean 12 XL Select Sand Natural · ламинат 24,1×203,8 см', 'wood', { note: 'AC5 · 12 мм · 62002515' }),
   ],
   walls: [
     paint('white-warm', 'Белый тёплый', '#f1ede6'),
@@ -274,6 +275,8 @@ export const MATERIALS = {
     { id: 'p-mushroom',  name: 'Грибной мат',        color: '#a99c8d', rough: 0.6 },
     { id: 'p-sand',      name: 'Песочный мат',       color: '#d8c8b0', rough: 0.6 },
     { id: 'p-black',     name: 'Чёрный мат',         color: '#232325', rough: 0.6 },
+    { id: 'egger-h1386-st40', name: 'EGGER Dąb Casella brązowy', tex: 'egger_h1386_st40',
+      size: 1.3, sizeV: 2.8, rough: 0.6, note: 'H1386 ST40' },
   ],
   backsplash: [
     { id: 'none',       name: 'Как стены' },
@@ -347,9 +350,9 @@ export const OPTIONS = {
 const ROOMS_SAME = { floorRoom2: 'same', floorRoom3: 'same', wallsRoom2: 'same', wallsRoom3: 'same' };
 export const PRESETS = [
   { id: 'sketch', name: 'Как в эскизе', state: { ...ROOMS_SAME,
-      floorA: 'oak-light', floorB: 'oak-light', split: 2.6, threshold: 'none',
+      floorA: 'carrea_miscela_nacar_60', floorB: 'w_berryalloc_select_sand_natural', split: 3.05, threshold: 'none',
       walls: 'flugger-white-03', wallAccent: 'same', wallsBath: 'flugger-white-03', doors: 'd-white',
-      counter: 'calacatta-rust', fronts: 'oak-01', island: 'same', islandTop: 'same', backsplash: 'none', metal: 'black',
+      counter: 'calacatta-rust', fronts: 'oak-white', island: 'same', islandTop: 'same', backsplash: 'none', metal: 'black',
       fridge: 'under', frames: 'white', handles: 'none', pendants: 'off' } },
   { id: 'tile-oak', name: 'Плитка в кухне, дуб в гостиной', state: { ...ROOMS_SAME,
       floorA: 'g_tile_halcon_torcello_60', floorB: 'g_plank_oak_natural', split: 2.6, threshold: 'profile',
