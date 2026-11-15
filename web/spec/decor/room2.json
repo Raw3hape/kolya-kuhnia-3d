@@ -1,0 +1,1155 @@
+{
+  "zone": "room2",
+  "title": "Спальня",
+  "room": "room2",
+  "_note": "Порядок слотов и опций = код варианта: новое только в конец. Кровать изголовьем к южной (наружной) стене z 6.88, ось x 4.20; шкаф на стене ванной x 2.08 (z 4.88–6.38, за дугой двери); комод/стеллаж на восточной стене южнее балконной двери и шторы (z ≥ 5.55); тумбочки центрами в x 3.05 / 5.35; лампы декора стоят на высоте 0.58 (верх тумбочек). Модели: web/models/decor/room2/<id>/SOURCE.md.",
+  "slots": [
+    {
+      "id": "bed",
+      "label": "Кровать",
+      "default": "sagesund-160",
+      "options": [
+        {
+          "id": "none",
+          "name": "Нет"
+        },
+        {
+          "id": "sagesund-160",
+          "name": "SAGESUND tapicerowana rama łóżka 160x200 cm",
+          "brand": "IKEA",
+          "article": "304.903.80",
+          "url": "https://www.ikea.com/pl/pl/p/sagesund-tapicerowana-rama-lozka-diseroed-brazowy-30490380/",
+          "price_pln": 1499.0,
+          "finish": "Diseröd brązowy",
+          "size": [
+            1.66,
+            1.066,
+            2.23
+          ],
+          "thumb": "models/decor/room2/sagesund-160/thumb.jpg",
+          "note": "+ матрас ÅBYGDA 160x200 cm (704.814.73, 1199 zł); постель — условная (CC0)",
+          "collide": true,
+          "seat": {
+            "h": 0.527,
+            "depth": -0.815,
+            "label": "Сесть на кровать"
+          },
+          "parts": [
+            {
+              "model": "models/decor/room2/sagesund-160/model.glb",
+              "pos": [
+                4.2,
+                0,
+                5.7525
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/room2/abygda-160/model.glb",
+              "pos": [
+                4.2,
+                0.367,
+                5.6725
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/props/bedding-160/model.glb",
+              "pos": [
+                4.2,
+                0.3835,
+                5.6725
+              ],
+              "rot": 180
+            }
+          ]
+        },
+        {
+          "id": "tonstad-160",
+          "name": "TONSTAD rama łóżka 160x200 cm",
+          "brand": "IKEA",
+          "article": "106.036.32",
+          "url": "https://www.ikea.com/pl/pl/p/tonstad-rama-lozka-okl-deb-10603632/",
+          "price_pln": 1699.0,
+          "finish": "okl dęb",
+          "size": [
+            1.7,
+            1.16,
+            2.09
+          ],
+          "thumb": "models/decor/room2/tonstad-160/thumb.jpg",
+          "note": "+ матрас ÅBYGDA 160x200 cm (704.814.73, 1199 zł); постель — условная (CC0)",
+          "collide": true,
+          "seat": {
+            "h": 0.588,
+            "depth": -0.745,
+            "label": "Сесть на кровать"
+          },
+          "parts": [
+            {
+              "model": "models/decor/room2/tonstad-160/model.glb",
+              "pos": [
+                4.2,
+                0,
+                5.8225
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/room2/abygda-160/model.glb",
+              "pos": [
+                4.2,
+                0.428,
+                5.8225
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/props/bedding-160/model.glb",
+              "pos": [
+                4.2,
+                0.4445,
+                5.8225
+              ],
+              "rot": 180
+            }
+          ]
+        },
+        {
+          "id": "tallasen-160",
+          "name": "TÄLLÅSEN tapicerowana rama łóżka 160x200 cm",
+          "brand": "IKEA",
+          "article": "705.389.26",
+          "url": "https://www.ikea.com/pl/pl/p/taellasen-tapicerowana-rama-lozka-kulsta-szarozielony-70538926/",
+          "price_pln": 999.0,
+          "finish": "Kulsta szarozielony",
+          "size": [
+            1.75,
+            1.07,
+            2.13
+          ],
+          "thumb": "models/decor/room2/tallasen-160/thumb.jpg",
+          "note": "+ матрас ÅBYGDA 160x200 cm (704.814.73, 1199 zł); постель — условная (CC0)",
+          "collide": true,
+          "seat": {
+            "h": 0.456,
+            "depth": -0.765,
+            "label": "Сесть на кровать"
+          },
+          "parts": [
+            {
+              "model": "models/decor/room2/tallasen-160/model.glb",
+              "pos": [
+                4.2,
+                0,
+                5.8025
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/room2/abygda-160/model.glb",
+              "pos": [
+                4.2,
+                0.296,
+                5.7575
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/props/bedding-160/model.glb",
+              "pos": [
+                4.2,
+                0.3125,
+                5.7575
+              ],
+              "rot": 180
+            }
+          ]
+        },
+        {
+          "id": "radmanso-160",
+          "name": "RÅDMANSÖ rama łóżka 160x200 cm",
+          "brand": "IKEA",
+          "article": "805.991.70",
+          "url": "https://www.ikea.com/pl/pl/p/radmansoe-rama-lozka-brazowy-orzech-80599170/",
+          "price_pln": 899.0,
+          "finish": "brązowy orzech",
+          "size": [
+            1.68,
+            0.977,
+            2.2
+          ],
+          "thumb": "models/decor/room2/radmanso-160/thumb.jpg",
+          "note": "+ матрас ÅBYGDA 160x200 cm (704.814.73, 1199 zł); постель — условная (CC0)",
+          "collide": true,
+          "seat": {
+            "h": 0.449,
+            "depth": -0.8,
+            "label": "Сесть на кровать"
+          },
+          "parts": [
+            {
+              "model": "models/decor/room2/radmanso-160/model.glb",
+              "pos": [
+                4.2,
+                0,
+                5.7675
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/room2/abygda-160/model.glb",
+              "pos": [
+                4.2,
+                0.289,
+                5.7025
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/props/bedding-160/model.glb",
+              "pos": [
+                4.2,
+                0.3055,
+                5.7025
+              ],
+              "rot": 180
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nightstands",
+      "label": "Тумбочки",
+      "default": "radmanso-nightstand",
+      "options": [
+        {
+          "id": "none",
+          "name": "Нет"
+        },
+        {
+          "id": "radmanso-nightstand",
+          "name": "RÅDMANSÖ stolik nocny 54x38x58 cm ×2",
+          "brand": "IKEA",
+          "article": "805.935.97",
+          "url": "https://www.ikea.com/pl/pl/p/radmansoe-stolik-nocny-brazowy-orzech-80593597/",
+          "price_pln": 698.0,
+          "finish": "brązowy orzech",
+          "size": [
+            0.54,
+            0.58,
+            0.383
+          ],
+          "thumb": "models/decor/room2/radmanso-nightstand/thumb.jpg",
+          "note": "2 шт., цена за пару: 698.0 zł",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/radmanso-nightstand/model.glb",
+              "pos": [
+                3.05,
+                0,
+                6.676
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/room2/radmanso-nightstand/model.glb",
+              "pos": [
+                5.35,
+                0,
+                6.676
+              ],
+              "rot": 180
+            }
+          ]
+        },
+        {
+          "id": "tonstad-nightstand",
+          "name": "TONSTAD stolik nocny 40x40x59 cm ×2",
+          "brand": "IKEA",
+          "article": "804.893.22",
+          "url": "https://www.ikea.com/pl/pl/p/tonstad-stolik-nocny-okl-deb-80489322/",
+          "price_pln": 998.0,
+          "finish": "okl dęb",
+          "size": [
+            0.4,
+            0.59,
+            0.4
+          ],
+          "thumb": "models/decor/room2/tonstad-nightstand/thumb.jpg",
+          "note": "2 шт., цена за пару: 998.0 zł",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/tonstad-nightstand/model.glb",
+              "pos": [
+                3.05,
+                0,
+                6.6675
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/room2/tonstad-nightstand/model.glb",
+              "pos": [
+                5.35,
+                0,
+                6.6675
+              ],
+              "rot": 180
+            }
+          ]
+        },
+        {
+          "id": "grafjallet-nightstand",
+          "name": "GRÅFJÄLLET stolik nocny 45x36x59 cm ×2",
+          "brand": "IKEA",
+          "article": "205.702.21",
+          "url": "https://www.ikea.com/pl/pl/p/grafjaellet-stolik-nocny-antracyt-20570221/",
+          "price_pln": 398.0,
+          "finish": "antracyt",
+          "size": [
+            0.45,
+            0.59,
+            0.36
+          ],
+          "thumb": "models/decor/room2/grafjallet-nightstand/thumb.jpg",
+          "note": "2 шт., цена за пару: 398.0 zł",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/grafjallet-nightstand/model.glb",
+              "pos": [
+                3.05,
+                0,
+                6.6875
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/room2/grafjallet-nightstand/model.glb",
+              "pos": [
+                5.35,
+                0,
+                6.6875
+              ],
+              "rot": 180
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wardrobe",
+      "label": "Шкаф",
+      "default": "pax-flisberget-150",
+      "options": [
+        {
+          "id": "none",
+          "name": "Нет"
+        },
+        {
+          "id": "pax-flisberget-150",
+          "name": "PAX / FLISBERGET kombinacja szafy 150x60x236 cm",
+          "brand": "IKEA",
+          "article": "s595.006.80",
+          "url": "https://www.ikea.com/pl/pl/p/pax-flisberget-kombinacja-szafy-bialy-jasnobezowy-s59500680/",
+          "price_pln": 1920.0,
+          "finish": "biały/jasnobeżowy",
+          "size": [
+            1.5,
+            2.364,
+            0.6
+          ],
+          "thumb": "models/decor/room2/pax-flisberget-150/thumb.jpg",
+          "note": "3 дверцы по 50 см: открываются на 50 см, до кровати остаётся ~17 см",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/pax-flisberget-150/model.glb",
+              "pos": [
+                2.3885,
+                0,
+                5.63
+              ],
+              "rot": 90
+            }
+          ]
+        },
+        {
+          "id": "pax-storklinta-150",
+          "name": "PAX / STORKLINTA kombinacja szafy 150x60x236 cm",
+          "brand": "IKEA",
+          "article": "s295.626.41",
+          "url": "https://www.ikea.com/pl/pl/p/pax-storklinta-kombinacja-szafy-szarobezowy-imit-debu-s29562641/",
+          "price_pln": 1865.0,
+          "finish": "szarobeżowy/imit. dębu",
+          "size": [
+            1.5,
+            2.364,
+            0.6
+          ],
+          "thumb": "models/decor/room2/pax-storklinta-150/thumb.jpg",
+          "note": "3 дверцы по 50 см",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/pax-storklinta-150/model.glb",
+              "pos": [
+                2.3885,
+                0,
+                5.63
+              ],
+              "rot": 90
+            }
+          ]
+        },
+        {
+          "id": "pax-grimo-150",
+          "name": "PAX / GRIMO szafa 150x66x236 cm",
+          "brand": "IKEA",
+          "article": "s994.297.81",
+          "url": "https://www.ikea.com/pl/pl/p/pax-grimo-szafa-bialy-bialy-s99429781/",
+          "price_pln": 1695.0,
+          "finish": "biały/biały",
+          "size": [
+            1.5,
+            2.375,
+            0.66
+          ],
+          "thumb": "models/decor/room2/pax-grimo-150/thumb.jpg",
+          "note": "раздвижные двери: проход у кровати не занимают",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/pax-grimo-150/model.glb",
+              "pos": [
+                2.4185,
+                0,
+                5.63
+              ],
+              "rot": 90
+            }
+          ]
+        },
+        {
+          "id": "pax-bergsbo-150",
+          "name": "PAX / BERGSBO szafa 150x60x236 cm",
+          "brand": "IKEA",
+          "article": "s191.272.97",
+          "url": "https://www.ikea.com/pl/pl/p/pax-bergsbo-szafa-bialy-bialy-s19127297/",
+          "price_pln": 2070.0,
+          "finish": "biały/biały",
+          "size": [
+            1.5,
+            2.364,
+            0.6
+          ],
+          "thumb": "models/decor/room2/pax-bergsbo-150/thumb.jpg",
+          "note": "3 дверцы по 50 см",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/pax-bergsbo-150/model.glb",
+              "pos": [
+                2.3885,
+                0,
+                5.63
+              ],
+              "rot": 90
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dresser",
+      "label": "Комод или стеллаж",
+      "default": "tonstad-dresser",
+      "options": [
+        {
+          "id": "none",
+          "name": "Нет"
+        },
+        {
+          "id": "tonstad-dresser",
+          "name": "TONSTAD komoda, 4 szuflady 82x47x90 cm",
+          "brand": "IKEA",
+          "article": "306.146.15",
+          "url": "https://www.ikea.com/pl/pl/p/tonstad-komoda-4-szuflady-okl-deb-30614615/",
+          "price_pln": 1099.0,
+          "finish": "okl dęb",
+          "size": [
+            0.82,
+            0.9,
+            0.47
+          ],
+          "thumb": "models/decor/room2/tonstad-dresser/thumb.jpg",
+          "note": "на крышке — общий реквизит (ваза, книги), условный",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/tonstad-dresser/model.glb",
+              "pos": [
+                5.9313,
+                0,
+                5.96
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/vase-jug-white/model.glb",
+              "pos": [
+                5.9313,
+                0.9,
+                5.74
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/books-stack-l/model.glb",
+              "pos": [
+                5.9313,
+                0.9,
+                6.08
+              ],
+              "rot": -90
+            }
+          ]
+        },
+        {
+          "id": "hauga-dresser",
+          "name": "HAUGA komoda, 3 szuflady 70x46x84 cm",
+          "brand": "IKEA",
+          "article": "205.815.21",
+          "url": "https://www.ikea.com/pl/pl/p/hauga-komoda-3-szuflady-bialy-20581521/",
+          "price_pln": 499.0,
+          "finish": "biały",
+          "size": [
+            0.7,
+            0.84,
+            0.46
+          ],
+          "thumb": "models/decor/room2/hauga-dresser/thumb.jpg",
+          "note": "на крышке — общий реквизит (ваза, книги), условный",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/hauga-dresser/model.glb",
+              "pos": [
+                5.9363,
+                0,
+                5.9
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/vase-white-tall/model.glb",
+              "pos": [
+                5.9363,
+                0.84,
+                5.72
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/books-stack-s/model.glb",
+              "pos": [
+                5.9363,
+                0.84,
+                6.02
+              ],
+              "rot": -90
+            }
+          ]
+        },
+        {
+          "id": "lastare-dresser",
+          "name": "LASTARE komoda, 4 szuflady 80x42x100 cm",
+          "brand": "IKEA",
+          "article": "605.993.50",
+          "url": "https://www.ikea.com/pl/pl/p/lastare-komoda-4-szuflady-bialy-60599350/",
+          "price_pln": 450.0,
+          "finish": "biały",
+          "size": [
+            0.8,
+            1.0,
+            0.42
+          ],
+          "thumb": "models/decor/room2/lastare-dresser/thumb.jpg",
+          "note": "на крышке — общий реквизит (ваза, книги), условный",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/lastare-dresser/model.glb",
+              "pos": [
+                5.9563,
+                0,
+                5.95
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/vase-stone-slim/model.glb",
+              "pos": [
+                5.9563,
+                1.0,
+                5.71
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/bowl-wood/model.glb",
+              "pos": [
+                5.9563,
+                1.0,
+                6.05
+              ],
+              "rot": -90
+            }
+          ]
+        },
+        {
+          "id": "tonstad-shelf",
+          "name": "TONSTAD regał 82x37x201 cm",
+          "brand": "IKEA",
+          "article": "705.284.61",
+          "url": "https://www.ikea.com/pl/pl/p/tonstad-regal-okl-deb-70528461/",
+          "price_pln": 1199.0,
+          "finish": "okl dęb",
+          "size": [
+            0.817,
+            2.005,
+            0.372
+          ],
+          "thumb": "models/decor/room2/tonstad-shelf/thumb.jpg",
+          "note": "книги и растение на полках — общий реквизит, условный",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/tonstad-shelf/model.glb",
+              "pos": [
+                5.9803,
+                0,
+                5.9585
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/books-row-m/model.glb",
+              "pos": [
+                5.9043,
+                0.469,
+                5.8085
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/books-stack-s/model.glb",
+              "pos": [
+                5.9043,
+                0.899,
+                5.7585
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/books-row-tall/model.glb",
+              "pos": [
+                5.9203,
+                0.899,
+                6.1385
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/books-row-l/model.glb",
+              "pos": [
+                5.9043,
+                1.275,
+                5.9585
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/props/plant-pothos/model.glb",
+              "pos": [
+                5.9243,
+                1.65,
+                6.1085
+              ],
+              "rot": -90
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rug",
+      "label": "Ковёр",
+      "default": "tversted",
+      "options": [
+        {
+          "id": "none",
+          "name": "Нет"
+        },
+        {
+          "id": "tversted",
+          "name": "TVERSTED dywan z krótkim włosiem 170x240 cm",
+          "brand": "IKEA",
+          "article": "205.608.06",
+          "url": "https://www.ikea.com/pl/pl/p/tversted-dywan-z-krotkim-wlosiem-bezowy-20560806/",
+          "price_pln": 499.0,
+          "finish": "beżowy",
+          "size": [
+            2.4,
+            0.0141,
+            1.7
+          ],
+          "thumb": "models/decor/room2/tversted/thumb.jpg",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/tversted/model.glb",
+              "pos": [
+                4.2,
+                0,
+                5.0
+              ],
+              "rot": 0
+            }
+          ]
+        },
+        {
+          "id": "blaljus",
+          "name": "BLÅLJUS dywan tkany na płasko 170x240 cm",
+          "brand": "IKEA",
+          "article": "305.957.06",
+          "url": "https://www.ikea.com/pl/pl/p/blaljus-dywan-tkany-na-plasko-reczne-tkanie-naturalny-szary-brazowy-w-kratke-30595706/",
+          "price_pln": 799.0,
+          "finish": "ręczne tkanie naturalny/szary/brązowy w kratkę",
+          "size": [
+            2.4,
+            0.0094,
+            1.7
+          ],
+          "thumb": "models/decor/room2/blaljus/thumb.jpg",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/blaljus/model.glb",
+              "pos": [
+                4.2,
+                0,
+                5.0
+              ],
+              "rot": 0
+            }
+          ]
+        },
+        {
+          "id": "stockholm-rug",
+          "name": "STOCKHOLM dywan tkany na płasko 170x240 cm",
+          "brand": "IKEA",
+          "article": "801.048.62",
+          "url": "https://www.ikea.com/pl/pl/p/stockholm-dywan-tkany-na-plasko-wykonano-recznie-w-paski-czarny-zlamana-biel-80104862/",
+          "price_pln": 799.0,
+          "finish": "wykonano ręcznie/w paski czarny/złamana biel",
+          "size": [
+            2.4,
+            0.0194,
+            1.7
+          ],
+          "thumb": "models/decor/room2/stockholm-rug/thumb.jpg",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/stockholm-rug/model.glb",
+              "pos": [
+                4.2,
+                0,
+                5.0
+              ],
+              "rot": 0
+            }
+          ]
+        },
+        {
+          "id": "tidtabell",
+          "name": "TIDTABELL dywan tkany na płasko 170x240 cm",
+          "brand": "IKEA",
+          "article": "305.552.82",
+          "url": "https://www.ikea.com/pl/pl/p/tidtabell-dywan-tkany-na-plasko-bezowy-30555282/",
+          "price_pln": 399.0,
+          "finish": "beżowy",
+          "size": [
+            2.4,
+            0.0076,
+            1.7
+          ],
+          "thumb": "models/decor/room2/tidtabell/thumb.jpg",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/tidtabell/model.glb",
+              "pos": [
+                4.2,
+                0,
+                5.0
+              ],
+              "rot": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "plant",
+      "label": "Растение",
+      "default": "fejka-fig",
+      "options": [
+        {
+          "id": "none",
+          "name": "Нет"
+        },
+        {
+          "id": "fejka-fig",
+          "name": "FEJKA sztuczna roślina doniczkowa 21 cm",
+          "brand": "IKEA",
+          "article": "306.152.76",
+          "url": "https://www.ikea.com/pl/pl/p/fejka-sztuczna-roslina-doniczkowa-do-wewnatrz-na-zewnatrz-figa-placzaca-30615276/",
+          "price_pln": 299.0,
+          "finish": "do wewnątrz/na zewnątrz Figa płacząca",
+          "size": [
+            0.731,
+            1.639,
+            0.739
+          ],
+          "thumb": "models/decor/room2/fejka-fig/thumb.jpg",
+          "note": "искусственная, горшок Ø21",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/fejka-fig/model.glb",
+              "pos": [
+                5.79,
+                0,
+                6.5
+              ],
+              "rot": 0
+            }
+          ]
+        },
+        {
+          "id": "yucca",
+          "name": "YUCCA ELEPHANTIPES roślina doniczkowa 24 cm",
+          "brand": "IKEA",
+          "article": "103.293.08",
+          "url": "https://www.ikea.com/pl/pl/p/yucca-elephantipes-roslina-doniczkowa-juka-bez-kolcow-2-trzonowy-10329308/",
+          "price_pln": 89.99,
+          "finish": "Juka bez kolców/2-trzonowy",
+          "size": [
+            0.496,
+            1.372,
+            0.613
+          ],
+          "thumb": "models/decor/room2/yucca/thumb.jpg",
+          "note": "живое растение в технич. горшке Ø24 (кашпо отдельно)",
+          "collide": true,
+          "parts": [
+            {
+              "model": "models/decor/room2/yucca/model.glb",
+              "pos": [
+                5.9,
+                0,
+                6.56
+              ],
+              "rot": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decor",
+      "label": "Лампы, картины, книги",
+      "default": "set-seine",
+      "options": [
+        {
+          "id": "none",
+          "name": "Нет"
+        },
+        {
+          "id": "set-seine",
+          "name": "BLIDVÄDER ×2 + BLODFLÄDER Sekwana w Giverny 118x78",
+          "brand": "IKEA",
+          "article": "805.012.58, 206.019.15",
+          "url": "https://www.ikea.com/pl/pl/p/blidvaeder-lampa-stolowa-kremowy-ceramika-bezowy-80501258/",
+          "price_pln": 597.0,
+          "finish": "kremowy ceramika/beżowy; Sekwana w Giverny",
+          "note": "лампы BLIDVÄDER 199 zł ×2 (только предметы, свет — в «Светильниках»); картина BLODFLÄDER 118x78 cm 199 zł, https://www.ikea.com/pl/pl/p/blodflaeder-obraz-sekwana-w-giverny-20601915/; книги условные",
+          "size": [
+            0.3,
+            0.5,
+            0.3
+          ],
+          "thumb": "models/decor/room2/set-seine/thumb.jpg",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/blidvader-lamp/model.glb",
+              "pos": [
+                3.13,
+                0.58,
+                6.6675
+              ],
+              "rot": 180,
+              "on": "nightstands"
+            },
+            {
+              "model": "models/decor/room2/blidvader-lamp/model.glb",
+              "pos": [
+                5.27,
+                0.58,
+                6.6675
+              ],
+              "rot": 180,
+              "on": "nightstands"
+            },
+            {
+              "model": "models/decor/props/blodflader-seine/model.glb",
+              "pos": [
+                4.2,
+                1.32,
+                6.8587
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/props/books-stack-s/model.glb",
+              "pos": [
+                2.95,
+                0.58,
+                6.6775
+              ],
+              "rot": 90,
+              "on": "nightstands"
+            }
+          ]
+        },
+        {
+          "id": "set-dunes",
+          "name": "SNÖBYAR ×2 + PJÄTTERYD szwedzkie wydmy 3×56x56",
+          "brand": "IKEA",
+          "article": "504.504.01, 406.020.18",
+          "url": "https://www.ikea.com/pl/pl/p/snoebyar-lampa-stolowa-szaroturkusowy-ceramika-szary-50450401/",
+          "price_pln": 457.99,
+          "finish": "szaroturkusowy ceramika/szary; szwedzkie wydmy",
+          "note": "лампы SNÖBYAR 179 zł ×2 (только предметы); триптих PJÄTTERYD 56x56, 3 шт. в упаковке, 99.99 zł, https://www.ikea.com/pl/pl/p/pjaetteryd-obraz-szwedzkie-wydmy-40602018/; книги условные",
+          "size": [
+            0.4,
+            0.525,
+            0.33
+          ],
+          "thumb": "models/decor/room2/set-dunes/thumb.jpg",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/snobyar-lamp/model.glb",
+              "pos": [
+                3.1,
+                0.58,
+                6.6675
+              ],
+              "rot": 180,
+              "on": "nightstands"
+            },
+            {
+              "model": "models/decor/room2/snobyar-lamp/model.glb",
+              "pos": [
+                5.3,
+                0.58,
+                6.6675
+              ],
+              "rot": 180,
+              "on": "nightstands"
+            },
+            {
+              "model": "models/decor/room2/pjatteryd-dunes/model.glb",
+              "pos": [
+                4.2,
+                1.36,
+                6.8705
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/props/books-stack-s/model.glb",
+              "pos": [
+                2.95,
+                0.58,
+                6.6775
+              ],
+              "rot": 90,
+              "on": "nightstands"
+            }
+          ]
+        },
+        {
+          "id": "set-botanic",
+          "name": "ÅRSTID ×2 + KNOPPÄNG karty botaniczne 4×40x50",
+          "brand": "IKEA",
+          "article": "303.213.73, 505.788.95",
+          "url": "https://www.ikea.com/pl/pl/p/arstid-lampa-stolowa-mosiadz-bialy-30321373/",
+          "price_pln": 299.96,
+          "finish": "mosiądz/biały; karty botaniczne owoców vintage",
+          "note": "лампы ÅRSTID 69.99 zł ×2 (только предметы); KNOPPÄNG 40x50, 2 упаковки по 2 шт., 79.99 zł, https://www.ikea.com/pl/pl/p/knoppaeng-rama-z-plakatem-karty-botaniczne-owocow-vintage-50578895/; книги условные",
+          "size": [
+            0.222,
+            0.54,
+            0.332
+          ],
+          "thumb": "models/decor/room2/set-botanic/thumb.jpg",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/arstid-lamp/model.glb",
+              "pos": [
+                3.13,
+                0.58,
+                6.6675
+              ],
+              "rot": 180,
+              "on": "nightstands"
+            },
+            {
+              "model": "models/decor/room2/arstid-lamp/model.glb",
+              "pos": [
+                5.27,
+                0.58,
+                6.6675
+              ],
+              "rot": 180,
+              "on": "nightstands"
+            },
+            {
+              "model": "models/decor/props/knoppang-botanic/model.glb",
+              "pos": [
+                4.2,
+                1.28,
+                6.8628
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/props/knoppang-botanic/model.glb",
+              "pos": [
+                4.2,
+                1.84,
+                6.8628
+              ],
+              "rot": 180
+            },
+            {
+              "model": "models/decor/props/books-stack-s/model.glb",
+              "pos": [
+                2.95,
+                0.58,
+                6.6775
+              ],
+              "rot": 90,
+              "on": "nightstands"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "curtains",
+      "label": "Шторы",
+      "default": "korgmott-beige",
+      "options": [
+        {
+          "id": "none",
+          "name": "Нет"
+        },
+        {
+          "id": "korgmott-beige",
+          "name": "KORGMOTT zasłony zaciemniające, para 145x300 cm",
+          "brand": "IKEA",
+          "article": "505.971.58",
+          "url": "https://www.ikea.com/pl/pl/p/korgmott-zaslony-zaciemniajace-para-bezowy-na-tasmie-50597158/",
+          "price_pln": 229.0,
+          "finish": "beżowy/na taśmie",
+          "size": [
+            1.7,
+            2.54,
+            0.2178
+          ],
+          "thumb": "models/decor/room2/korgmott-beige/thumb.jpg",
+          "note": "длина 300 подшита до 254 (потолок 264); + карниз HUGAD 120-210 cm biały (102.171.41, 30 zł)",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/korgmott-beige/model.glb",
+              "pos": [
+                6.0424,
+                0,
+                4.62
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/room2/hugad-rod/model.glb",
+              "pos": [
+                6.0424,
+                2.54,
+                4.62
+              ],
+              "rot": 90
+            }
+          ]
+        },
+        {
+          "id": "majgull-green",
+          "name": "MAJGULL zasłony zaciemniające, para 145x300 cm",
+          "brand": "IKEA",
+          "article": "305.860.33",
+          "url": "https://www.ikea.com/pl/pl/p/majgull-zaslony-zaciemniajace-para-ciemnozielony-na-tasmie-30586033/",
+          "price_pln": 189.0,
+          "finish": "ciemnozielony/na taśmie",
+          "size": [
+            1.7,
+            2.54,
+            0.1716
+          ],
+          "thumb": "models/decor/room2/majgull-green/thumb.jpg",
+          "note": "длина 300 подшита до 254 (потолок 264); + карниз HUGAD 120-210 cm biały (102.171.41, 30 zł)",
+          "collide": false,
+          "parts": [
+            {
+              "model": "models/decor/room2/majgull-green/model.glb",
+              "pos": [
+                6.0655,
+                0,
+                4.62
+              ],
+              "rot": -90
+            },
+            {
+              "model": "models/decor/room2/hugad-rod/model.glb",
+              "pos": [
+                6.0655,
+                2.54,
+                4.62
+              ],
+              "rot": 90
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

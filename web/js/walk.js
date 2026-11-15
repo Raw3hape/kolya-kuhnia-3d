@@ -1,12 +1,20 @@
 // Прогулка от первого лица: WASD/стрелки, взгляд перетаскиванием, джойстик на телефоне, столкновения со стенами.
-// Самодостаточный модуль: свою кнопку, подсказку и джойстик вставляет сам (стили на токенах страницы).
+// Самодостаточный модуль: свою кнопку, подсказку, прицел и джойстик вставляет сам (стили на токенах страницы).
 // API: initWalk({ THREE, camera, controls, canvas, plan, getObstacles, requestRender, onChange })
-//   -> { active, walking, enter(pos?, yaw?), exit({ restore }?), toggle(), update(dt?), boxesOf(object3d),
-//        setPersonHeight(cm), personHeight, eyeHeight }   рост по умолчанию 180 см -> глаза 1.68 м
+//   -> { active, walking, moving, running, enter(pos?, yaw?, { orbit }?), exit({ restore }?), toggle(), update(dt?),
+//        boxesOf(object3d), setPersonHeight(cm), personHeight, eyeHeight, refreshObstacles(), setAreaGate(fn), orbitPose }
+//   orbitPose — куда вернёт облёт выход из прогулки ({ pos, target, fov, order } | null); enter(…, { orbit }) задаёт его
+//     явно (seats.js: встал с дивана в прогулку — выход вернёт облёт, каким он был до посадки, а не точку сиденья).
+//   рост по умолчанию 180 см -> глаза 1.68 м.
 //   update(dt) звать каждый кадр; true — камера сдвинулась, нужен кадр. dt в секундах (можно не передавать).
-//   getObstacles() -> [{ x0, x1, z0, z1 } | THREE.Box3]: мебель в плане XZ (кухонный ряд, остров, холодильник).
+//   moving — игрок в этом кадре идёт; running — идёт с Shift (для покачивания рук в viewmodel.js).
+//   getObstacles() -> [{ x0, x1, z0, z1 } | THREE.Box3 | { ax, az, bx, bz, h }]: мебель в плане XZ и полотна дверей
+//     (толстый отрезок от петли до края полотна, h — половина толщины; их даёт doors.js).
+//   refreshObstacles() — перечитать препятствия сейчас (дверь двигается), иначе раз в 0.75 с.
+//   setAreaGate(id => bool) — можно ли телепортом попасть в зону снаружи ('balcony', 'landing'): дверь туда открыта.
 //   onChange(active) — режим включился/выключился (на время прогулки выключить вырез стен).
-// Ядро столкновений (buildColliders, moveCircle, findFree, roomOf) — чистые функции без DOM, их проверяет тест в node.
+// Ядро столкновений (buildColliders, moveCircle, findFree, roomOf, outdoorAreas, areaBeyond) — чистые функции
+// без DOM, их проверяет тест в node. Проёмы дверей в ядре открыты: закрытые полотна и глухие части рам даёт doors.js.
 
 import { ensureDock, injectStyle, subtractRect } from './minimap.js';
 
@@ -22,46 +30,82 @@ export const WALK = {
   fovV: 55, fovHMax: 88, fovHMinPortrait: 60, fovMin: 40, fovMax: 75,
   pitch0: -5,         // начальный взгляд чуть вниз, градусы
   pitchMax: 80,       // наклон взгляда, градусы
-  doorAngle: 85,      // межкомнатные полотна открыты на этот угол (как в model.js)
   start: { x: 1.3, z: 4.3, yaw: 0 },   // холл у кухни, взгляд к окнам (−z)
   transition: 0.75,   // вход/выход, с
 };
 
+// Зоны снаружи квартиры, куда можно выйти через открытую дверь. Один источник и для прогулки, и для model.js
+// (ограждение балкона и площадка у входной двери строятся по этим прямоугольникам).
+export const OUTDOOR = {
+  rail: 0.085,         // внутренняя грань ограждения балкона от края плиты, м
+  landingDepth: 1.0,   // площадка за входной дверью, м от двери
+  landingSide: 0.45,   // площадка шире двери на столько с каждой стороны, м
+};
+// -> [{ id, x0, x1, z0, z1, open }]: прямоугольник, по которому можно ходить; open — сторона к дому (там стена с дверью).
+export function outdoorAreas(plan) {
+  const out = [], b = plan.balcony, r = OUTDOOR.rail;
+  if (b) out.push({ id: 'balcony', x0: b.x0 + r, x1: b.x1 - r, z0: b.z0 + r, z1: b.z1, open: 'z1' });
+  const e = plan.openings.find(o => o.type === 'entry');
+  if (e) out.push({ id: 'landing', x0: e.x0 - OUTDOOR.landingSide, x1: e.x1 + OUTDOOR.landingSide, z0: e.z1, z1: e.z1 + OUTDOOR.landingDepth, open: 'z0' });
+  return out;
+}
+
+// Куда ведёт наружная дверь: { area: id | null, side: 'x0'|'x1'|'z0'|'z1' } — сторона проёма, что смотрит из квартиры.
+export function areaBeyond(plan, o) {
+  const X = o.along === 'x', c = X ? (o.x0 + o.x1) / 2 : (o.z0 + o.z1) / 2, d = 0.3;
+  const sides = X ? [['z0', c, o.z0 - d], ['z1', c, o.z1 + d]] : [['x0', o.x0 - d, c], ['x1', o.x1 + d, c]];
+  const pt = sides.map(([side, x, z]) => ({ side, x, z }));
+  const inRoom = q => Object.entries(plan.rooms).some(([id, r]) => id !== 'shaft' && r.rects.some(t => q.x >= t.x0 && q.x <= t.x1 && q.z >= t.z0 && q.z <= t.z1));
+  const out = pt.find(q => !inRoom(q)) ?? pt[0];
+  const area = outdoorAreas(plan).find(a => out.x >= a.x0 - d && out.x <= a.x1 + d && out.z >= a.z0 - d && out.z <= a.z1 + d);
+  return { area: area?.id ?? null, side: out.side };
+}
+
 // ---------- ядро: план -> препятствия ----------
 
-// Где точка: id комнаты, 'door:<id>' в межкомнатном проёме, null — вне квартиры (шахта и балкон тоже «вне»).
+// Где точка: id комнаты, 'door:<id>' в дверном проёме, id зоны снаружи ('balcony', 'landing'),
+// null — вне квартиры (шахта тоже «вне»).
 export function roomOf(plan, x, z) {
   for (const [id, r] of Object.entries(plan.rooms)) {
     if (id !== 'shaft' && r.rects.some(q => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1)) return id;
   }
-  const d = plan.openings.find(o => o.type === 'interior' && x >= o.x0 && x <= o.x1 && z >= o.z0 && z <= o.z1);
-  return d ? 'door:' + d.id : null;
+  const d = plan.openings.find(o => o.type !== 'window' && x >= o.x0 && x <= o.x1 && z >= o.z0 && z <= o.z1);
+  if (d) return 'door:' + d.id;
+  return outdoorAreas(plan).find(a => x >= a.x0 && x <= a.x1 && z >= a.z0 && z <= a.z1)?.id ?? null;
 }
 
-// Стены минус межкомнатные проёмы (они открыты), плюс стойки коробок и открытые полотна.
-// Окна, балконные и входная дверь закрыты: их проёмы остаются стеной.
-export function buildColliders(plan, { doorAngle = WALK.doorAngle } = {}) {
-  const doors = plan.openings.filter(o => o.type === 'interior');
+// Стены минус все дверные проёмы (межкомнатные, балконные, входная), плюс стойки коробок межкомнатных дверей
+// и границы зон снаружи: ограждение балкона, стены площадки, «французский балкон» за дверью, которая никуда не ведёт.
+// Окна остаются стеной. Полотна дверей и глухие части балконных рам — динамические, их даёт doors.js.
+export function buildColliders(plan) {
+  const holes = plan.openings.filter(o => o.type !== 'window');
   let boxes = plan.walls.map(w => ({ x0: w.x0, x1: w.x1, z0: w.z0, z1: w.z1 }));
-  for (const o of doors) boxes = boxes.flatMap(b => subtractRect(b, o));
-  const segs = [];
-  for (const o of doors) {
-    const X = o.along === 'x', L = o.leaf ?? o.width - 0.1, jamb = (o.width - L) / 2;
-    if (jamb > 0.001) {
-      if (X) boxes.push({ x0: o.x0, x1: o.x0 + jamb, z0: o.z0, z1: o.z1 }, { x0: o.x1 - jamb, x1: o.x1, z0: o.z0, z1: o.z1 });
-      else boxes.push({ x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z0 + jamb }, { x0: o.x0, x1: o.x1, z0: o.z1 - jamb, z1: o.z1 });
-    }
-    // Полотно — та же формула, что в model.js buildInteriorDoor (оси u вдоль стены, t поперёк)
-    const cu = X ? (o.x0 + o.x1) / 2 : (o.z0 + o.z1) / 2, ct = X ? (o.z0 + o.z1) / 2 : (o.x0 + o.x1) / 2;
-    const T = X ? o.z1 - o.z0 : o.x1 - o.x0, W = o.width / 2, lt = 0.04, a = (doorAngle * Math.PI) / 180;
-    const start = o.hinge === 'start', sw = o.swing ?? 1;
-    const hu = start ? -W + jamb : W - jamb, ht = sw * (T / 2 - lt / 2);
-    const du = (start ? 1 : -1) * Math.cos(a), dt = sw * Math.sin(a);
-    const [hx, hz] = X ? [cu + hu, ct + ht] : [ct + ht, cu + hu];
-    const [wx, wz] = X ? [du, dt] : [dt, du];
-    segs.push({ ax: hx, az: hz, bx: hx + wx * L, bz: hz + wz * L, h: lt / 2, door: o.id });
+  for (const o of holes) boxes = boxes.flatMap(b => subtractRect(b, o));
+  for (const o of holes) {
+    if (o.type !== 'interior') continue;
+    const L = o.leaf ?? o.width - 0.1, jamb = (o.width - L) / 2;
+    if (jamb <= 0.001) continue;
+    if (o.along === 'x') boxes.push({ x0: o.x0, x1: o.x0 + jamb, z0: o.z0, z1: o.z1 }, { x0: o.x1 - jamb, x1: o.x1, z0: o.z0, z1: o.z1 });
+    else boxes.push({ x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z0 + jamb }, { x0: o.x0, x1: o.x1, z0: o.z1 - jamb, z1: o.z1 });
   }
-  return { boxes, segs };
+  // зоны снаружи: три стороны закрыты, сторона к дому открыта (там стена дома со своими проёмами)
+  const F = 0.5;
+  for (const a of outdoorAreas(plan)) {
+    const zLo = a.open === 'z0' ? a.z0 : a.z0 - F, zHi = a.open === 'z1' ? a.z1 : a.z1 + F;
+    boxes.push({ x0: a.x0 - F, x1: a.x0, z0: zLo, z1: zHi }, { x0: a.x1, x1: a.x1 + F, z0: zLo, z1: zHi });
+    if (a.open !== 'z0') boxes.push({ x0: a.x0, x1: a.x1, z0: a.z0 - F, z1: a.z0 });
+    if (a.open !== 'z1') boxes.push({ x0: a.x0, x1: a.x1, z0: a.z1, z1: a.z1 + F });
+  }
+  for (const o of holes) {
+    if (o.type === 'interior') continue;
+    const { area, side } = areaBeyond(plan, o);
+    if (area) continue;
+    const f = { x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z1 };
+    if (side === 'x1') { f.x0 = o.x1; f.x1 = o.x1 + F; } else if (side === 'x0') { f.x1 = o.x0; f.x0 = o.x0 - F; }
+    else if (side === 'z1') { f.z0 = o.z1; f.z1 = o.z1 + F; } else { f.z1 = o.z0; f.z0 = o.z0 - F; }
+    boxes.push(f);
+  }
+  return { boxes, segs: [] };
 }
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -100,11 +144,13 @@ function pushSeg(p, s, r) {
   p.x = cx + (dx / d) * R; p.z = cz + (dz / d) * R;
   return true;
 }
+// Препятствие из списка extra: коробка или толстый отрезок (полотно двери).
+const push = (p, b, r) => (b.ax !== undefined ? pushSeg(p, b, r) : pushBox(p, b, r));
 function resolve(p, col, extra, r) {
   for (let i = 0; i < 8; i++) {
     let hit = false;
     for (const b of col.boxes) if (pushBox(p, b, r)) hit = true;
-    for (const b of extra) if (pushBox(p, b, r)) hit = true;
+    for (const b of extra) if (push(p, b, r)) hit = true;
     for (const s of col.segs) if (pushSeg(p, s, r)) hit = true;
     if (!hit) return true;
   }
@@ -115,7 +161,7 @@ function resolve(p, col, extra, r) {
 export function isFree(p, col, extra = [], r = WALK.radius) {
   const q = { x: p.x, z: p.z };
   for (const b of col.boxes) if (pushBox(q, b, r - 1e-4)) return false;
-  for (const b of extra) if (pushBox(q, b, r - 1e-4)) return false;
+  for (const b of extra) if (push(q, b, r - 1e-4)) return false;
   for (const s of col.segs) if (pushSeg(q, s, r - 1e-4)) return false;
   return true;
 }
@@ -133,28 +179,31 @@ export function moveCircle(p, dx, dz, col, extra = [], r = WALK.radius) {
 }
 
 // Ближайшее свободное место в той же комнате (для входа и телепорта: клик по столешнице -> рядом с ней, а не за стеной).
+// Если в той же комнате места нет (стоял в дверном проёме, а полотно закрылось), — любое место в квартире рядом.
 export function findFree(plan, p, col, extra = [], r = WALK.radius) {
   const room = roomOf(plan, p.x, p.z);
-  const same = q => { const id = roomOf(plan, q.x, q.z); return room ? id === room : id != null; };
-  if (same(p) && isFree(p, col, extra, r)) return { x: p.x, z: p.z };
-  for (let d = 0.05; d <= 2.0; d += 0.05) {
-    const n = Math.max(8, Math.round((2 * Math.PI * d) / 0.05));
-    let best = null;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2, q = { x: p.x + Math.cos(a) * d, z: p.z + Math.sin(a) * d };
-      if (same(q) && isFree(q, col, extra, r)) { best = q; break; }
+  const search = same => {
+    if (same(p) && isFree(p, col, extra, r)) return { x: p.x, z: p.z };
+    for (let d = 0.05; d <= 2.0; d += 0.05) {
+      const n = Math.max(8, Math.round((2 * Math.PI * d) / 0.05));
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2, q = { x: p.x + Math.cos(a) * d, z: p.z + Math.sin(a) * d };
+        if (same(q) && isFree(q, col, extra, r)) return q;
+      }
     }
-    if (best) return best;
-  }
-  return null;
+    return null;
+  };
+  const any = q => roomOf(plan, q.x, q.z) != null;
+  return (room ? search(q => roomOf(plan, q.x, q.z) === room) : null) ?? search(any);
 }
 
-// Препятствия в любом виде -> { x0, x1, z0, z1 }
+// Препятствия в любом виде -> { x0, x1, z0, z1 } или отрезок { ax, az, bx, bz, h } как есть
 function normBoxes(list) {
   const out = [];
   for (const b of list || []) {
     if (!b) continue;
-    if (b.min && b.max) { if (b.max.x > b.min.x && b.max.z > b.min.z) out.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z }); }
+    if (b.ax !== undefined) out.push(b);
+    else if (b.min && b.max) { if (b.max.x > b.min.x && b.max.z > b.min.z) out.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z }); }
     else if (b.x1 > b.x0 && b.z1 > b.z0) out.push({ x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1 });
   }
   return out;
@@ -162,7 +211,8 @@ function normBoxes(list) {
 
 // ---------- режим прогулки ----------
 
-const MOVE = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
+// E — «использовать» (двери, doors.js), поэтому поворот только стрелками
+const MOVE = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 const coarse = () => { try { return matchMedia('(hover: none), (pointer: coarse)').matches; } catch { return false; } };
 const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
@@ -184,6 +234,15 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   let yaw = 0, pitch = 0, tYaw = 0, tPitch = 0, turnVel = 0, fov = WALK.fovV, tFov = WALK.fovV, fovAdj = 0, step = 0;
   let heightCm = WALK.height, eye = (WALK.height * WALK.eyeRatio) / 100;
   let saved = null, anim = null, lastT = 0, touchSeen = false, locked = false, unlockedAt = 0;
+  let moving = false, running = false, areaGate = () => false;
+  // Можно ли телепортом/входом оказаться в точке: в квартире — всегда, снаружи — если дверь туда открыта
+  // (или игрок уже стоит в этой зоне).
+  const reachable = q => {
+    const id = roomOf(plan, q.x, q.z);
+    if (id == null) return false;
+    if (!outdoorAreas(plan).some(a => a.id === id)) return true;
+    return areaGate(id) || (mode === 'walk' && roomOf(plan, p.x, p.z) === id);
+  };
   const keys = new Set();
   const joy = { id: null, x: 0, y: 0 };
   const PITCH = (WALK.pitchMax * Math.PI) / 180;
@@ -219,8 +278,8 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   const showHint = () => {
     const touch = touchSeen || coarse();
     hint.innerHTML = touch
-      ? 'Джойстик — идти · веди пальцем — смотреть · план — перейти'
-      : '<b>W A S D</b> — идти · тяни мышью — смотреть · <b>Shift</b> — быстрее · колесо — шаг · <b>Esc</b> — выход';
+      ? 'Джойстик — идти · веди пальцем — смотреть · наведи на дверь — открыть · план — перейти'
+      : '<b>W A S D</b> — идти · тяни мышью — смотреть · <b>E</b> или клик — дверь · <b>Shift</b> — быстрее · <b>Esc</b> — выход';
     hint.hidden = false; hint.classList.remove('fade');
     clearTimeout(hintTimer);
     hintTimer = setTimeout(() => { hint.classList.add('fade'); hintTimer = setTimeout(() => { hint.hidden = true; }, 450); }, 5500);
@@ -228,18 +287,18 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   const hideHint = () => { clearTimeout(hintTimer); hint.hidden = true; };
   const syncFloat = () => {
     joyEl.hidden = !(mode === 'walk' || mode === 'entering') || !(touchSeen || coarse());
-    cross.hidden = !(locked && mode === 'walk');
+    cross.hidden = mode !== 'walk';
     document.body.classList.toggle('kw-walking', mode !== 'off');
   };
 
   // ---------- вход и выход ----------
 
-  function enter(pos, yawArg) {
+  function enter(pos, yawArg, { orbit } = {}) {
     if (mode === 'entering' || mode === 'exiting') return false;
     refreshObstacles(true);
     if (mode === 'walk') {
       // телепорт внутри прогулки: только в квартиру
-      if (!pos || roomOf(plan, pos.x, pos.z) == null) return false;
+      if (!pos || !reachable(pos)) return false;
       const to = findFree(plan, { x: pos.x, z: pos.z }, col, extra);
       if (!to) return false;
       vel.x = vel.z = 0; step = 0;
@@ -251,11 +310,13 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
       return true;
     }
     // из орбиты
-    saved = { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov, order: camera.rotation.order };
+    saved = orbit
+      ? { pos: orbit.pos.clone(), target: orbit.target.clone(), fov: orbit.fov, order: orbit.order || 'XYZ' }
+      : { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov, order: camera.rotation.order };
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
     const camYaw = Math.hypot(dir.x, dir.z) > 0.15 ? Math.atan2(-dir.x, -dir.z) : WALK.start.yaw;
     const from = pos ?? { x: camera.position.x, z: camera.position.z };
-    let start = roomOf(plan, from.x, from.z) != null ? findFree(plan, from, col, extra) : null;
+    let start = reachable(from) ? findFree(plan, from, col, extra) : null;
     let y0 = yawArg ?? camYaw;
     if (!start) { start = findFree(plan, WALK.start, col, extra) || { ...WALK.start }; y0 = yawArg ?? WALK.start.yaw; }
     p.x = start.x; p.z = start.z;
@@ -266,7 +327,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     camera.rotation.reorder('YXZ');   // reorder сохраняет поворот (а присвоение .order — нет)
     mode = 'entering';
     anim = { t: 0, dur: reduced() ? 0 : WALK.transition, kind: 'enter',
-      fromPos: saved.pos.clone(), toPos: new THREE.Vector3(p.x, eye, p.z),
+      fromPos: camera.position.clone(), toPos: new THREE.Vector3(p.x, eye, p.z),
       fromQ: camera.quaternion.clone(), toQ: quatOf(yaw, pitch), fromFov: camera.fov, toFov: fov,
       end: () => { mode = 'walk'; syncFloat(); } };
     lastT = performance.now();
@@ -278,7 +339,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   function exit({ restore = true } = {}) {
     if (mode === 'off' || mode === 'exiting') return;
-    keys.clear(); joyRelease(); lookRelease();
+    keys.clear(); joyRelease(); lookRelease(); moving = running = false;
     if (locked) { try { document.exitPointerLock(); } catch { /* нет блокировки */ } }
     hideHint();
     if (!restore || !saved) {
@@ -336,6 +397,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     dt = clamp(dt, 0, 0.05);
 
     if (anim) {
+      moving = running = false;
       anim.t = anim.dur > 0 ? Math.min(1, anim.t + dt / anim.dur) : 1;
       const k = anim.t, e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
       camera.position.lerpVectors(anim.fromPos, anim.toPos, e);
@@ -354,7 +416,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     if (!isFree(p, col, extra)) { const f = findFree(plan, p, col, extra); if (f) { p.x = f.x; p.z = f.z; } }
 
     // поворот стрелками
-    const turnIn = (keys.has('ArrowLeft') || keys.has('KeyQ') ? 1 : 0) - (keys.has('ArrowRight') || keys.has('KeyE') ? 1 : 0);
+    const turnIn = (keys.has('ArrowLeft') ? 1 : 0) - (keys.has('ArrowRight') ? 1 : 0);
     turnVel += (turnIn * WALK.turn - turnVel) * (1 - Math.exp(-10 * dt));
     if (!turnIn && Math.abs(turnVel) < 1e-3) turnVel = 0;
     tYaw += turnVel * dt;
@@ -362,7 +424,8 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     // ход
     let f = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
     let s = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0);
-    let speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? WALK.run : WALK.walk;
+    const shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
+    let speed = shift ? WALK.run : WALK.walk;
     if (joy.id != null) {
       const jm = Math.min(1, Math.hypot(joy.x, joy.y));
       if (jm > 0.12) { f += -joy.y / jm; s += joy.x / jm; speed = jm > 0.95 ? WALK.run * 0.8 : WALK.walk * Math.min(1, jm / 0.8); }
@@ -381,6 +444,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     step -= take;
 
     const mx = vel.x * dt + fw.x * take, mz = vel.z * dt + fw.z * take;
+    const px0 = p.x, pz0 = p.z;
     if (mx || mz) {
       const px = p.x, pz = p.z;
       moveCircle(p, mx, mz, col, extra);
@@ -390,6 +454,9 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
         if (Math.hypot(ax, az) < Math.hypot(vel.x, vel.z) - 1e-3) { vel.x = ax; vel.z = az; }
       }
     }
+
+    moving = dt > 0 && Math.hypot(p.x - px0, p.z - pz0) / dt > 0.15;
+    running = moving && (shift || (joy.id != null && Math.hypot(joy.x, joy.y) > 0.95));
 
     // взгляд и угол обзора — с лёгким сглаживанием; обзор следует за пропорциями окна (поворот телефона)
     tFov = clamp(naturalFov(camera.aspect) + fovAdj, WALK.fovMin, WALK.fovMax);
@@ -530,7 +597,12 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   return {
     get active() { return mode !== 'off'; },
     get walking() { return mode === 'walk'; },
+    get moving() { return mode === 'walk' && moving; },
+    get running() { return mode === 'walk' && running; },
+    refreshObstacles: () => refreshObstacles(true),
+    setAreaGate(fn) { areaGate = typeof fn === 'function' ? fn : () => false; },
     get personHeight() { return heightCm; },
+    get orbitPose() { return saved && { pos: saved.pos.clone(), target: saved.target.clone(), fov: saved.fov, order: saved.order }; },
     get eyeHeight() { return eye; },
     setPersonHeight,
     enter, exit, toggle, update, boxesOf,

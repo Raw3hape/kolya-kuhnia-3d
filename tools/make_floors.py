@@ -5,7 +5,8 @@
     uv run --with numpy --with pillow tools/make_floors.py g_plank_ash --force   # выбранные id
 
 Рецепты: tools/textures.json → "generated" и (если есть) tools/real_tiles.json — фото реальной
-плитки, каждая запись рендерится как pattern "photo". Результат: web/textures/<id>/ с color, normal
+плитки, каждая запись рендерится как pattern "photo" (flat — снять градиент света скана; shape "hex" — шестигранник с плоским верхом,
+size_m = ширина по углам × высота по граням). maxpx в рецепте — потолок стороны текстуры. Результат: web/textures/<id>/ с color, normal
 (OpenGL, зелёный = +V), rough, thumb .jpg и meta.json {size, sizeV, rough}. UV в метрах: текстура
 повторяется каждые size × sizeV м; rough.jpg хранит абсолютную шероховатость.
 
@@ -371,28 +372,16 @@ def render_photo(r, out):
     if bond and (ny * bond) % 1:
         ny += 1
     PU, PV = nx * tw, ny * th
-    if max(PU, PV) * ppm > MAXPX:
-        ppm = MAXPX / max(PU, PV)
+    ppm = min(ppm, r.get("maxpx", MAXPX) / max(PU, PV))
     tpx, tpy = round(tw * ppm), round(th * ppm)
     ppm_x, ppm_y = tpx / tw, tpy / th
     W, H = nx * tpx, ny * tpy
 
-    gain = r.get("gain", 1.0)
-    rough_t = r.get("rough", rough_of(r.get("finish", "")))
-    relief = r.get("relief", 0.00008)          # σ рельефа, м
-    lin = [to_lin(np.asarray(im.resize((tpx, tpy), Image.LANCZOS))) * gain for im in imgs]
-    # рельеф: high-pass яркости (крап заполнителя), нормирован на σ
-    rel = []
-    for c in lin:
-        L = lum(c)
-        hp = L - gauss_blur(L, 0.004 * ppm_x)
-        rel.append(hp / (hp.std() + 1e-6) * relief)
-    if "grout" in r:
-        gcol = hex_lin(r["grout"])
-    else:                                    # цвет краёв лица, чуть темнее
-        edge = np.concatenate([np.concatenate([c[:8].reshape(-1, 3), c[-8:].reshape(-1, 3),
-                                               c[:, :8].reshape(-1, 3), c[:, -8:].reshape(-1, 3)]) for c in lin])
-        gcol = np.median(edge, 0) * 0.78
+    lin = [to_lin(np.asarray(im.resize((tpx, tpy), Image.LANCZOS))) * r.get("gain", 1.0) for im in imgs]
+    if r.get("flat"):
+        lin = [flatten(c, r["flat"]) for c in lin]
+    rel = [relief_of(r, c, ppm_x) for c in lin]
+    gcol = grout_of(r, lin)
     square = tpx == tpy
     rots = r.get("rot") or ([0, 90, 180, 270] if square and not directional(r) else [0, 180])
     rots = [k for k in rots if square or k % 180 == 0]
@@ -415,19 +404,103 @@ def render_photo(r, out):
     xx = (np.arange(W)[None, :] - (np.arange(H)[:, None] // tpy) * round(bond * tpx)) % tpx
     xx = (xx + 0.5) / ppm_x
     d = np.minimum(np.minimum(xx, tw - xx), dy)
+    finish_tiles(out, r, color, height, d, gcol, ppm_x, ppm_y, PU, PV)
+    return PU, PV
+
+
+def render_hex(r, out):
+    """Шестигранник с плоским верхом: лицо = габарит плитки, повороты кратны 60°, шов по нормали к граням."""
+    rng = np.random.default_rng(zlib.crc32(r["id"].encode()))
+    tw, th = r["size_m"]                     # ширина по углам, высота по граням
     g = r.get("grout_w", 0.002) / 2
-    px = 1 / ppm_x
-    gm = np.clip((g - d) / px + 0.5, 0, 1)
+    a = th / 2 + g                           # апофема ячейки (плитка + полшва)
+    dx, dy = 1.5 * a / np.cos(np.pi / 6), 2 * a
+    nx = max(2, 2 * round(1.8 / dx / 2))     # чётное число колонн — нечётные сдвинуты на dy/2
+    ny = max(2, round(1.8 / dy))
+    PU, PV = nx * dx, ny * dy
+    faces = [Image.open(face_path(f)).convert("RGB") for f in r["faces"]]
+    ppm = min(min(im.width / tw for im in faces), r.get("ppm", PHOTO_PPM), r.get("maxpx", MAXPX) / max(PU, PV))
+    W, H = round(PU * ppm), round(PV * ppm)
+    ppm_x, ppm_y = W / PU, H / PV
+    fw, fh = round(tw * ppm_x), round(th * ppm_y)
+    lin = [to_lin(np.asarray(im.resize((fw, fh), Image.LANCZOS))) * r.get("gain", 1.0) for im in faces]
+    rel = [relief_of(r, c, ppm_x) for c in lin]
+    gcol = grout_of(r, lin)
+
+    X = ((np.arange(W) + 0.5) / ppm_x)[None, :].repeat(H, 0)
+    Y = ((np.arange(H) + 0.5) / ppm_y)[:, None].repeat(W, 1)
+    best = None
+    for c in (np.floor(X / dx), np.floor(X / dx) + 1):   # центр ячейки — в одной из двух ближайших колонн
+        off = (c % 2) * dy / 2
+        row = np.round((Y - off) / dy)
+        lx, ly = X - c * dx, Y - (row * dy + off)
+        hh = np.maximum(np.abs(ly), np.abs(lx) * np.cos(np.pi / 6) + np.abs(ly) * 0.5)
+        if best is None:
+            best = [hh, lx, ly, c, row]
+        else:
+            m = hh < best[0]
+            for i, v in enumerate((hh, lx, ly, c, row)):
+                best[i] = np.where(m, v, best[i])
+    hh, lx, ly, c, row = best
+    cell = (c.astype(int) % nx) * ny + row.astype(int) % ny
+    face = rng.integers(0, len(lin), nx * ny)[cell]
+    ang = rng.integers(0, 6, nx * ny)[cell] * np.pi / 3
+    tint = (1 + rng.normal(0, 0.01, nx * ny))[cell]
+    ca, sa = np.cos(ang), np.sin(ang)
+    sx = np.clip((lx * ca + ly * sa) / tw + 0.5, 0, 1) * (fw - 1.001)
+    sy = np.clip((-lx * sa + ly * ca) / th + 0.5, 0, 1) * (fh - 1.001)
+    color = np.zeros((H, W, 3), np.float32)
+    height = np.zeros((H, W), np.float32)
+    for f in range(len(lin)):
+        m = face == f
+        color[m] = bilinear(lin[f], sx[m], sy[m]) * tint[m][:, None]
+        height[m] = bilinear(rel[f][..., None], sx[m], sy[m])[:, 0]
+    finish_tiles(out, r, color, height, a - hh, gcol, ppm_x, ppm_y, PU, PV)
+    return PU, PV
+
+
+def flatten(c, k):
+    """Снять плавный градиент освещения скана (квадратичная поверхность яркости), k — доля снятия."""
+    h, w = c.shape[:2]
+    L = lum(c)
+    g = 32
+    Ls = L[:h // g * g, :w // g * g].reshape(g, h // g, g, w // g).mean((1, 3))
+    v, u = np.mgrid[0:1:g * 1j, 0:1:g * 1j]
+    A = np.stack([np.ones_like(u), u, v, u * u, u * v, v * v], -1).reshape(-1, 6)
+    q = np.linalg.lstsq(A, Ls.reshape(-1), rcond=None)[0]
+    v, u = np.mgrid[0:1:h * 1j, 0:1:w * 1j]
+    S = q[0] + q[1] * u + q[2] * v + q[3] * u * u + q[4] * u * v + q[5] * v * v
+    return c * ((L.mean() / np.maximum(S, 1e-4)) ** k)[..., None].astype(np.float32)
+
+
+def relief_of(r, c, ppm):
+    """Рельеф: high-pass яркости (крап заполнителя), нормирован на σ рельефа (м)."""
+    L = lum(c)
+    hp = L - gauss_blur(L, 0.004 * ppm)
+    return hp / (hp.std() + 1e-6) * r.get("relief", 0.00008)
+
+
+def grout_of(r, lin):
+    """Цвет шва: из рецепта или цвет краёв лиц, чуть темнее."""
+    if "grout" in r:
+        return hex_lin(r["grout"])
+    edge = np.concatenate([np.concatenate([c[:8].reshape(-1, 3), c[-8:].reshape(-1, 3),
+                                           c[:, :8].reshape(-1, 3), c[:, -8:].reshape(-1, 3)]) for c in lin])
+    return np.median(edge, 0) * 0.78
+
+
+def finish_tiles(out, r, color, height, d, gcol, ppm_x, ppm_y, PU, PV):
+    """Шов по расстоянию d (м) до края ячейки, шероховатость по отделке; запись карт (вход y-вниз)."""
+    g = r.get("grout_w", 0.002) / 2
+    gm = np.clip((g - d) * ppm_x + 0.5, 0, 1)
     e = np.clip(1 - (d - g) / 0.001, 0, 1) * (1 - gm)
     color = color * (1 - 0.05 * e)[..., None] * (1 - gm[..., None]) + gcol * gm[..., None]
     height = height * (1 - gm) - 0.0004 * e - 0.0015 * gm
     L = lum(color)
-    rough = rough_t + (L - L.mean()) * -0.15
+    rough = r.get("rough", rough_of(r.get("finish", ""))) + (L - L.mean()) * -0.15
     rough = rough * (1 - gm) + 0.9 * gm
-    # в систему y-вверх
     color, height, rough = np.flipud(color), np.flipud(height), np.flipud(rough)
     finish(out, r, color, np.zeros(color.shape[:2] + (2,), np.float32), rough, height, ppm_x, ppm_y, PU, PV)
-    return PU, PV
 
 
 def gauss_blur(a, sigma):
@@ -476,7 +549,7 @@ def main():
         if (out / "meta.json").exists() and not force:
             continue
         try:
-            fn = render_photo if r["pattern"] == "photo" else render_pattern
+            fn = render_pattern if r["pattern"] != "photo" else render_hex if r.get("shape") == "hex" else render_photo
             u, v = fn(dict(r), out)
             print(f"{r['id']:32s} {u:.3f} x {v:.3f} m")
         except Exception as e:          # одна сломанная запись не роняет остальные

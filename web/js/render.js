@@ -53,7 +53,12 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, ...q.pd });
     composer.addPass(ao);
     // Свечение только у очень ярких точек (лампы, блик солнца): порог в линейной яркости до экспозиции
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.15, 0.35, 2.0));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.15, 0.35, 2.0);
+    // ТВ (tv.js): альфа кадра — «дыра» под YouTube-плеер за холстом. Свечение прибавляет только цвет и альфу не трогает
+    // (у штатного AdditiveBlending альфа экрана росла бы на ~0.2 и затемняла видео). GTAO и OutputPass альфу и так хранят.
+    Object.assign(bloom.blendMaterial, { blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneFactor,
+      blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor });
+    composer.addPass(bloom);
     composer.addPass(new OutputPass());
   }
 
@@ -94,6 +99,10 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   let balance = null;   // множители RGB баланса белого фото (Vector3 в шейдере вывода)
   let progressCb = null, lastReport = '';
   const waiters = [];
+  // Слой поверх растра (руки с оружием в прогулке, viewmodel.js): { active() -> bool, draw() }.
+  // Рисуется только в живом растре: не в фото-режиме, не в capture() и не в трассировщике; пока он виден,
+  // авто-фото (ultra) не включается, чтобы слой не пропадал из кадра.
+  let overlay = null;
 
   function invalidate() {
     lastChange = performance.now();
@@ -119,10 +128,11 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     for (let i = waiters.length - 1; i >= 0; i--) {
       if (ptFailed || broken || lost || done >= waiters[i].n || now > waiters[i].until) waiters.splice(i, 1)[0].resolve();
     }
-    const want = !ptFailed && !broken && (explicit || (!!q.autoPhoto && !autoSuppressed && quiet >= q.autoPhoto));
+    const ov = !explicit && !!overlay?.active();
+    const want = !ptFailed && !broken && (explicit || (!!q.autoPhoto && !autoSuppressed && !ov && quiet >= q.autoPhoto));
     if (want && !pt) loadTracer();
     if (!want || !pt || quiet < SETTLE) {
-      if (rasterDirty) { rasterDirty = false; drawRaster(); }
+      if (rasterDirty) { rasterDirty = false; drawRaster(); if (ov) overlay.draw(); }
       report(0, want ? (pt ? 'waiting' : 'loading') : 'idle');
       return;
     }
@@ -255,7 +265,15 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 
   const toBlob = () => new Promise(res => canvas.toBlob(res, 'image/png'));
 
+  // Живой растр против снимка (tv.js): onLive(fn) — fn(false) перед снимком и fn(true) после, чтобы «дыра» под
+  // YouTube-плеер не попала в PNG прозрачностью: на снимке экран показывает постер.
+  const liveFns = new Set();
   async function capture(minSamples = 0) {
+    liveFns.forEach(fn => fn(false));
+    try { return await captureFrame(minSamples); } finally { liveFns.forEach(fn => fn(true)); }
+  }
+
+  async function captureFrame(minSamples) {
     if (!minSamples || ptFailed) {   // растр с удвоенной плотностью
       applySize(Math.max(2, renderer.getPixelRatio()));
       drawRaster();
@@ -269,7 +287,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     const n = Math.min(Math.max(16, minSamples), maxSamples);
     await new Promise(resolve => waiters.push({ n, until: performance.now() + CAPTURE_TIMEOUT, resolve }));
     if (lost) { if (entered) exitPhoto(); return null; }
-    if (ptFailed || broken || !pt) { if (entered) exitPhoto(); return capture(0); }
+    if (ptFailed || broken || !pt) { if (entered) exitPhoto(); return captureFrame(0); }
     pt.pausePathTracing = true;      // перерисовать накопленное без нового прохода и сразу прочитать холст
     pt.renderSample();
     const blob = toBlob();
@@ -327,8 +345,10 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     enterPhoto,
     exitPhoto,
     capture,
+    onLive(fn) { liveFns.add(fn); return () => liveFns.delete(fn); },   // см. capture() — tv.js
     dispose,
     onProgress(cb) { progressCb = cb; },
+    setOverlay(o) { overlay = o; rasterDirty = true; },   // см. overlay выше; null — снять
     get quality() { return quality; },
     get photo() { return explicit; },
     get samples() { return tracedSamples(); },

@@ -4,17 +4,27 @@
 // Оси плана: X вдоль оконной стены, Z вглубь, Y вверх, метры. UV плитки в метрах: v = 0 у пола,
 // u = 0 во внутреннем углу грани (uFrom), так ряды начинаются от пола и швы сходятся в углах.
 //
-// buildBath(plan, spec, M, state) -> { group, above, cut, colliders, light, setLight(on, scale), ready, dispose }
+// buildBath(plan, spec, M, state) -> { group, above, cut, colliders, light, setLight(on, scale), ready, seat, dispose }
 //   above     — меши у потолка (userData.cut = 'above'), прятать при виде сверху
 //   cut       — объекты на стенах (плитка, профили, короб, зеркало, смеситель): прятать вместе со стеной при вырезе
 //   colliders — [{ x0, x1, z0, z1 }] для прогулки: короб, унитаз, тумба, стекло
-//   light     — SpotLight светильника (выключен, visible = false); setLight(on, scale) включает
+//   light     — SpotLight светильника (выключен интенсивностью 0); setLight(on, scale) включает
 //   ready     — Promise: текстуры загружены
+//   seat      — wcSeat(spec): где сидит человек на унитазе
+// wcSeat(spec) -> { x, y, z, yaw } | null — точка таза на сиденье (крышка закрыта), yaw — куда смотрит сидящий
+//   (радианы вокруг +Y, 0 = +Z). Короб на стене x0, унитаз смотрит в +X. Читает seats.js.
 import * as THREE from 'three';
 import { applyItem } from './materials.js';
 import { boxAt } from './model.js';
 
 const EPS = 1e-3;
+const LID = 0.012;   // сиденье с крышкой: верх на столько выше wc.bowl.seat
+
+export function wcSeat(spec) {
+  const b = spec?.wc?.box, bowl = spec?.wc?.bowl;
+  if (!b || !bowl || !Number.isFinite(bowl.seat)) return null;
+  return { x: b.x1 + (bowl.hips ?? bowl.depth / 2), y: bowl.seat + LID, z: bowl.z, yaw: Math.PI / 2 };
+}
 
 export function buildBath(plan, spec, M, state = {}) {
   const H = plan.ceiling;
@@ -201,9 +211,9 @@ export function buildBath(plan, spec, M, state = {}) {
   bodyGeo.rotateX(Math.PI / 2); bodyGeo.translate(0, rim - 0.015, 0);
   taper(bodyGeo, rim - 0.28, rim - 0.06);
   mk(bodyGeo, mat.ceramic, 'wc_bowl', bowl);
-  // Сиденье с закрытой крышкой одним телом: от края чаши до seat + 12 мм
-  const lidGeo = new THREE.ExtrudeGeometry(eggShape(bw - 0.02, bd - 0.035), { depth: wc.bowl.seat + 0.012 - rim - 0.012, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: 2, curveSegments: 16 });
-  lidGeo.rotateX(Math.PI / 2); lidGeo.translate(0, wc.bowl.seat + 0.012 - 0.006, 0.012);
+  // Сиденье с закрытой крышкой одним телом: от края чаши до seat + LID
+  const lidGeo = new THREE.ExtrudeGeometry(eggShape(bw - 0.02, bd - 0.035), { depth: wc.bowl.seat + LID - rim - 0.012, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: 2, curveSegments: 16 });
+  lidGeo.rotateX(Math.PI / 2); lidGeo.translate(0, wc.bowl.seat + LID - 0.006, 0.012);
   mk(lidGeo, mat.seat, 'wc_seat_lid', bowl);
   lbox(-0.11, 0.11, rim - 0.01, wc.bowl.seat + 0.01, 0, 0.035, mat.ceramic, 'wc_hinge_block', bowl);
   for (const s of [-1, 1]) lcyl(0.012, 0.03, 'x', s * 0.075, wc.bowl.seat + 0.004, 0.04, mat.metal, 'wc_hinge', bowl, 12);
@@ -266,10 +276,10 @@ export function buildBath(plan, spec, M, state = {}) {
   light.position.set(L.x, H - lh - 0.01, L.z);
   light.target.position.set(L.x, 0, L.z);
   light.userData = { lm: L.lm, base: L.lm / Math.PI };   // ламбертовский вниз: кд = лм / π
-  light.visible = false;
+  // выключен интенсивностью, а не visible: смена числа источников пересобирает шейдеры всей сцены
   group.add(light, light.target);
   const setLight = (on, scale = 1) => {
-    light.visible = !!on; light.intensity = on ? light.userData.base * scale : 0;
+    light.intensity = on ? light.userData.base * scale : 0;
     mat.diffuser.emissiveIntensity = on ? 1.4 : 0;
   };
 
@@ -277,7 +287,7 @@ export function buildBath(plan, spec, M, state = {}) {
     group.traverse(o => o.geometry?.dispose());
     for (const m of Object.values(mat)) { for (const k of ['map', 'normalMap', 'roughnessMap']) m[k]?.dispose(); m.dispose(); }
   };
-  return { group, above, cut, colliders, light, setLight, ready, dispose };
+  return { group, above, cut, colliders, light, setLight, ready, seat: wcSeat(spec), dispose };
 }
 
 // ---------- материалы ----------

@@ -1,0 +1,832 @@
+{
+ "_note": "Реальные деревянные полы польских магазинов (данные карточек на 2026-11-15). Вход для tools/make_wood.py. Поля: name — точное название в магазине; size_mm [длина, ширина, толщина]; price_pln_m2 — цена за m² в магазине; faces — фото лица товара сверху (src — откуда скачано).",
+ "floors": [
+  {
+   "id": "w_barlinek_advance",
+   "name": "Deska podłogowa trójwarstwowa Barlinek Dąb Advance 1-lamelowa 0,99 m2",
+   "brand": "Barlinek",
+   "model": "Dąb Advance 1-lamelowa",
+   "type": "engineered",
+   "pattern": "planks",
+   "size_mm": [
+    1108,
+    130,
+    14
+   ],
+   "class": null,
+   "finish": "Matowe",
+   "bevel": "Czterostronne V-fugi",
+   "price_pln_m2": 178.0,
+   "pack": "opak. 0.99 m², 7 szt., 176,22 zł",
+   "article": "EAN 5906737972403",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/deska-podlogowa-trojwarstwowa-barlinek-dab-advance-1-lamelowa-0-99-m2/5906737972403_CAPL.prd",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_advance/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/deska-podlogowa-trojwarstwowa-barlinek-dab-advance-1-lamelowa-0-99-m2~5906737972403_36c_CP"
+    },
+    {
+     "file": "source/refs/wood/w_barlinek_advance/face-1.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/deska-podlogowa-trojwarstwowa-barlinek-dab-advance-1-lamelowa-0-99-m2~5906737972403_38c_CP"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_jodla_cognac_country",
+   "name": "Deska podłogowa trójwarstwowa Barlinek Jodła klasyczna Dąb Cognac country 0,5 m2",
+   "brand": "Barlinek",
+   "model": "Jodła klasyczna Dąb Cognac country",
+   "type": "engineered",
+   "pattern": "herringbone",
+   "size_mm": [
+    660,
+    110,
+    14
+   ],
+   "class": "Klasa 22",
+   "finish": "Matowe",
+   "bevel": "Czterostronne V-fugi",
+   "price_pln_m2": 218.0,
+   "pack": "opak. 0.5 m², 7 szt., 109,00 zł",
+   "article": "EAN 5906737995594",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/deska-podlogowa-trojwarstwowa-barlinek-jodla-klasyczna-dab-cognac-country-0-5-m2/5906737995594_CAPL.prd",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_jodla_cognac_country/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/deska-podlogowa-trojwarstwowa-barlinek-jodla-klasyczna-dab-cognac-country-0-5-m2~5906737995594_02c_PL_CP"
+    }
+   ]
+  },
+  {
+   "id": "w_classen_daroca_jodla",
+   "name": "Panele podłogowe laminowane Classen Ville Dąb Daroca 1,179 m2",
+   "brand": "Classen",
+   "model": "Ville Dąb Daroca jodła",
+   "type": "laminate",
+   "pattern": "herringbone",
+   "size_mm": [
+    643,
+    131,
+    8
+   ],
+   "class": "AC5, Klasa 32",
+   "finish": "Matowe",
+   "bevel": "Czterostronne V-fugi",
+   "price_pln_m2": 36.03,
+   "pack": "opak. 1.179 m², 14 szt., 42,48 zł",
+   "article": "EAN 4003992613186",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-podlogowe-laminowane-classen-ville-dab-daroca-1-179-m2/4003992613186_CAPL.prd",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_classen_daroca_jodla/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-laminowane-classen-ville-dab-daroca-1-179-m2~4003992613186_03c_PL_CP",
+     "w_px": 298
+    }
+   ]
+  },
+  {
+   "id": "w_classen_virginia_jodelka",
+   "name": "Panele podłogowe jodełka Classen Dąb Virginia AC5 1,179 m2",
+   "brand": "Classen",
+   "model": "Ville Dąb Virginia jodełka",
+   "type": "laminate",
+   "pattern": "herringbone",
+   "size_mm": [
+    643,
+    131,
+    8
+   ],
+   "class": "AC5, Klasa 33",
+   "finish": "Matowe",
+   "bevel": "Czterostronne V-fugi",
+   "price_pln_m2": 69.98,
+   "pack": "opak. 1.179 m², 14 szt., 82,51 zł",
+   "article": "EAN 4003992631630",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-podlogowe-jodelka-classen-dab-virginia-ac5-1-179-m2/4003992631630_CAPL.prd",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_classen_virginia_jodelka/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-jodelka-classen-dab-virginia-ac5-1-179-m2~4003992631630_02c_PL_CP"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_spc_sano_jodelka",
+   "name": "Panele podłogowe winylowe Barlinek SPC Dąb Sano jodełka 4 + 1 mm 1,47 m2",
+   "brand": "Barlinek",
+   "model": "SPC Dąb Sano jodełka",
+   "type": "vinyl",
+   "pattern": "herringbone",
+   "size_mm": [
+    639.5,
+    127.9,
+    5
+   ],
+   "class": "Klasa 33",
+   "finish": "Matowe",
+   "bevel": "4-stronnie fazowana krawędź",
+   "price_pln_m2": 108.0,
+   "pack": "opak. 1.47 m², 18 szt., 158,76 zł",
+   "article": "EAN 5906737911044",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-podlogowe-winylowe-barlinek-spc-dab-sano-jodelka-4-1-mm-1-47-m2/5906737911044_CAPL.prd",
+   "date": "2026-11-15",
+   "notes": "SPC 4 + 1 mm (zintegrowany podkład 1 mm), wodoszczelny.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_spc_sano_jodelka/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-winylowe-barlinek-spc-dab-sano-jodelka-4-1-mm-1-47-m2~5906737911044_02c_PL_CP"
+    }
+   ]
+  },
+  {
+   "id": "w_classen_havana",
+   "name": "Panele podłogowe laminowane wodoodporne Classen Dąb Havana AC% 2,46 m2",
+   "brand": "Classen",
+   "model": "Style Dąb Havana",
+   "type": "laminate",
+   "pattern": "planks",
+   "size_mm": [
+    1285,
+    192,
+    7
+   ],
+   "class": "AC5, Klasa 33",
+   "finish": "Matowe",
+   "bevel": "Czterostronne V-fugi",
+   "price_pln_m2": 45.98,
+   "pack": "opak. 2.46 m², 10 szt., 113,43 zł",
+   "article": "EAN 4003992644654",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-podlogowe-laminowane-wodoodporne-classen-dab-havana-ac-2-46-m2/4003992644654_CAPL.prd",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_classen_havana/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-laminowane-wodoodporne-classen-dab-havana-ac-2-46-m2~4003992644654_01c_pl_cp"
+    },
+    {
+     "file": "source/refs/wood/w_classen_havana/face-1.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-laminowane-wodoodporne-classen-dab-havana-ac-2-46-m2~4003992644654_02c_PL_CP"
+    },
+    {
+     "file": "source/refs/wood/w_classen_havana/face-2.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-laminowane-wodoodporne-classen-dab-havana-ac-2-46-m2~4003992644654_25c_PL_CP",
+     "single": true
+    }
+   ]
+  },
+  {
+   "id": "w_classen_quara",
+   "name": "Panele podłogowe laminowane Classen dąb quara AC5 2,518 m2",
+   "brand": "Classen",
+   "model": "Melody Dąb Quara",
+   "type": "laminate",
+   "pattern": "planks",
+   "size_mm": [
+    1285,
+    280,
+    8
+   ],
+   "class": "AC5, Klasa 33",
+   "finish": "Matowe",
+   "bevel": "Czterostronne V-fugi",
+   "price_pln_m2": 69.98,
+   "pack": "opak. 2.518 m², 7 szt., 176,21 zł",
+   "article": "EAN 4003992639520",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-podlogowe-laminowane-classen-dab-quara-ac5-2-518-m2/4003992639520_CAPL.prd",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_classen_quara/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-laminowane-classen-dab-quara-ac5-2-518-m2~4003992639520_02c_PL_CP"
+    },
+    {
+     "file": "source/refs/wood/w_classen_quara/face-1.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-laminowane-classen-dab-quara-ac5-2-518-m2~4003992639520_24c_PL_CP"
+    }
+   ]
+  },
+  {
+   "id": "w_egger_starwell",
+   "name": "Panele podlogowe laminowane Egger Dąb Starwell naturalny",
+   "brand": "Egger",
+   "model": "Dąb Starwell naturalny",
+   "type": "laminate",
+   "pattern": "planks",
+   "size_mm": [
+    1292,
+    135,
+    8
+   ],
+   "class": "AC4, Klasa 32",
+   "finish": null,
+   "bevel": "4 stronna fuga prasowana",
+   "price_pln_m2": 52.98,
+   "pack": "opak. 1.39 m², 8 szt., 73,91 zł",
+   "article": "EAN 9007022594129",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-podlogowe-laminowane-egger-dab-starwell-naturalny/9007022594129_CAPL.prd",
+   "date": "2026-11-15",
+   "notes": "Seria NatureSense1 (wg Castorama). Wykończenie w karcie nie podane.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_egger_starwell/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-laminowane-egger-dab-starwell-naturalny~9007022594129_01c_PL_CP",
+     "rotate": 90
+    }
+   ]
+  },
+  {
+   "id": "w_classen_spc_calma",
+   "name": "Panele winylowe Classen SPC Dąb Calma 2,61 m2",
+   "brand": "Classen",
+   "model": "Ceramin SPC Dąb Calma",
+   "type": "vinyl",
+   "pattern": "planks",
+   "size_mm": [
+    1295,
+    203,
+    4
+   ],
+   "class": "Klasa 34",
+   "finish": "Matowe",
+   "bevel": "4-stronnie fazowana krawędź",
+   "price_pln_m2": 74.98,
+   "pack": "opak. 2.61 m², 10 szt., 196,30 zł",
+   "article": "EAN 4003992646467",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-winylowe-classen-spc-dab-calma-2-61-m2/4003992646467_CAPL.prd",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_classen_spc_calma/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-winylowe-classen-spc-dab-calma-2-61-m2~4003992646467_02c_PL_CP"
+    },
+    {
+     "file": "source/refs/wood/w_classen_spc_calma/face-1.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-winylowe-classen-spc-dab-calma-2-61-m2~4003992646467_37c_PL_CP",
+     "single": true
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_spc_eli",
+   "name": "Panele winylowe Barlinek SPC Dąb Eli II 4,5+1 mm 2,2 m2",
+   "brand": "Barlinek",
+   "model": "SPC Dąb Eli II",
+   "type": "vinyl",
+   "pattern": "planks",
+   "size_mm": [
+    1234,
+    198,
+    5.5
+   ],
+   "class": "Klasa 33",
+   "finish": "Matowe",
+   "bevel": "4-stronnie fazowana krawędź",
+   "price_pln_m2": 108.0,
+   "pack": "opak. 2.2 m², 9 szt., 237,60 zł",
+   "article": "EAN 5906737930779",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-winylowe-barlinek-spc-dab-eli-ii-4-5-1-mm-2-2-m2/5906737930779_CAPL.prd",
+   "date": "2026-11-15",
+   "notes": "SPC 4,5 + 1 mm (zintegrowany podkład 1 mm).",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_spc_eli/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-winylowe-barlinek-spc-dab-eli-ii-4-5-1-mm-2-2-m2~5906737930779_02c_PL_CP"
+    }
+   ]
+  },
+  {
+   "id": "w_classen_burriana_jodla",
+   "name": "Panele podłogowe laminowane Classen Burriana jodła AC5 1,179 m2",
+   "brand": "Classen",
+   "model": "Burriana jodła",
+   "type": "laminate",
+   "pattern": "herringbone",
+   "size_mm": [
+    643,
+    131,
+    8
+   ],
+   "class": "AC5, Klasa 33",
+   "finish": "Matowe",
+   "bevel": "Czterostronne V-fugi",
+   "price_pln_m2": 89.98,
+   "pack": "opak. 1.179 m², 14 szt., 106,09 zł",
+   "article": "EAN 4003992608939",
+   "shop": "Castorama",
+   "url": "https://www.castorama.pl/panele-podlogowe-laminowane-classen-burriana-jodla-ac5-1-179-m2/4003992608939_CAPL.prd",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_classen_burriana_jodla/face-0.jpg",
+     "src": "https://media2.castorama.pl/is/image/CastoramaPL/panele-podlogowe-laminowane-classen-burriana-jodla-ac5-1-179-m2~4003992608939_02c_PL_CP"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_cremino",
+   "name": "DESKA BARLINECKA DĄB CREMINO LAKIER MATOWY 1-LAMELOWY 14X180X2200",
+   "brand": "Barlinek",
+   "model": "Dąb Cremino 1-lamelowa 180",
+   "type": "engineered",
+   "pattern": "planks",
+   "size_mm": [
+    2200,
+    180,
+    14
+   ],
+   "class": null,
+   "finish": "Lakier ultramatowy",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 365.0,
+   "pack": null,
+   "article": "Komfort 100644397",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-barlinecka-dab-cremino-lakier-matowy-1-lamelowy-14x180x2200-100644397",
+   "date": "2026-11-15",
+   "notes": "W nazwie Komfort 'lakier matowy', w specyfikacji 'Lakier ultramatowy'.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_cremino/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FD19ED8CC8B16042D2B%26compId%3D100644397_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_alabaster",
+   "name": "DESKA BARLINECKA DĄB ALABASTER OLEJ OXY 1-LAMELOWY 14X130X1092",
+   "brand": "Barlinek",
+   "model": "Dąb Alabaster 1-lamelowa",
+   "type": "engineered",
+   "pattern": "planks",
+   "size_mm": [
+    1092,
+    130,
+    14
+   ],
+   "class": null,
+   "finish": "Olej oksydacyjny (olej oxy)",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 309.99,
+   "pack": null,
+   "article": "Komfort 100661732",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-barlinecka-dab-alabaster-olej-oxy-1-lamelowy-14x130x1092-100661732",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_alabaster/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FD1ADEAA7B7D5243340%26compId%3D100661732_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_tartuffo_bianco",
+   "name": "DESKA BARLINECKA DĄB TARTUFFO BIANCO LAKIER ULTRAMATOWY 1-LAMELOWY 14X180X2200",
+   "brand": "Barlinek",
+   "model": "Dąb Tartuffo Bianco 1-lamelowa 180",
+   "type": "engineered",
+   "pattern": "planks",
+   "size_mm": [
+    2200,
+    180,
+    14
+   ],
+   "class": null,
+   "finish": "Lakier ultramatowy",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 353.0,
+   "pack": null,
+   "article": "Komfort 100661722",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-barlinecka-dab-tartuffo-bianco-lakier-ultramatowy-1-lamelowy-14x180x2200-100661722",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_tartuffo_bianco/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FD19ED8F7E71617CDDF%26compId%3D100661722_IMG.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_qs_cascada_bawelniany",
+   "name": "PANEL FORNIROWANY QUICK-STEP WODOODPORNY CASCADA DĄB BAWEŁNIANY 5112 LAKIER MAT 1-LAMELOWY 2V-FUGA 13X190X1820",
+   "brand": "Quick-Step",
+   "model": "Cascada Dąb bawełniany 5112",
+   "type": "engineered",
+   "pattern": "planks",
+   "size_mm": [
+    1820,
+    190,
+    13
+   ],
+   "class": null,
+   "finish": "Lakier ultramatowy",
+   "bevel": "2V-fuga",
+   "price_pln_m2": 299.0,
+   "pack": null,
+   "article": "Komfort 100565862",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-quick-step-wodoodporna-cascada-dab-bawelniany-5112-lakier-mat-1-lamelowy-2v-fuga-13x190x1820-100565862",
+   "date": "2026-11-15",
+   "notes": "Panel fornirowany wodoodporny, warstwa dekoracyjna 2,5 mm. W nazwie 'lakier mat', w specyfikacji 'Lakier ultramatowy'. Fuga tylko na długich bokach (2V), tekstura rysuje fugę na wszystkich krawędziach.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_qs_cascada_bawelniany/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FE09CF37D60D29DB586%26compId%3D100565862_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_qs_cala_czysty",
+   "name": "PANEL FORNIROWANY QUICK-STEP WODOODPORNY CALA DĄB CZYSTY 5611 LAKIER MAT 1-LAMELOWY 4V-FUGA 13X220X2200",
+   "brand": "Quick-Step",
+   "model": "Cala Dąb czysty 5611",
+   "type": "engineered",
+   "pattern": "planks",
+   "size_mm": [
+    2200,
+    220,
+    13
+   ],
+   "class": null,
+   "finish": "Lakier ultramatowy",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 299.0,
+   "pack": null,
+   "article": "Komfort 100565865",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-quick-step-wodoodporna-cala-dab-czysty-5611-lakier-mat-1-lamelowy-4v-fuga-13x220x2200-100565865",
+   "date": "2026-11-15",
+   "notes": "Panel fornirowany wodoodporny, warstwa dekoracyjna 2,5 mm. W nazwie 'lakier mat', w specyfikacji 'Lakier ultramatowy'.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_qs_cala_czysty/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FE09CF37D7722F93586%26compId%3D100565865_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_alabaster_chevron",
+   "name": "DESKA BARLINECKA DĄB ALABASTER JODEŁKA FRANCUSKA OLEJ OXY 1-LAMELOWY 14X130X725",
+   "brand": "Barlinek",
+   "model": "Dąb Alabaster jodełka francuska",
+   "type": "engineered",
+   "pattern": "chevron",
+   "size_mm": [
+    725,
+    130,
+    14
+   ],
+   "class": null,
+   "finish": "Olej oxy (nazwa) / Lakier matowy (specyfikacja)",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 461.0,
+   "pack": null,
+   "article": "Komfort 100661731",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-barlinecka-dab-alabaster-jodelka-francuska-lakier-matowy-1-lamelowy-14x130x725-100661731",
+   "date": "2026-11-15",
+   "notes": "Nazwa Komfort: OLEJ OXY, specyfikacja: Lakier matowy — rozbieżność w karcie sklepu.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_alabaster_chevron/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FE1B68AF1E3EF6E0F7F%26compId%3D100661731_dab_alabaster_jpg.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_cremino_jodelka",
+   "name": "DESKA BARLINECKA DĄB CREMINO JODEŁKA KLASYCZNA LAKIER MATOWY 130 1-LAMELOWY 14X130X725",
+   "brand": "Barlinek",
+   "model": "Dąb Cremino jodełka klasyczna 130",
+   "type": "engineered",
+   "pattern": "herringbone",
+   "size_mm": [
+    725,
+    130,
+    14
+   ],
+   "class": null,
+   "finish": "Lakier ultramatowy",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 369.0,
+   "pack": null,
+   "article": "Komfort 100644396",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-barlinecka-dab-cremino-jodelka-klasyczna-lakier-matowy-130-1-lamelowy-14x130x725-100644396",
+   "date": "2026-11-15",
+   "notes": "W nazwie 'lakier matowy', w specyfikacji 'Lakier ultramatowy'.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_cremino_jodelka/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FE1B68AF1BF4D75AF7F%26compId%3D100644396_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_cappuccino_chevron",
+   "name": "DESKA BARLINECKA DĄB CAPPUCCINO JODEŁKA FRANCUSKA 130 LAKIER MATOWY 1-LAMELOWY 14X130X725",
+   "brand": "Barlinek",
+   "model": "Dąb Cappuccino jodełka francuska 130",
+   "type": "engineered",
+   "pattern": "chevron",
+   "size_mm": [
+    725,
+    130,
+    14
+   ],
+   "class": null,
+   "finish": "Lakier ultramatowy",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 462.0,
+   "pack": null,
+   "article": "Komfort 100644398",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-barlinecka-dab-cremino-jodelka-francuska-130-lakier-matowy-1-lamelowy-14x130x725-100644398",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_cappuccino_chevron/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FE1B68AF1BF4D766F7F%26compId%3D100644398_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_marrone_jodelka",
+   "name": "DESKA BARLINECKA DĄB MARRONE JODEŁKA KLASYCZNA OLEJ OXY 130 1-LAMELOWY 14X130X725",
+   "brand": "Barlinek",
+   "model": "Dąb Marrone jodełka klasyczna 130",
+   "type": "engineered",
+   "pattern": "herringbone",
+   "size_mm": [
+    725,
+    130,
+    14
+   ],
+   "class": null,
+   "finish": "Olej oksydacyjny (olej oxy)",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 365.0,
+   "pack": null,
+   "article": "Komfort 100661737",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-barlinecka-dab-marrone-jodelka-klasyczna-olej-oxy-130-1-lamelowy-14x130x725-100661737",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_marrone_jodelka/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FD19ED8CCB3403C2D3E%26compId%3D100661737_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_lareco_kredowy_lita",
+   "name": "DESKA LITA LARECO DĄB KREDOWY RUSTIC OLEJ 1-LAMELOWY 15x130x300-1200 mm",
+   "brand": "Lareco",
+   "model": "Dąb kredowy rustic",
+   "type": "solid",
+   "pattern": "planks",
+   "size_mm": [
+    1200,
+    130,
+    15
+   ],
+   "L_range_mm": [
+    300,
+    1200
+   ],
+   "class": null,
+   "finish": "Olejowosk",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 379.99,
+   "pack": null,
+   "article": "Komfort 100413674",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-lita-dab-kredowy-rustic-100413674",
+   "date": "2026-11-15",
+   "notes": "Długości 300–1200 mm; montaż pióro-wpust (klejenie).",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_lareco_kredowy_lita/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B601011EEE8DECA4A824758FB2%26compId%3D100413674_deska_podlogowa_lita_dab_kredowy_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_qs_impressive_bawelniany",
+   "name": "PANELE PODŁOGOWE WODOODPORNE QUICK STEP DĄB BAWEŁNIANY IMPRESSIVE IM8254 AC4 8 mm 1l 4V-fuga",
+   "brand": "Quick-Step",
+   "model": "Impressive Dąb bawełniany IM8254",
+   "type": "laminate",
+   "pattern": "planks",
+   "size_mm": [
+    1380,
+    190,
+    8
+   ],
+   "class": "AC4, obiektowa średnie natężenie",
+   "finish": null,
+   "bevel": "4V-fuga",
+   "price_pln_m2": 149.95,
+   "pack": null,
+   "article": "Komfort 100594495",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/panele-podlogowe-wodoodporne-quick-step-dab-bawelniany-impressive-im8254-ac4-8-mm-1l-4v-fuga-100594495",
+   "date": "2026-11-15",
+   "notes": "Wymiar wg Komfort 'Rozmiar 0.19 x 1.38 m' (zaokrąglony). Struktura synchroniczna.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_qs_impressive_bawelniany/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FD0B48B76C90AAC4F4F%26compId%3D100594495_bawelniany_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_qs_impressive_wedzony",
+   "name": "PANELE PODŁOGOWE WODOODPORNE QUICK STEP DĄB WĘDZONY IMPRESSIVE IM8261 AC4 8 mm 1l 4V-fuga",
+   "brand": "Quick-Step",
+   "model": "Impressive Dąb wędzony IM8261",
+   "type": "laminate",
+   "pattern": "planks",
+   "size_mm": [
+    1380,
+    190,
+    8
+   ],
+   "class": "AC4, obiektowa średnie natężenie",
+   "finish": null,
+   "bevel": "4V-fuga",
+   "price_pln_m2": 149.95,
+   "pack": null,
+   "article": "Komfort 100594675",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/panele-podlogowe-wodoodporne-quick-step-dab-wedzony-impressive-im8261-ac4-8-mm-1l-4v-fuga-100594675",
+   "date": "2026-11-15",
+   "notes": "Wymiar wg Komfort 'Rozmiar 0.19 x 1.38 m' (zaokrąglony). Struktura synchroniczna.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_qs_impressive_wedzony/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FD0B48B76E326FBAF4F%26compId%3D100594675_wedzony_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_qs_capture_orzech",
+   "name": "PANELE PODŁOGOWE WODOODPORNE QUICK STEP ELEGANCKI ORZECH CAPTURE SIG4761 AC4 9 mm 4V-fuga",
+   "brand": "Quick-Step",
+   "model": "Signature Elegancki orzech SIG4761",
+   "type": "laminate",
+   "pattern": "planks",
+   "size_mm": [
+    1380,
+    210,
+    9
+   ],
+   "class": "AC4, obiektowa średnie natężenie",
+   "finish": null,
+   "bevel": "4V-fuga",
+   "price_pln_m2": 159.95,
+   "pack": null,
+   "article": "Komfort 100189693",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/elegancki-orzech-sig4761-capture-100189693",
+   "date": "2026-11-15",
+   "notes": "W nazwie Komfort 'CAPTURE'. Wymiar wg Komfort 'Rozmiar 0.21 x 1.38 m' (zaokrąglony).",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_qs_capture_orzech/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791EEA8DF5D98BA0DD7760%26compId%3D100189693_panel_sig4761_elegancki_orzech_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_qs_classic_brazowy_orzech",
+   "name": "PANELE PODŁOGOWE WODOODPORNE QUICK STEP DĄB BRĄZOWY ORZECH CLASSIC CLM5800 AC4 8mm 4V-fuga",
+   "brand": "Quick-Step",
+   "model": "Classic Dąb brązowy orzech CLM5800",
+   "type": "laminate",
+   "pattern": "planks",
+   "size_mm": [
+    1200,
+    190,
+    8
+   ],
+   "class": "AC4, obiektowa średnie natężenie",
+   "finish": null,
+   "bevel": "4V-fuga",
+   "price_pln_m2": 104.95,
+   "pack": null,
+   "article": "Komfort 100329302",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/panel-dab-orzechowy-brazowy-clm5800-classic-100329302",
+   "date": "2026-11-15",
+   "notes": "Wymiar wg Komfort 'Rozmiar 0.19 x 1.20 m' (zaokrąglony).",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_qs_classic_brazowy_orzech/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791EDD8BD5852FDD5FAF64%26compId%3D100329302_panel_classic_dab_orzechowy_braz_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_tartuffo_jodelka",
+   "name": "DESKA BARLINECKA DĄB TARTUFFO BIANCO JODEŁKA KLASYCZNA LAKIER MATOWY 130 1-LAMELOWY 14X130X725",
+   "brand": "Barlinek",
+   "model": "Dąb Tartuffo Bianco jodełka klasyczna 130",
+   "type": "engineered",
+   "pattern": "herringbone",
+   "size_mm": [
+    725,
+    130,
+    14
+   ],
+   "class": null,
+   "finish": "Lakier matowy",
+   "bevel": "4V-fuga",
+   "price_pln_m2": 364.0,
+   "pack": null,
+   "article": "Komfort 100661695",
+   "shop": "Komfort",
+   "url": "https://komfort.pl/p/deska-barlinecka-dab-tartuffo-bianco-jodelka-klasyczna-lakier-matowy-130-1-lamelowy-14x130x725-100661695",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_tartuffo_jodelka/face-0.jpg",
+     "src": "https://mediaserver.komfort.pl/download?image=sapcontsrv.komfort.local%3A1090%2FContentServer%2FContentServer.dll%3Fget%26pVersion%3D0047%26contRep%3DZ_ZDJ_PROD%26docId%3D005056B605791FE1B68AF1BF4D772F7F%26compId%3D100661695_img.jpg"
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_various_bielony",
+   "name": "Barlinek deska podłogowa dąb Various bielony 14x180x725 mm",
+   "brand": "Barlinek",
+   "model": "Dąb Various bielony",
+   "type": "engineered",
+   "pattern": "planks",
+   "size_mm": [
+    725,
+    180,
+    14
+   ],
+   "class": null,
+   "finish": "Lakierowana, matowa",
+   "bevel": "Bez V-fugi",
+   "price_pln_m2": 189.0,
+   "pack": "opak. 0,91 m²",
+   "article": "OBI nr art. 6886774, EAN 5906737995075",
+   "shop": "OBI",
+   "url": "https://www.obi.pl/p/6886774/barlinek-deska-podlogowa-dab-various-bielony-14x180x725-mm",
+   "date": "2026-11-15",
+   "notes": "Zdjęcie OBI pokazuje jedną deskę 725 × 180 mm na białym tle; deska złożona z wąskich lamelek.",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_various_bielony/face-0.jpg",
+     "src": "https://bilder.obi.pl/5ed1299b-bfb6-49da-a345-37ec2f12fd0e/prZZK/image.jpeg",
+     "single": true
+    }
+   ]
+  },
+  {
+   "id": "w_barlinek_country",
+   "name": "Barlinek Deska podłogowa Dąb Country 1 lam 14x130x725 mm",
+   "brand": "Barlinek",
+   "model": "Dąb Country 1-lamelowa",
+   "type": "engineered",
+   "pattern": "planks",
+   "size_mm": [
+    725,
+    130,
+    14
+   ],
+   "class": null,
+   "finish": "Lakierowana",
+   "bevel": "V-fuga",
+   "price_pln_m2": 125.79,
+   "pack": "opak. 0,65 m²",
+   "article": "OBI nr art. 7309057, EAN 5906737956373",
+   "shop": "OBI",
+   "url": "https://www.obi.pl/p/7309057/barlinek-deska-podlogowa-dab-country-1-lam-14x130x725-mm",
+   "date": "2026-11-15",
+   "faces": [
+    {
+     "file": "source/refs/wood/w_barlinek_country/face-0.jpg",
+     "src": "https://bilder.obi.pl/659f1491-11a5-4d43-a148-869ef9b78a99/prZZK/image.jpeg"
+    }
+   ]
+  }
+ ]
+}

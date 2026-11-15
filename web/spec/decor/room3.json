@@ -1,0 +1,1853 @@
+{
+ "zone": "room3",
+ "title": "Кабинет",
+ "room": "room3",
+ "slots": [
+  {
+   "id": "desk",
+   "label": "Стол",
+   "default": "tonstad-120",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "tonstad-120",
+     "name": "TONSTAD biurko, 120x47 cm",
+     "brand": "IKEA",
+     "article": "605.382.05",
+     "url": "https://www.ikea.com/pl/pl/p/tonstad-biurko-okl-deb-60538205/",
+     "price_pln": 899.0,
+     "finish": "okl dęb",
+     "note": "узкий письменный стол из дуба с ящиком",
+     "size": [
+      1.201,
+      0.75,
+      0.471
+     ],
+     "thumb": "models/decor/room3/tonstad-120/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/room3/tonstad-120/model.glb",
+       "pos": [
+        -0.346,
+        0,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "mittzon-120",
+     "name": "MITTZON biurko, 120x60 cm",
+     "brand": "IKEA",
+     "article": "095.258.62",
+     "url": "https://www.ikea.com/pl/pl/p/mittzon-biurko-okl-deb-bialy-s09525862/",
+     "price_pln": 699.0,
+     "finish": "okl dęb/biały",
+     "note": "высота ножек регулируется 65–85 см, поставлен на 75",
+     "size": [
+      1.199,
+      0.75,
+      0.6
+     ],
+     "thumb": "models/decor/room3/mittzon-120/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/room3/mittzon-120/model.glb",
+       "pos": [
+        -0.41,
+        0,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "idasen-120",
+     "name": "IDÅSEN biurko, 120x70 cm",
+     "brand": "IKEA",
+     "article": "492.810.27",
+     "url": "https://www.ikea.com/pl/pl/p/idasen-biurko-brazowy-ciemnoszary-s49281027/",
+     "price_pln": 999.0,
+     "finish": "brązowy/ciemnoszary",
+     "note": "высота регулируется 65–79 см, поставлен на 75",
+     "size": [
+      1.2,
+      0.75,
+      0.7
+     ],
+     "thumb": "models/decor/room3/idasen-120/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/room3/idasen-120/model.glb",
+       "pos": [
+        -0.46,
+        0,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "micke-142",
+     "name": "MICKE biurko, 142x50 cm",
+     "brand": "IKEA",
+     "article": "902.143.08",
+     "url": "https://www.ikea.com/pl/pl/p/micke-biurko-bialy-90214308/",
+     "price_pln": 499.0,
+     "finish": "biały",
+     "note": "с ящиком и отверстием для проводов",
+     "size": [
+      1.42,
+      0.753,
+      0.5
+     ],
+     "thumb": "models/decor/room3/micke-142/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/room3/micke-142/model.glb",
+       "pos": [
+        -0.36,
+        0,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chair",
+   "label": "Рабочее кресло",
+   "default": "alefjall",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "alefjall",
+     "name": "ALEFJÄLL krzesło biurowe",
+     "brand": "IKEA",
+     "article": "404.199.82",
+     "url": "https://www.ikea.com/pl/pl/p/alefjaell-krzeslo-biurowe-grann-zloto-brazowy-40419982/",
+     "price_pln": 999.0,
+     "finish": "Grann złoto-brązowy",
+     "size": [
+      0.674,
+      0.846,
+      0.685
+     ],
+     "thumb": "models/decor/room3/alefjall/thumb.jpg",
+     "collide": true,
+     "seat": {
+      "h": 0.48,
+      "depth": 0.06,
+      "label": "Сесть за стол"
+     },
+     "parts": [
+      {
+       "model": "models/decor/room3/alefjall/model.glb",
+       "pos": [
+        -1.02,
+        0,
+        1.42
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "fjallberget",
+     "name": "FJÄLLBERGET krzesło konferencyjne z kółkami",
+     "brand": "IKEA",
+     "article": "204.852.42",
+     "url": "https://www.ikea.com/pl/pl/p/fjaellberget-krzeslo-konferencyjne-z-kolkami-okleina-debowa-bejcowana-na-bialo-gunnared-bezowy-20485242/",
+     "price_pln": 799.0,
+     "finish": "okleina dębowa bejcowana na biało/Gunnared beżowy",
+     "size": [
+      0.684,
+      0.747,
+      0.669
+     ],
+     "thumb": "models/decor/room3/fjallberget/thumb.jpg",
+     "collide": true,
+     "seat": {
+      "h": 0.47,
+      "depth": 0.06,
+      "label": "Сесть за стол"
+     },
+     "parts": [
+      {
+       "model": "models/decor/room3/fjallberget/model.glb",
+       "pos": [
+        -1.02,
+        0,
+        1.42
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "markus",
+     "name": "MARKUS krzesło biurowe, Średnie",
+     "brand": "IKEA",
+     "article": "702.611.50",
+     "url": "https://www.ikea.com/pl/pl/p/markus-krzeslo-biurowe-vissle-ciemnoszary-70261150/",
+     "price_pln": 699.0,
+     "finish": "Vissle ciemnoszary",
+     "size": [
+      0.63,
+      1.347,
+      0.611
+     ],
+     "thumb": "models/decor/room3/markus/thumb.jpg",
+     "collide": true,
+     "seat": {
+      "h": 0.5,
+      "depth": 0.06,
+      "label": "Сесть за стол"
+     },
+     "parts": [
+      {
+       "model": "models/decor/room3/markus/model.glb",
+       "pos": [
+        -1.02,
+        0,
+        1.42
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "flintan",
+     "name": "FLINTAN krzesło biurowe z podłokietnikami",
+     "brand": "IKEA",
+     "article": "894.244.68",
+     "url": "https://www.ikea.com/pl/pl/p/flintan-krzeslo-biurowe-z-podlokietnikami-czarny-s89424468/",
+     "price_pln": 299.0,
+     "finish": "czarny",
+     "size": [
+      0.711,
+      1.024,
+      0.677
+     ],
+     "thumb": "models/decor/room3/flintan/thumb.jpg",
+     "collide": true,
+     "seat": {
+      "h": 0.5,
+      "depth": 0.06,
+      "label": "Сесть за стол"
+     },
+     "parts": [
+      {
+       "model": "models/decor/room3/flintan/model.glb",
+       "pos": [
+        -1.02,
+        0,
+        1.42
+       ],
+       "rot": 90
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "computer",
+   "label": "Компьютер",
+   "default": "monitor-laptop",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "monitor-laptop",
+     "name": "Универсальный монитор 27″, клавиатура и ноутбук 14″",
+     "brand": "универсальная модель (CC0)",
+     "note": "IKEA не продаёт компьютеры: простая модель без бренда, сделана для проекта",
+     "thumb": "models/decor/room3/monitor-27/thumb.jpg",
+     "collide": false,
+     "size": [
+      0.614,
+      0.471,
+      0.192
+     ],
+     "parts": [
+      {
+       "model": "models/decor/room3/monitor-27/model.glb",
+       "pos": [
+        -0.246,
+        0.75,
+        1.36
+       ],
+       "rot": -90
+      },
+      {
+       "model": "models/decor/room3/keyboard-mouse/model.glb",
+       "pos": [
+        -0.43,
+        0.75,
+        1.421
+       ],
+       "rot": -90
+      },
+      {
+       "model": "models/decor/room3/laptop-14/model.glb",
+       "pos": [
+        -0.38,
+        0.75,
+        1.84
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "monitor",
+     "name": "Универсальный монитор 27″ с клавиатурой и мышью",
+     "brand": "универсальная модель (CC0)",
+     "note": "IKEA не продаёт компьютеры: простая модель без бренда, сделана для проекта",
+     "thumb": "models/decor/room3/keyboard-mouse/thumb.jpg",
+     "collide": false,
+     "size": [
+      0.614,
+      0.471,
+      0.192
+     ],
+     "parts": [
+      {
+       "model": "models/decor/room3/monitor-27/model.glb",
+       "pos": [
+        -0.246,
+        0.75,
+        1.42
+       ],
+       "rot": -90
+      },
+      {
+       "model": "models/decor/room3/keyboard-mouse/model.glb",
+       "pos": [
+        -0.43,
+        0.75,
+        1.48
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "laptop",
+     "name": "Универсальный ноутбук 14″",
+     "brand": "универсальная модель (CC0)",
+     "note": "IKEA не продаёт компьютеры: простая модель без бренда, сделана для проекта",
+     "thumb": "models/decor/room3/laptop-14/thumb.jpg",
+     "collide": false,
+     "size": [
+      0.313,
+      0.21,
+      0.296
+     ],
+     "parts": [
+      {
+       "model": "models/decor/room3/laptop-14/model.glb",
+       "pos": [
+        -0.38,
+        0.75,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lamp",
+   "label": "Настольная лампа",
+   "default": "ranarp",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "ranarp",
+     "name": "RANARP lampa biurkowa",
+     "brand": "IKEA",
+     "article": "302.313.15",
+     "url": "https://www.ikea.com/pl/pl/p/ranarp-lampa-biurkowa-kremowy-30231315/",
+     "price_pln": 149.0,
+     "finish": "kremowy",
+     "note": "только предмет: свет кабинета задаёт панель «Свет»",
+     "size": [
+      0.188,
+      0.534,
+      0.552
+     ],
+     "thumb": "models/decor/room3/ranarp/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/room3/ranarp/model.glb",
+       "pos": [
+        -0.416,
+        0.75,
+        0.92
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "isnalen",
+     "name": "ISNÅLEN lampa biurkowa LED",
+     "brand": "IKEA",
+     "article": "605.012.64",
+     "url": "https://www.ikea.com/pl/pl/p/isnalen-lampa-biurkowa-led-bialy-kolor-mosiadzu-60501264/",
+     "price_pln": 99.99,
+     "finish": "biały/kolor mosiądzu",
+     "note": "только предмет: свет кабинета задаёт панель «Свет»",
+     "size": [
+      0.14,
+      0.353,
+      0.262
+     ],
+     "thumb": "models/decor/room3/isnalen/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/room3/isnalen/model.glb",
+       "pos": [
+        -0.271,
+        0.75,
+        0.92
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "skurup",
+     "name": "SKURUP lampa biurkowa",
+     "brand": "IKEA",
+     "article": "805.167.78",
+     "url": "https://www.ikea.com/pl/pl/p/skurup-lampa-biurkowa-czarny-80516778/",
+     "price_pln": 59.99,
+     "finish": "czarny",
+     "note": "только предмет: свет кабинета задаёт панель «Свет»",
+     "size": [
+      0.17,
+      0.408,
+      0.484
+     ],
+     "thumb": "models/decor/room3/skurup/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/room3/skurup/model.glb",
+       "pos": [
+        -0.382,
+        0.75,
+        0.92
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "forsa",
+     "name": "FORSÅ lampa biurkowa",
+     "brand": "IKEA",
+     "article": "304.391.17",
+     "url": "https://www.ikea.com/pl/pl/p/forsa-lampa-biurkowa-bialy-30439117/",
+     "price_pln": 69.99,
+     "finish": "biały",
+     "note": "только предмет: свет кабинета задаёт панель «Свет»",
+     "size": [
+      0.151,
+      0.399,
+      0.478
+     ],
+     "thumb": "models/decor/room3/forsa/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/room3/forsa/model.glb",
+       "pos": [
+        -0.379,
+        0.75,
+        0.92
+       ],
+       "rot": -90
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "shelving",
+   "label": "Стеллаж",
+   "default": "billy-200-walnut",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "billy-200-walnut",
+     "name": "BILLY kombinacja regałowa z nadstawkami, 200x28x237 cm",
+     "brand": "IKEA",
+     "article": "294.835.35",
+     "url": "https://www.ikea.com/pl/pl/p/billy-kombinacja-regalowa-z-nadstawkami-brazowy-orzech-s29483535/",
+     "price_pln": 1202.0,
+     "finish": "brązowy orzech",
+     "note": "три секции с надставками почти до потолка: 80 + 40 + 80 см; книги и коробки KNAGGLIG, корзины TRUMMIS — реквизит",
+     "size": [
+      2.0,
+      2.37,
+      0.28
+     ],
+     "thumb": "models/decor/room3/billy-200-walnut/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/room3/billy-200-walnut/model.glb",
+       "pos": [
+        -2.477,
+        0,
+        1.78
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.49,
+        0.109,
+        2.558
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.49,
+        0.109,
+        2.201
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        0.453,
+        2.38
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-mix60/model.glb",
+       "pos": [
+        -2.492,
+        0.772,
+        2.38
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        1.063,
+        2.38
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-45/model.glb",
+       "pos": [
+        -2.492,
+        1.41,
+        2.496
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/trummis/model.glb",
+       "pos": [
+        -2.477,
+        1.41,
+        2.141
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        1.729,
+        2.38
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-45/model.glb",
+       "pos": [
+        -2.492,
+        2.018,
+        2.38
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/trummis/model.glb",
+       "pos": [
+        -2.477,
+        0.109,
+        1.78
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        0.453,
+        1.78
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        0.772,
+        1.78
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        1.063,
+        1.78
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        1.41,
+        1.78
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        1.729,
+        1.78
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        2.018,
+        1.78
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.49,
+        0.109,
+        1.358
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.49,
+        0.109,
+        1.001
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-45/model.glb",
+       "pos": [
+        -2.492,
+        0.453,
+        1.321
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        0.453,
+        0.953
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        0.772,
+        1.179
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-mix60/model.glb",
+       "pos": [
+        -2.492,
+        1.063,
+        1.179
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        1.41,
+        1.179
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-45/model.glb",
+       "pos": [
+        -2.492,
+        1.729,
+        1.296
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/trummis/model.glb",
+       "pos": [
+        -2.477,
+        1.729,
+        0.941
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        2.018,
+        1.179
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "billy-120-oak",
+     "name": "BILLY kombinacja regałowa z nadstawkami, 120x28x237 cm",
+     "brand": "IKEA",
+     "article": "894.833.92",
+     "url": "https://www.ikea.com/pl/pl/p/billy-kombinacja-regalowa-z-nadstawkami-imit-debu-s89483392/",
+     "price_pln": 972.0,
+     "finish": "imit. dębu",
+     "note": "три узкие секции по 40 см с надставками; книги и коробки KNAGGLIG, корзины TRUMMIS — реквизит",
+     "size": [
+      1.2,
+      2.37,
+      0.28
+     ],
+     "thumb": "models/decor/room3/billy-120-oak/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/room3/billy-120-oak/model.glb",
+       "pos": [
+        -2.477,
+        0,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/trummis/model.glb",
+       "pos": [
+        -2.477,
+        0.109,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        0.453,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        0.772,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        1.063,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        1.41,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        1.729,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        2.018,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        0.109,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        0.453,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        0.772,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        1.063,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/trummis/model.glb",
+       "pos": [
+        -2.477,
+        1.41,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        1.729,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        2.018,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/trummis/model.glb",
+       "pos": [
+        -2.477,
+        0.109,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        0.453,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        0.772,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        1.063,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        1.41,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        1.729,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-30/model.glb",
+       "pos": [
+        -2.492,
+        2.018,
+        1.22
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "billy-160-white",
+     "name": "BILLY regał, 160x28x202 cm",
+     "brand": "IKEA",
+     "article": "790.178.37",
+     "url": "https://www.ikea.com/pl/pl/p/billy-regal-bialy-s79017837/",
+     "price_pln": 558.0,
+     "finish": "biały",
+     "note": "две секции по 80 см; книги и коробки KNAGGLIG, корзины TRUMMIS — реквизит",
+     "size": [
+      1.6,
+      2.025,
+      0.28
+     ],
+     "thumb": "models/decor/room3/billy-160-white/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/room3/billy-160-white/model.glb",
+       "pos": [
+        -2.477,
+        0,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.49,
+        0.101,
+        2.199
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.49,
+        0.101,
+        1.841
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        0.387,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-mix60/model.glb",
+       "pos": [
+        -2.492,
+        0.739,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        1.063,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-45/model.glb",
+       "pos": [
+        -2.492,
+        1.41,
+        2.137
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/trummis/model.glb",
+       "pos": [
+        -2.477,
+        1.41,
+        1.781
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        1.731,
+        2.02
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.49,
+        0.101,
+        1.399
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.49,
+        0.101,
+        1.041
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-45/model.glb",
+       "pos": [
+        -2.492,
+        0.387,
+        1.362
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.492,
+        0.387,
+        0.993
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        0.739,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-mix60/model.glb",
+       "pos": [
+        -2.492,
+        1.063,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.492,
+        1.41,
+        1.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-45/model.glb",
+       "pos": [
+        -2.492,
+        1.731,
+        1.22
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "ivar-89",
+     "name": "IVAR regał, 89x30x226 cm",
+     "brand": "IKEA",
+     "article": "295.905.78",
+     "url": "https://www.ikea.com/pl/pl/p/ivar-regal-z-2-pojemnikami-sosna-s29590578/",
+     "price_pln": 630.0,
+     "finish": "z 2 pojemnikami/sosna",
+     "note": "сосна, два ящика-корзины посередине; книги и коробки KNAGGLIG, корзины TRUMMIS — реквизит",
+     "size": [
+      0.89,
+      2.265,
+      0.301
+     ],
+     "thumb": "models/decor/room3/ivar-89/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/room3/ivar-89/model.glb",
+       "pos": [
+        -2.466,
+        0,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.479,
+        0.112,
+        1.805
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/knagglig/model.glb",
+       "pos": [
+        -2.479,
+        0.112,
+        1.435
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-70/model.glb",
+       "pos": [
+        -2.481,
+        0.483,
+        1.62
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-shelf-45/model.glb",
+       "pos": [
+        -2.481,
+        1.765,
+        1.743
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/trummis/model.glb",
+       "pos": [
+        -2.467,
+        1.765,
+        1.375
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.481,
+        2.019,
+        1.796
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        -2.481,
+        2.019,
+        1.444
+       ],
+       "rot": 90
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "reading",
+   "label": "Кресло для чтения",
+   "default": "lillesater",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "lillesater",
+     "name": "LILLESÄTER fotel obrotowy + GLADOM + ÅRSTID",
+     "brand": "IKEA",
+     "article": "006.186.86",
+     "url": "https://www.ikea.com/pl/pl/p/lillesaeter-fotel-obrotowy-axvall-kremowy-00618686/",
+     "price_pln": 1127.99,
+     "finish": "Axvall kremowy",
+     "note": "кресло 899.0 zł (Axvall kremowy); столик GLADOM 45×53 czarny 49.99 zł (арт. 504.119.90); торшер ÅRSTID mosiądz/biały 179.0 zł (арт. 003.213.17), только предмет",
+     "size": [
+      0.703,
+      0.7,
+      0.797
+     ],
+     "thumb": "models/decor/room3/lillesater/thumb.jpg",
+     "collide": true,
+     "seat": {
+      "h": 0.42,
+      "depth": 0.1,
+      "label": "Сесть в кресло"
+     },
+     "parts": [
+      {
+       "model": "models/decor/room3/lillesater/model.glb",
+       "pos": [
+        -0.76,
+        0,
+        2.97
+       ],
+       "rot": -135
+      },
+      {
+       "model": "models/decor/room3/gladom/model.glb",
+       "pos": [
+        -1.24,
+        0,
+        3.37
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/room3/arstid/model.glb",
+       "pos": [
+        -0.32,
+        0,
+        3.44
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "strandmon",
+     "name": "STRANDMON fotel uszak + GLADOM + ÅRSTID",
+     "brand": "IKEA",
+     "article": "004.946.38",
+     "url": "https://www.ikea.com/pl/pl/p/strandmon-fotel-uszak-grann-bomstad-ciemnobrazowy-00494638/",
+     "price_pln": 1727.99,
+     "finish": "Grann/Bomstad ciemnobrązowy",
+     "note": "кресло 1499.0 zł (Grann/Bomstad ciemnobrązowy); столик GLADOM 45×53 czarny 49.99 zł (арт. 504.119.90); торшер ÅRSTID mosiądz/biały 179.0 zł (арт. 003.213.17), только предмет",
+     "size": [
+      0.809,
+      1.013,
+      0.973
+     ],
+     "thumb": "models/decor/room3/strandmon/thumb.jpg",
+     "collide": true,
+     "seat": {
+      "h": 0.45,
+      "depth": 0.1,
+      "label": "Сесть в кресло"
+     },
+     "parts": [
+      {
+       "model": "models/decor/room3/strandmon/model.glb",
+       "pos": [
+        -0.76,
+        0,
+        2.97
+       ],
+       "rot": -135
+      },
+      {
+       "model": "models/decor/room3/gladom/model.glb",
+       "pos": [
+        -1.24,
+        0,
+        3.37
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/room3/arstid/model.glb",
+       "pos": [
+        -0.32,
+        0,
+        3.44
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "poang",
+     "name": "POÄNG fotel + GLADOM + ÅRSTID",
+     "brand": "IKEA",
+     "article": "595.143.85",
+     "url": "https://www.ikea.com/pl/pl/p/poaeng-fotel-okl-brzoz-gunnared-bezowy-s59514385/",
+     "price_pln": 627.99,
+     "finish": "okl brzoz/Gunnared beżowy",
+     "note": "кресло 399.0 zł (okl brzoz/Gunnared beżowy); столик GLADOM 45×53 czarny 49.99 zł (арт. 504.119.90); торшер ÅRSTID mosiądz/biały 179.0 zł (арт. 003.213.17), только предмет",
+     "size": [
+      0.687,
+      0.994,
+      0.827
+     ],
+     "thumb": "models/decor/room3/poang/thumb.jpg",
+     "collide": true,
+     "seat": {
+      "h": 0.42,
+      "depth": 0.1,
+      "label": "Сесть в кресло"
+     },
+     "parts": [
+      {
+       "model": "models/decor/room3/poang/model.glb",
+       "pos": [
+        -0.76,
+        0,
+        2.97
+       ],
+       "rot": -135
+      },
+      {
+       "model": "models/decor/room3/gladom/model.glb",
+       "pos": [
+        -1.24,
+        0,
+        3.37
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/room3/arstid/model.glb",
+       "pos": [
+        -0.32,
+        0,
+        3.44
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "oskarshamn",
+     "name": "OSKARSHAMN fotel uszak + GLADOM + ÅRSTID",
+     "brand": "IKEA",
+     "article": "205.236.11",
+     "url": "https://www.ikea.com/pl/pl/p/oskarshamn-fotel-uszak-tibbleby-bezowy-szary-20523611/",
+     "price_pln": 1227.99,
+     "finish": "Tibbleby beżowy/szary",
+     "note": "кресло 999.0 zł (Tibbleby beżowy/szary); столик GLADOM 45×53 czarny 49.99 zł (арт. 504.119.90); торшер ÅRSTID mosiądz/biały 179.0 zł (арт. 003.213.17), только предмет",
+     "size": [
+      0.835,
+      0.994,
+      0.88
+     ],
+     "thumb": "models/decor/room3/oskarshamn/thumb.jpg",
+     "collide": true,
+     "seat": {
+      "h": 0.44,
+      "depth": 0.1,
+      "label": "Сесть в кресло"
+     },
+     "parts": [
+      {
+       "model": "models/decor/room3/oskarshamn/model.glb",
+       "pos": [
+        -0.76,
+        0,
+        2.97
+       ],
+       "rot": -135
+      },
+      {
+       "model": "models/decor/room3/gladom/model.glb",
+       "pos": [
+        -1.24,
+        0,
+        3.37
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/room3/arstid/model.glb",
+       "pos": [
+        -0.32,
+        0,
+        3.44
+       ],
+       "rot": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rug",
+   "label": "Ковёр",
+   "default": "jarnvag",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "jarnvag",
+     "name": "JÄRNVÄG dywan z krótkim włosiem, 133x195 cm",
+     "brand": "IKEA",
+     "article": "406.242.42",
+     "url": "https://www.ikea.com/pl/pl/p/jaernvaeg-dywan-z-krotkim-wlosiem-ozdobny-wzor-bezowy-ciemny-bez-40624242/",
+     "price_pln": 299.0,
+     "finish": "ozdobny wzór beżowy/ciemny beż",
+     "size": [
+      1.95,
+      0.01,
+      1.33
+     ],
+     "thumb": "models/decor/room3/jarnvag/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/room3/jarnvag/model.glb",
+       "pos": [
+        -1.33,
+        0,
+        1.82
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "lohals",
+     "name": "LOHALS dywan tkany na płasko, 133x195 cm",
+     "brand": "IKEA",
+     "article": "305.112.88",
+     "url": "https://www.ikea.com/pl/pl/p/lohals-dywan-tkany-na-plasko-naturalny-30511288/",
+     "price_pln": 199.0,
+     "finish": "naturalny",
+     "size": [
+      1.95,
+      0.014,
+      1.33
+     ],
+     "thumb": "models/decor/room3/lohals/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/room3/lohals/model.glb",
+       "pos": [
+        -1.33,
+        0,
+        1.82
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "tidtabell",
+     "name": "TIDTABELL dywan tkany na płasko, 133x195 cm",
+     "brand": "IKEA",
+     "article": "105.618.49",
+     "url": "https://www.ikea.com/pl/pl/p/tidtabell-dywan-tkany-na-plasko-bezowy-10561849/",
+     "price_pln": 299.0,
+     "finish": "beżowy",
+     "size": [
+      1.95,
+      0.01,
+      1.331
+     ],
+     "thumb": "models/decor/room3/tidtabell/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/room3/tidtabell/model.glb",
+       "pos": [
+        -1.33,
+        0,
+        1.82
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "stoense",
+     "name": "STOENSE dywan z krótkim włosiem, 133x195 cm",
+     "brand": "IKEA",
+     "article": "104.255.26",
+     "url": "https://www.ikea.com/pl/pl/p/stoense-dywan-z-krotkim-wlosiem-kremowy-10425526/",
+     "price_pln": 199.0,
+     "finish": "kremowy",
+     "size": [
+      1.95,
+      0.018,
+      1.33
+     ],
+     "thumb": "models/decor/room3/stoense/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/room3/stoense/model.glb",
+       "pos": [
+        -1.33,
+        0,
+        1.82
+       ],
+       "rot": 90
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "plant",
+   "label": "Растение",
+   "default": "fejka-ficus",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "fejka-ficus",
+     "name": "FEJKA sztuczna roślina doniczkowa, 21 cm",
+     "brand": "IKEA",
+     "article": "306.152.76",
+     "url": "https://www.ikea.com/pl/pl/p/fejka-sztuczna-roslina-doniczkowa-do-wewnatrz-na-zewnatrz-figa-placzaca-30615276/",
+     "price_pln": 299.0,
+     "finish": "do wewnątrz/na zewnątrz Figa płacząca",
+     "note": "искусственный фикус ~164 см, не требует света",
+     "size": [
+      0.731,
+      1.639,
+      0.739
+     ],
+     "thumb": "models/decor/props/fejka-ficus/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/props/fejka-ficus/model.glb",
+       "pos": [
+        -2.24,
+        0,
+        0.4
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "dypsis",
+     "name": "DYPSIS LUTESCENS roślina doniczkowa, 24 cm + KLYNNON osłonka 24 cm",
+     "brand": "IKEA",
+     "article": "468.040.05",
+     "url": "https://www.ikea.com/pl/pl/p/dypsis-lutescens-roslina-doniczkowa-palma-areka-46804005/",
+     "price_pln": 168.99,
+     "finish": "Palma Areka",
+     "note": "пальма 129.0 zł + бамбуковое кашпо KLYNNON 39.99 zł (арт. 205.164.08)",
+     "size": [
+      0.853,
+      1.466,
+      0.879
+     ],
+     "thumb": "models/decor/props/dypsis-lutescens-24/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/props/klynnon-24/model.glb",
+       "pos": [
+        -2.24,
+        0,
+        0.4
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/props/dypsis-lutescens-24/model.glb",
+       "pos": [
+        -2.24,
+        0.03,
+        0.4
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "strelitzia",
+     "name": "STRELITZIA roślina doniczkowa, 19 cm + HASSELBUKETT osłonka 19 cm",
+     "brand": "IKEA",
+     "article": "104.267.19",
+     "url": "https://www.ikea.com/pl/pl/p/strelitzia-roslina-doniczkowa-rajski-ptak-10426719/",
+     "price_pln": 139.98,
+     "finish": "Rajski ptak",
+     "note": "стрелиция 79.99 zł + кашпо HASSELBUKETT 59.99 zł (арт. 406.218.23)",
+     "size": [
+      0.578,
+      0.918,
+      0.649
+     ],
+     "thumb": "models/decor/props/strelitzia-19/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/props/hasselbukett-19/model.glb",
+       "pos": [
+        -2.24,
+        0,
+        0.4
+       ],
+       "rot": 0
+      },
+      {
+       "model": "models/decor/props/strelitzia-19/model.glb",
+       "pos": [
+        -2.24,
+        0.025,
+        0.4
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "fejka-bamboo",
+     "name": "FEJKA sztuczna roślina doniczkowa, 21 cm",
+     "brand": "IKEA",
+     "article": "406.106.07",
+     "url": "https://www.ikea.com/pl/pl/p/fejka-sztuczna-roslina-doniczkowa-do-wewnatrz-na-zewnatrz-bambus-40610607/",
+     "price_pln": 199.0,
+     "finish": "do wewnątrz/na zewnątrz/bambus",
+     "note": "искусственный бамбук ~170 см",
+     "size": [
+      0.901,
+      1.7,
+      0.725
+     ],
+     "thumb": "models/decor/props/fejka-bamboo/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/props/fejka-bamboo/model.glb",
+       "pos": [
+        -2.24,
+        0,
+        0.4
+       ],
+       "rot": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "art",
+   "label": "Картина",
+   "default": "knoppang-botanic",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "knoppang-botanic",
+     "name": "KNOPPÄNG rama z plakatem, 40x50 cm",
+     "brand": "IKEA",
+     "article": "505.788.95",
+     "url": "https://www.ikea.com/pl/pl/p/knoppaeng-rama-z-plakatem-karty-botaniczne-owocow-vintage-50578895/",
+     "price_pln": 79.99,
+     "finish": "karty botaniczne owoców vintage",
+     "note": "пара рамок с ботаническими плакатами",
+     "size": [
+      0.832,
+      0.5,
+      0.021
+     ],
+     "thumb": "models/decor/props/knoppang-botanic/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/knoppang-botanic/model.glb",
+       "pos": [
+        -0.115,
+        1.32,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "blodflader-seine",
+     "name": "BLODFLÄDER obraz, 118x78 cm",
+     "brand": "IKEA",
+     "article": "206.019.15",
+     "url": "https://www.ikea.com/pl/pl/p/blodflaeder-obraz-sekwana-w-giverny-20601915/",
+     "price_pln": 199.0,
+     "finish": "Sekwana w Giverny",
+     "note": "Моне, в раме",
+     "size": [
+      1.204,
+      0.804,
+      0.03
+     ],
+     "thumb": "models/decor/props/blodflader-seine/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/blodflader-seine/model.glb",
+       "pos": [
+        -0.119,
+        1.3,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "pjatteryd-lilies",
+     "name": "PJÄTTERYD obraz, 70x50 cm",
+     "brand": "IKEA",
+     "article": "005.789.06",
+     "url": "https://www.ikea.com/pl/pl/p/pjaetteryd-obraz-lilie-wodne-1916-19-00578906/",
+     "price_pln": 99.99,
+     "finish": "Lilie wodne, 1916 19",
+     "note": "Моне, на холсте",
+     "size": [
+      0.702,
+      0.502,
+      0.022
+     ],
+     "thumb": "models/decor/props/pjatteryd-lilies/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/pjatteryd-lilies/model.glb",
+       "pos": [
+        -0.115,
+        1.32,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    },
+    {
+     "id": "pjatteryd-pearl",
+     "name": "PJÄTTERYD obraz, 30x40 cm",
+     "brand": "IKEA",
+     "article": "205.789.10",
+     "url": "https://www.ikea.com/pl/pl/p/pjaetteryd-obraz-dziewczyna-z-perla-2-20578910/",
+     "price_pln": 39.99,
+     "finish": "dziewczyna z perłą, 2",
+     "note": "Вермеер, на холсте",
+     "size": [
+      0.3,
+      0.4,
+      0.002
+     ],
+     "thumb": "models/decor/props/pjatteryd-pearl/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/pjatteryd-pearl/model.glb",
+       "pos": [
+        -0.105,
+        1.36,
+        1.42
+       ],
+       "rot": -90
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

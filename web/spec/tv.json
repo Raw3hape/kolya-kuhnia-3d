@@ -1,0 +1,24 @@
+{
+  "_about": "Что показывает ТВ в гостиной (web/js/tv.js). videos — по порядку: первое играет, при ошибке (встраивание запрещено, видео удалено) или зависании — следующее, по кругу. duration — длительность или \"live\" (круглосуточная трансляция). embedCheck — дата проверки oEmbed (200) и настоящего воспроизведения во встроенном плеере. poster — кадр для фото-режима, снимка и GLB, лицензия в textures/tv/SOURCE.md; posterBrightness — его видимая яркость (после экспозиции). volume — громкость со звуком (0–100). crop — увеличение видео внутри экрана (1 — без обрезки). pauseAfterSec — пауза плеера, когда ТВ так долго не в кадре. stallSec — через сколько секунд без воспроизведения брать следующее видео.",
+  "host": "https://www.youtube-nocookie.com",
+  "poster": "textures/tv/poster.jpg",
+  "volume": 35,
+  "posterBrightness": 0.8,
+  "crop": 1.0,
+  "pauseAfterSec": 30,
+  "stallSec": 25,
+  "videos": [
+    { "id": "eSWST13stO4", "title": "4k (ASMR) 10 Hour Store Loop - Hawaii Surfing - With Relaxing Music", "channel": "Waves of the World",
+      "url": "https://www.youtube.com/watch?v=eSWST13stO4", "duration": "10:00:32", "embedCheck": "2026-11-15" },
+    { "id": "hm9iAviOZ20", "title": "Surfline TV | LIVE Surf Cams 24/7", "channel": "Surfline",
+      "url": "https://www.youtube.com/watch?v=hm9iAviOZ20", "duration": "live", "embedCheck": "2026-11-15" },
+    { "id": "1QKtt6CTf_I", "title": "4k (ASMR) 10 Hour Store Loop - Tahiti Surfing - With Relaxing Music", "channel": "Waves of the World",
+      "url": "https://www.youtube.com/watch?v=1QKtt6CTf_I", "duration": "10:00:00", "embedCheck": "2026-11-15" },
+    { "id": "uDtV9Kl0qsM", "title": "(ASMR) Waves of the World/Surfing 12 hour store loop - with relaxing ocean sounds and music", "channel": "Waves of the World",
+      "url": "https://www.youtube.com/watch?v=uDtV9Kl0qsM", "duration": "11:54:56", "embedCheck": "2026-11-15" },
+    { "id": "Fp7l8XASb9Y", "title": "LIVE Banzai Pipeline Surf Cam: North Shore, Oahu - Hawaii | explore.org", "channel": "Explore Big Surf, Beaches and Sunsets",
+      "url": "https://www.youtube.com/watch?v=Fp7l8XASb9Y", "duration": "live", "embedCheck": "2026-11-15" },
+    { "id": "Sy8oLkHlrk8", "title": "4 Hours of Incredible Huge Cloud Break Waves, Relaxing Cafe, Surfshop Slow Motion Surfing", "channel": "Nathan Florence",
+      "url": "https://www.youtube.com/watch?v=Sy8oLkHlrk8", "duration": "3:49:28", "embedCheck": "2026-11-15" }
+  ]
+}

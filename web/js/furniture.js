@@ -11,6 +11,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { applyItem, loadMeta } from './materials.js';
 import { islandBox } from './model.js';
+import { tvPosterTexture } from './tv.js';
 
 // Спеки грузятся сами (как в main.js — относительно страницы). Нет файла — нет и того, что в нём; приложение живёт.
 const getJSON = url => fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null);
@@ -461,26 +462,15 @@ function finishMat(id, ctx) {
 }
 const isWood = id => id === 'oak' || id === 'walnut';
 
-// «Включённый» экран: мягкий градиент-заставка.
-let screenTex = null;
-function screenTexture() {
-  if (screenTex) return screenTex;
-  const c = document.createElement('canvas'); c.width = 512; c.height = 288;
-  const x = c.getContext('2d');
-  const g = x.createLinearGradient(0, 0, 0, 288);
-  g.addColorStop(0, '#16314f'); g.addColorStop(0.55, '#6f6a86'); g.addColorStop(0.8, '#e0956a'); g.addColorStop(1, '#3a2a2a');
-  x.fillStyle = g; x.fillRect(0, 0, 512, 288);
-  const s = x.createRadialGradient(330, 190, 4, 330, 190, 120);
-  s.addColorStop(0, 'rgba(255,236,190,0.95)'); s.addColorStop(1, 'rgba(255,200,140,0)');
-  x.fillStyle = s; x.fillRect(0, 0, 512, 288);
-  screenTex = new THREE.CanvasTexture(c); screenTex.colorSpace = THREE.SRGBColorSpace;
-  return screenTex;
-}
+// Экран ТВ. В живом растре поверх него идёт настоящий YouTube (tv.js находит меш 'tv_screen' и вырезает в кадре «дыру»
+// под плеер). Материал «включённого» экрана светится постером (spec/tv.json → poster): его видят фото-режим, снимок
+// PNG и экспорт GLB, где iframe быть не может.
 function screenMat(on) {
   const m = cached('furn_tv_screen', () => physical({ color: '#050506', roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.03 }));
-  m.emissiveMap = on ? screenTexture() : null;
-  m.emissive.set(on ? '#ffffff' : '#000000');
-  m.emissiveIntensity = on ? 0.9 : 0;
+  const poster = on ? tvPosterTexture() : null;
+  m.emissiveMap = poster;
+  m.emissive.set(poster ? '#ffffff' : '#000000');
+  m.emissiveIntensity = poster ? 1 : 0;   // яркость постера под экспозицию кадра подгоняет tv.js
   m.needsUpdate = true;
   return m;
 }
@@ -775,7 +765,8 @@ function buildTV(S, c) {
   const t = c.spec.tv, g = itemGroup('tv'), ctx = { id: 'tv', slot: 'tv', group: g, n: 0 };
   const { pw, ph } = tvDims(S), b = t.bezel, body = tvBody();
   part(hardBox(pw + 2 * b, ph + 2 * b, t.depth, 0.004), body, 0, 0, 0, ctx);
-  part(new THREE.PlaneGeometry(pw, ph), screenMat(S.tvOn === 'on'), 0, 0, t.depth / 2 + 0.0004, ctx, { cast: false, uv: false });
+  const screen = part(new THREE.PlaneGeometry(pw, ph), screenMat(S.tvOn === 'on'), 0, 0, t.depth / 2 + 0.0004, ctx, { cast: false, uv: false });
+  screen.name = 'tv_screen'; screen.userData.tvScreen = true;   // ищут tv.js (плеер) и seats.js (взгляд с дивана)
   part(hardBox(pw * 0.62, ph * 0.6, t.backDepth, 0.01), body, 0, -ph * 0.08, -t.depth / 2 - t.backDepth / 2, ctx);
   const bottom = -(ph / 2 + b);
   if (S.tv === 'stand') {

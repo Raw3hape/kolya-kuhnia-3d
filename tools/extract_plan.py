@@ -50,7 +50,8 @@ OPENINGS = [
      "center_pt": 623.44, "wall_pt": (211.8, 231.12), "width": 2.50, "sill": 0.0, "head": 2.21,
      "fixed_left": 1.55},
     {"id": "room2_balcony_door", "room": "Комната 2", "type": "door", "along": "z",
-     "center_pt": 464.75, "wall_pt": (719.49, 738.81), "width": 1.50, "sill": 0.0, "head": 2.21},
+     "center_pt": 464.75, "wall_pt": (719.49, 738.81), "width": 1.50, "sill": 0.0, "head": 2.21,
+     "fixed_left": 0.50},   # по PDF: глухая часть 0.5 м у меньшего z, створка 1.0 м
     # wall_pt от внутренней штукатурки холла (z 6.4463), иначе в проёме остаётся её полоска
     {"id": "entry_door", "room": "Холл", "type": "entry", "along": "x",
      "center_pt": 296.8, "wall_pt": (562.9, 573.12), "width": 0.97, "sill": 0.0, "head": 2.05},

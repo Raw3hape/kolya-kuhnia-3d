@@ -1,0 +1,19 @@
+[
+  {"id": "stall-oak", "zone": "hall", "article": "40530229"},
+  {"id": "bissa-white", "zone": "hall", "article": "10530259"},
+  {"id": "gullaberg-grey", "zone": "hall", "article": "40587697", "maxTris": 30000},
+  {"id": "tjusig-bench-white", "zone": "hall", "article": "70152702"},
+  {"id": "nipasen-black", "zone": "hall", "article": "20586142"},
+  {"id": "kallso-grey", "zone": "hall", "article": "80599325", "maxTris": 30000},
+  {"id": "hovolm-oak", "zone": "hall", "article": "10500059", "rot": [90, 0, 0]},
+  {"id": "tjusig-hanger-white", "zone": "hall", "article": "60291708"},
+  {"id": "mackapar-white", "zone": "hall", "article": "10530990", "rot": [90, 0, 0]},
+  {"id": "nissedal-65x150", "zone": "hall", "article": "70320319", "rot": [90, 0, 0]},
+  {"id": "lindbyn-60x120", "zone": "hall", "article": "30458610", "rot": [90, 0, 0]},
+  {"id": "lindbyn-80", "zone": "hall", "article": "50458614", "rot": [90, 0, 0]},
+  {"id": "klavrestrom-oak", "zone": "hall", "article": "30601689", "rot": [90, 0, 0]},
+  {"id": "mosslanda-55", "zone": "hall", "article": "80589835", "rot": [90, 0, 0]},
+  {"id": "nereby-birch", "zone": "hall", "article": "90465924", "rot": [90, 0, 0]},
+  {"id": "fejka-fig", "zone": "hall", "article": "30615276"},
+  {"id": "fejka-areca", "zone": "hall", "article": "00600894", "maxTris": 30000}
+]

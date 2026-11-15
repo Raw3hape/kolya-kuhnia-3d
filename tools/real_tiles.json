@@ -1,6 +1,6 @@
 {
- "_note": "Real floor tiles from carrea.pl, collected 2026-11-15 for the floor material configurator. Faces are the shop's flat straight-on product images (largest available, no room scenes). face_is_full_tile=true means the image is (or very likely is) one whole tile face at the right aspect ratio; false means a crop or a face of a different format, see notes. Most scans are seamless, so tile edges are not drawn in the image. finish: 'natural' = manufacturer's 'naturale' matte surface, 'mat' = matte. price_pln_m2 is the shop's current price per m² incl. VAT (null = price on request). Shop wording kept in color_pl / availability_pl.",
- "source": "carrea.pl",
+ "_note": "Real floor tiles from carrea.pl, collected 2026-11-15 for the floor material configurator. Faces are the shop's flat straight-on product images (largest available, no room scenes). face_is_full_tile=true means the image is (or very likely is) one whole tile face at the right aspect ratio; false means a crop or a face of a different format, see notes. Most scans are seamless, so tile edges are not drawn in the image. finish: 'natural' = manufacturer's 'naturale' matte surface, 'mat' = matte. price_pln_m2 is the shop's current price per m² incl. VAT (null = price on request). Shop wording kept in color_pl / availability_pl. Entries added 2026-11-15 by the stone/tile pass carry 'shop', 'sku' (EAN or manufacturer code) and 'fetched'; their faces live in source/refs/tiles/<shop>/<slug>/. Render params: maxpx caps the texture side, grout_w is the joint width in m (2 mm rectified, 3 mm non-rectified, 4 mm tumbled stone), bond is the row offset, shape 'hex' switches to the hexagon layout, flat removes the scan's lighting gradient (quadratic fit) so rotated faces do not form a patchwork. 'cat' here is the catalogue category (tile, concrete or stone).",
+ "source": "carrea.pl; domus-sklep.pl; castorama.pl; paradyz.com (see each entry's url/shop)",
  "tiles": [
   {
    "id": "carrea_medley_white_rock_60",
@@ -442,6 +442,1141 @@
    "grout": "#cac9c5",
    "gain": 0.8,
    "notes": "Shop: domus-sklep.pl (not carrea; page behind Cloudflare, price from search snippets, 182,52 zł per 1.08 m² box). Peronda Manhattan Floor, code 34873, AS = 'All in One' matt slip-resistant finish. Light-grey concrete with fine aggregate. face-1/2 = 60×60 faces cr26/cr03 (estile.pl, eplytki24.pl), face-3/4 = halves of the 60×120 White AS face cr12 (alewnetrze.com.pl), same scale. Scans are over-exposed, gain 0.8 matches the shop room photo. Sources: source/refs/tiles/manhattan-floor-white-60/SOURCE.md."
+  },
+  {
+   "id": "paradyz_terazzo_white_60",
+   "name": "TERAZZO WHITE GRES SZKL. REKT. MAT. 59,8X59,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p39160-terazzo-white-gres-szkl-rekt-mat-598x598-g1",
+   "sku": "R-R-598X598-1-TERA.WH",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/terazzo-white-60/face-1.jpg",
+    "source/refs/tiles/paradyz/terazzo-white-60/face-2.jpg",
+    "source/refs/tiles/paradyz/terazzo-white-60/face-3.jpg",
+    "source/refs/tiles/paradyz/terazzo-white-60/face-4.jpg",
+    "source/refs/tiles/paradyz/terazzo-white-60/face-5.jpg",
+    "source/refs/tiles/paradyz/terazzo-white-60/face-6.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 139.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-598X598-1-TERA.WH, gross price per m². Faces = manufacturer scans (6 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_terazzo_grey_60",
+   "name": "TERAZZO GREY GRES SZKL. REKT. MAT. 59,8X59,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p39154-terazzo-grey-gres-szkl-rekt-mat-598x598-g1",
+   "sku": "R-R-598X598-1-TERA.GR",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/terazzo-grey-60/face-1.jpg",
+    "source/refs/tiles/paradyz/terazzo-grey-60/face-2.jpg",
+    "source/refs/tiles/paradyz/terazzo-grey-60/face-3.jpg",
+    "source/refs/tiles/paradyz/terazzo-grey-60/face-4.jpg",
+    "source/refs/tiles/paradyz/terazzo-grey-60/face-5.jpg",
+    "source/refs/tiles/paradyz/terazzo-grey-60/face-6.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 139.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-598X598-1-TERA.GR, gross price per m². Faces = manufacturer scans (6 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_terazzo_beige_60",
+   "name": "TERAZZO BEIGE GRES SZKL. REKT. MAT. 59,8X59,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p89344-terazzo-beige-gres-szkl-rekt-mat-598x598-g1",
+   "sku": "R-R-598X598-1-TERA.BE",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/terazzo-beige-60/face-1.jpg",
+    "source/refs/tiles/paradyz/terazzo-beige-60/face-2.jpg",
+    "source/refs/tiles/paradyz/terazzo-beige-60/face-3.jpg",
+    "source/refs/tiles/paradyz/terazzo-beige-60/face-4.jpg",
+    "source/refs/tiles/paradyz/terazzo-beige-60/face-5.jpg",
+    "source/refs/tiles/paradyz/terazzo-beige-60/face-6.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 139.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-598X598-1-TERA.BE, gross price per m². Faces = manufacturer scans (6 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "casto_cersanit_brand_rock_cream_60",
+   "name": "Gres Brand Rock Cersanit 59,8 x 59,8 cm cream 1,07 m2",
+   "brand": "Cersanit",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-brand-rock-cersanit-59-8-x-59-8-cm-cream-1-07-m2/5901771157489_CAPL.prd",
+   "sku": "5901771157489",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/castorama/cersanit-brand-rock-cream-60/face-1.jpg",
+    "source/refs/tiles/castorama/cersanit-brand-rock-cream-60/face-2.jpg",
+    "source/refs/tiles/castorama/cersanit-brand-rock-cream-60/face-3.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 62.98,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Kremowy",
+   "notes": "Castorama listing, EAN 5901771157489. Pack price 67.39 zł (1.07m²). Faces = the shop's straight-on product images (3), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_cersanit_big_terrazzo_grey_60",
+   "name": "Gres Big Terrazzo Cersanit 59,8 x 59,8 cm grey 1,07 m2",
+   "brand": "Cersanit",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-big-terrazzo-cersanit-59-8-x-59-8-cm-grey-1-07-m2/5901771118275_CAPL.prd",
+   "sku": "5901771118275",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/castorama/cersanit-big-terrazzo-grey-60/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 34.98,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Szary",
+   "notes": "Castorama listing, EAN 5901771118275. Pack price 37.43 zł (1.07m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_euroceramika_terazzo_white_60x120",
+   "name": "Gres mrozoodporny szkliwiony Terazzo 60 x 120 cm white carving 1,44 m2",
+   "brand": "Euroceramika Tiles",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-szkliwiony-terazzo-60-x-120-cm-white-carving-1-44-m2/5902767924726_CAPL.prd",
+   "sku": "5902767924726",
+   "size_m": [
+    1.2,
+    0.6
+   ],
+   "thickness_mm": 8.5,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/castorama/euroceramika-terazzo-white-60x120/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 148.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Biały",
+   "notes": "Castorama listing, EAN 5902767924726. Pack price 213.12 zł (1.44m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_shiny_lines_bianco_hex",
+   "name": "SHINY LINES BIANCO HEKSAGON GRES SZKL. MAT. 19,8X17,1 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p22532-shiny-lines-bianco-heksagon-gres-szkl-mat-198x171-g1",
+   "sku": "R---198X171-1-SHIN.BI",
+   "size_m": [
+    0.198,
+    0.171
+   ],
+   "thickness_mm": 7.5,
+   "finish": "mat",
+   "rectified": false,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/shiny-lines-bianco-hex/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 219.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "shape": "hex",
+   "grout_w": 0.003,
+   "notes": "Hexagon 19.8 cm across corners, 17.1 cm across flats. face-1 is the manufacturer's PNG cut-out; transparent corners filled with the mean colour. The decorative glossy lines do not show in the scan. Ceramika Paradyż official e-shop, SKU R---198X171-1-SHIN.BI, gross price per m². Faces = manufacturer scans (1 different face patterns)."
+  },
+  {
+   "id": "paradyz_gammo_waniliowy_20",
+   "name": "GAMMO COLOURS WANILIOWY GRES SZKL. MAT. 19,8X19,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p107397-gammo-colours-waniliowy-gres-szkl-mat-198x198-g1",
+   "sku": "R---198X198-1-GAMO.WA--M2",
+   "size_m": [
+    0.2,
+    0.2
+   ],
+   "thickness_mm": 7.2,
+   "finish": "mat",
+   "rectified": false,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/gammo-waniliowy-20/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 129.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "grout_w": 0.003,
+   "notes": "Ceramika Paradyż official e-shop, SKU R---198X198-1-GAMO.WA--M2, gross price per m². Faces = manufacturer scans (1 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_gammo_bialy_20",
+   "name": "GAMMO COLOURS BIAŁY GRES SZKL. MAT. 19,8X19,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p107398-gammo-colours-bialy-gres-szkl-mat-198x198-g1",
+   "sku": "R---198X198-1-GAMO.BI--M2",
+   "size_m": [
+    0.2,
+    0.2
+   ],
+   "thickness_mm": 7.2,
+   "finish": "mat",
+   "rectified": false,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/gammo-bialy-20/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 129.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "grout_w": 0.003,
+   "notes": "Ceramika Paradyż official e-shop, SKU R---198X198-1-GAMO.BI--M2, gross price per m². Faces = manufacturer scans (1 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_gammo_popielaty_20",
+   "name": "GAMMO COLOURS POPIELATY GRES SZKL. MAT. 19,8X19,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p94960-gammo-colours-popielaty-gres-szkl-mat-198x198-g1",
+   "sku": "R---198X198-1-GAMO.PP---M",
+   "size_m": [
+    0.2,
+    0.2
+   ],
+   "thickness_mm": 7.5,
+   "finish": "mat",
+   "rectified": false,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/gammo-popielaty-20/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 129.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "grout_w": 0.003,
+   "notes": "Ceramika Paradyż official e-shop, SKU R---198X198-1-GAMO.PP---M, gross price per m². Faces = manufacturer scans (1 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_bazo_beige_20",
+   "name": "BAZO BEIGE GRES UPEC SÓL-PIEPRZ MAT. 19,8X19,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p14974-bazo-beige-gres-upec-sol-pieprz-mat-198x198-g1",
+   "sku": "Q---198X198-1-BAZO.BE",
+   "size_m": [
+    0.2,
+    0.2
+   ],
+   "thickness_mm": 7.5,
+   "finish": "mat",
+   "rectified": false,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/bazo-beige-20/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 117.22,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "grout_w": 0.003,
+   "notes": "Ceramika Paradyż official e-shop, SKU Q---198X198-1-BAZO.BE, gross price per m². Faces = manufacturer scans (1 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_bazo_grys_20",
+   "name": "BAZO GRYS GRES UPEC SÓL-PIEPRZ GR.13MM MAT. 19,8X19,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p11820-bazo-grys-gres-upec-sol-pieprz-gr13mm-mat-198x198-g1",
+   "sku": "Q---198X198-1-BAZO.GR13",
+   "size_m": [
+    0.2,
+    0.2
+   ],
+   "thickness_mm": 13.0,
+   "finish": "mat",
+   "rectified": false,
+   "cat": "tile",
+   "faces": [
+    "source/refs/tiles/paradyz/bazo-grys-20/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 166.66,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "grout_w": 0.003,
+   "notes": "Ceramika Paradyż official e-shop, SKU Q---198X198-1-BAZO.GR13, gross price per m². Faces = manufacturer scans (1 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "casto_paradyz_art_grys_60",
+   "name": "Gres Art Ceramika Paradyż 60 x 60 cm grys 1,44 m2",
+   "brand": "Paradyż",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-art-ceramika-paradyz-60-x-60-cm-grys-1-44-m2/5904584153174_CAPL.prd",
+   "sku": "5904584153174",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": false,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/paradyz-art-grys-60/face-1.jpg",
+    "source/refs/tiles/castorama/paradyz-art-grys-60/face-2.jpg",
+    "source/refs/tiles/castorama/paradyz-art-grys-60/face-3.jpg",
+    "source/refs/tiles/castorama/paradyz-art-grys-60/face-4.jpg",
+    "source/refs/tiles/castorama/paradyz-art-grys-60/face-5.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 79.98,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Grys",
+   "grout_w": 0.003,
+   "notes": "Not rectified, so 3 mm joint. Faces are Castorama 650 px product images with white margins trimmed. Castorama listing, EAN 5904584153174. Pack price 115.17 zł (1.44m²). Faces = the shop's straight-on product images (5), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_paradyz_chromatic_grys_60",
+   "name": "Gres Chromatic 59,8 x 59,8 cm grys 1,43 m2",
+   "brand": "Paradyż",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-chromatic-59-8-x-59-8-cm-grys-1-43-m2/5904584155871_CAPL.prd",
+   "sku": "5904584155871",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/paradyz-chromatic-grys-60/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 97.98,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Grys",
+   "notes": "Castorama listing, EAN 5904584155871. Pack price 140.11 zł (1.43m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_cerrad_olden_light_grey_60x120",
+   "name": "Gres mrozoodporny Olden Cerrad 59,7 x 119,7 cm light grey 1,43 m2",
+   "brand": "Cerrad",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-olden-cerrad-59-7-x-119-7-cm-light-grey-1-43-m2/5903313354844_CAPL.prd",
+   "sku": "5903313354844",
+   "size_m": [
+    1.2,
+    0.6
+   ],
+   "thickness_mm": 7.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/cerrad-olden-light-grey-60x120/face-1.jpg",
+    "source/refs/tiles/castorama/cerrad-olden-light-grey-60x120/face-2.jpg",
+    "source/refs/tiles/castorama/cerrad-olden-light-grey-60x120/face-3.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 59.98,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Jasnoszary",
+   "notes": "Castorama listing, EAN 5903313354844. Pack price 85.77 zł (1.43m²). Faces = the shop's straight-on product images (3), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_cerrad_sepia_grigio_80",
+   "name": "Gres mrozoodporny Sepia 79,7 x 79,7 cm grigio 1,27 m2",
+   "brand": "Cerrad",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-sepia-79-7-x-79-7-cm-grigio-1-27-m2/5903313308236_CAPL.prd",
+   "sku": "5903313308236",
+   "size_m": [
+    0.8,
+    0.8
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/cerrad-sepia-grigio-80/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 74.98,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Grigio",
+   "notes": "Castorama listing, EAN 5903313308236. Pack price 95.22 zł (1.27m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_cersanit_rialto_grey_60x120",
+   "name": "Gres mrozoodporny szkliwiony Cersanit Rialto 59,8 x 119,8 cm grey 1,43 m2",
+   "brand": "Cersanit",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-szkliwiony-cersanit-rialto-59-8-x-119-8-cm-grey-1-43-m2/5907753255945_CAPL.prd",
+   "sku": "5907753255945",
+   "size_m": [
+    1.2,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/cersanit-rialto-grey-60x120/face-1.jpg",
+    "source/refs/tiles/castorama/cersanit-rialto-grey-60x120/face-2.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 56.98,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Castorama listing, EAN 5907753255945. Pack price 81.48 zł (1.43m²). Faces = the shop's straight-on product images (2), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_arte_neutral_grey_60",
+   "name": "Gres mrozoodporny szkliwiony Neutral Arte 59,8 x 59,8 cm grey 1,79 m2",
+   "brand": "Arte",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-szkliwiony-neutral-arte-59-8-x-59-8-cm-grey-1-79-m2/5900199221864_CAPL.prd",
+   "sku": "5900199221864",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/arte-neutral-grey-60/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 108.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Szary",
+   "notes": "Castorama listing, EAN 5900199221864. Pack price 193.32 zł (1.79m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_paradyz_play_light_grey_60",
+   "name": "Gres mrozoodporny szkliwiony Play Ceramika Paradyż 59,8 x 59,8 cm light grey mat 1,43 m2",
+   "brand": "Paradyż",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-szkliwiony-play-ceramika-paradyz-59-8-x-59-8-cm-light-grey-mat-1-43-m2/5904584158285_CAPL.prd",
+   "sku": "5904584158285",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/paradyz-play-light-grey-60/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 51.2,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Light grey",
+   "notes": "Castorama listing, EAN 5904584158285. Pack price 73.22 zł (1.43m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_paradyz_play_light_grey_lappato_60x120",
+   "name": "Gres mrozoodporny szkliwiony Play Ceramika Paradyż lapatto 59,8 x 119,8 cm light grey 1,43 m2",
+   "brand": "Paradyż",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-szkliwiony-play-ceramika-paradyz-lapatto-59-8-x-119-8-cm-light-grey-1-43-m2/5904584158100_CAPL.prd",
+   "sku": "5904584158100",
+   "size_m": [
+    1.2,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "lappato",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/paradyz-play-light-grey-lappato-60x120/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 128.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Light grey",
+   "notes": "Castorama listing, EAN 5904584158100. Pack price 183.04 zł (1.43m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_arte_nakano_grey_lappato_120",
+   "name": "Gres Nakano Arte 119,8 x 119,8 cm grey lappato",
+   "brand": "Arte",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-nakano-arte-119-8-x-119-8-cm-grey-lappato/5900199230996_CAPL.prd",
+   "sku": "5900199230996",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 6.0,
+   "finish": "lappato",
+   "rectified": null,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/castorama/arte-nakano-grey-lappato-120/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 298.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Lappato (semi-polished). Castorama: 858.24 zł per 2.88 m² pack = 298 zł/m². Castorama listing, EAN 5900199230996. Pack price 858.24 zł (2.88m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_u117_light_beige_60",
+   "name": "U117 LIGHT BEIGE GRES SZKL. REKT. PÓŁPOLER 59,8X59,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p39089-u117-light-beige-gres-szkl-rekt-polpoler-598x598-g1",
+   "sku": "RHR-598X598-1-U117.BELG",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "półpoler",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/paradyz/u117-light-beige-60/face-1.jpg",
+    "source/refs/tiles/paradyz/u117-light-beige-60/face-2.jpg",
+    "source/refs/tiles/paradyz/u117-light-beige-60/face-3.jpg",
+    "source/refs/tiles/paradyz/u117-light-beige-60/face-4.jpg",
+    "source/refs/tiles/paradyz/u117-light-beige-60/face-5.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 169.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Półpoler (semi-polished) finish. Ceramika Paradyż official e-shop, SKU RHR-598X598-1-U117.BELG, gross price per m². Faces = manufacturer scans (5 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_bergdust_crema_60",
+   "name": "BERGDUST CREMA GRES SZKL. REKT. MAT. 59,8X59,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p67347-bergdust-crema-gres-szkl-rekt-mat-598x598-g1",
+   "sku": "R-R-598X598-1-BERG.CR",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/paradyz/bergdust-crema-60/face-1.jpg",
+    "source/refs/tiles/paradyz/bergdust-crema-60/face-2.jpg",
+    "source/refs/tiles/paradyz/bergdust-crema-60/face-3.jpg",
+    "source/refs/tiles/paradyz/bergdust-crema-60/face-4.jpg",
+    "source/refs/tiles/paradyz/bergdust-crema-60/face-5.jpg",
+    "source/refs/tiles/paradyz/bergdust-crema-60/face-6.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 149.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-598X598-1-BERG.CR, gross price per m². Faces = manufacturer scans (6 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_convero_light_beige_120",
+   "name": "CONVERO LIGHT BEIGE GRES SZKL. REKT. MAT 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p107333-convero-light-beige-gres-szkl-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-CONV.BELG",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/paradyz/convero-light-beige-120/face-1.jpg",
+    "source/refs/tiles/paradyz/convero-light-beige-120/face-2.jpg",
+    "source/refs/tiles/paradyz/convero-light-beige-120/face-3.jpg",
+    "source/refs/tiles/paradyz/convero-light-beige-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 229.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-CONV.BELG, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_mild_desert_crema_120",
+   "name": "MILD DESERT CREMA GRES SZKL. REKT. MAT. 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p98110-mild-desert-crema-gres-szkl-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-MILD.CR",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "concrete",
+   "faces": [
+    "source/refs/tiles/paradyz/mild-desert-crema-120/face-1.jpg",
+    "source/refs/tiles/paradyz/mild-desert-crema-120/face-2.jpg",
+    "source/refs/tiles/paradyz/mild-desert-crema-120/face-3.jpg",
+    "source/refs/tiles/paradyz/mild-desert-crema-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 229.09,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-MILD.CR, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "casto_arte_root_ivory_60x120",
+   "name": "Gres mrozoodporny Root Arte 59,8 x 119,8 cm ivory mat 1,43 m2",
+   "brand": "Arte",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-root-arte-59-8-x-119-8-cm-ivory-mat-1-43-m2/5900199285071_CAPL.prd",
+   "sku": "5900199285071",
+   "size_m": [
+    1.2,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/castorama/arte-root-ivory-60x120/face-1.jpg",
+    "source/refs/tiles/castorama/arte-root-ivory-60x120/face-2.jpg",
+    "source/refs/tiles/castorama/arte-root-ivory-60x120/face-3.jpg",
+    "source/refs/tiles/castorama/arte-root-ivory-60x120/face-4.jpg",
+    "source/refs/tiles/castorama/arte-root-ivory-60x120/face-5.jpg",
+    "source/refs/tiles/castorama/arte-root-ivory-60x120/face-6.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 118.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Beżowy",
+   "notes": "Castorama listing, EAN 5900199285071. Pack price 168.74 zł (1.43m²). Faces = the shop's straight-on product images (6), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_arte_valerie_beige_120",
+   "name": "Gres mrozoodporny Valerie Arte 119,8 x 119,8 cm beige 1,44 m2",
+   "brand": "Arte",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-valerie-arte-119-8-x-119-8-cm-beige-1-44-m2/5900199231085_CAPL.prd",
+   "sku": "5900199231085",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 6.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/castorama/arte-valerie-beige-120/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 268.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Castorama listing, EAN 5900199231085. Pack price 771.84 zł (2.88m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_arte_vanilla_white_120",
+   "name": "Gres mrozoodporny Vanilla Arte 119,8 x 119,8 cm white 2,88 m2",
+   "brand": "Arte",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/gres-mrozoodporny-vanilla-arte-119-8-x-119-8-cm-white-2-88-m2/5900199231320_CAPL.prd",
+   "sku": "5900199231320",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 6.0,
+   "finish": "matowe",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/castorama/arte-vanilla-white-120/face-1.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 268.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Castorama listing, EAN 5900199231320. Pack price 771.84 zł (2.88m²). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_trawertyn_ivory_classic_40x61",
+   "name": "Trawertyn Tiles Ivory Classic Mix Bębnowany 40,6x61x1,2 cm 1 m2",
+   "brand": "Tiles",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/trawertyn-tiles-ivory-classic-mix-b-bnowany-40-6x61x1-2-cm-1-m2/5904824323985_CAPL.prd",
+   "sku": "5904824323985",
+   "size_m": [
+    0.61,
+    0.406
+   ],
+   "thickness_mm": 12.0,
+   "finish": "bębnowany",
+   "rectified": null,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/castorama/trawertyn-ivory-classic-40x61/face-1.jpg"
+   ],
+   "face_is_full_tile": false,
+   "price_pln_m2": 199.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Beżowy",
+   "grout_w": 0.004,
+   "bond": 0.5,
+   "rough": 0.8,
+   "notes": "Natural travertine (Tiles brand, Castorama), tumbled edges. Only image is a product render on white; face-1 is a crop of its inner area, not a full tile (render is not at the 40.6×61 aspect). Castorama sells it as a 1 m² pack for 199 zł. Castorama listing, EAN 5904824323985. Pack price 199 zł (?). Faces = the shop's straight-on product images (1), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "casto_trawertyn_silver_latte_40x61",
+   "name": "Trawertyn Tiles Silver Latte Greige Bębnowany 40,6x61x3 cm 1 m2",
+   "brand": "Tiles",
+   "shop": "castorama.pl",
+   "url": "https://www.castorama.pl/trawertyn-tiles-silver-latte-greige-b-bnowany-40-6x61x3-cm-1-m2/5904824324012_CAPL.prd",
+   "sku": "5904824324012",
+   "size_m": [
+    0.61,
+    0.406
+   ],
+   "thickness_mm": 30.0,
+   "finish": "bębnowany",
+   "rectified": null,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/castorama/trawertyn-silver-latte-40x61/face-1.jpg",
+    "source/refs/tiles/castorama/trawertyn-silver-latte-40x61/face-2.jpg",
+    "source/refs/tiles/castorama/trawertyn-silver-latte-40x61/face-3.jpg"
+   ],
+   "face_is_full_tile": false,
+   "price_pln_m2": 279.0,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "color_pl": "Szary",
+   "grout_w": 0.004,
+   "bond": 0.5,
+   "rough": 0.8,
+   "notes": "Natural silver travertine (Tiles brand, Castorama), tumbled, 3 cm thick. Faces are crops from the shop's photos of real slabs on a pallet (slight perspective), not full tiles. Castorama sells it as a 1 m² pack for 279 zł. Castorama listing, EAN 5904824324012. Pack price 279 zł (1m²). Faces = the shop's straight-on product images (3), borders trimmed.",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_limaro_white_120",
+   "name": "LIMARO WHITE GRES SZKL. REKT. MAT 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p107355-limaro-white-gres-szkl-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-LIMA.WH",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/limaro-white-120/face-1.jpg",
+    "source/refs/tiles/paradyz/limaro-white-120/face-2.jpg",
+    "source/refs/tiles/paradyz/limaro-white-120/face-3.jpg",
+    "source/refs/tiles/paradyz/limaro-white-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 229.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-LIMA.WH, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_calacatta_120",
+   "name": "CALACATTA GRES SZKL. REKT. MAT. 119,8x119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p79370-calacatta-gres-szkl-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-CALA.--N-3",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/calacatta-120/face-1.jpg",
+    "source/refs/tiles/paradyz/calacatta-120/face-2.jpg",
+    "source/refs/tiles/paradyz/calacatta-120/face-3.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 333.33,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-CALA.--N-3, gross price per m². Faces = manufacturer scans (3 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_storm_slate_taupe_120",
+   "name": "STORM SLATE TAUPE GRES REKT. MAT 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p93974-storm-slate-taupe-gres-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-STSL.TA",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/storm-slate-taupe-120/face-1.jpg",
+    "source/refs/tiles/paradyz/storm-slate-taupe-120/face-2.jpg",
+    "source/refs/tiles/paradyz/storm-slate-taupe-120/face-3.jpg",
+    "source/refs/tiles/paradyz/storm-slate-taupe-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 229.09,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-STSL.TA, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_fortess_vein_white_120",
+   "name": "FORTESS VEIN WHITE MAT GRES SZKL. 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p100416-fortess-vein-white-mat-gres-szkl-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-FOVE.WH",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/fortess-vein-white-120/face-1.jpg",
+    "source/refs/tiles/paradyz/fortess-vein-white-120/face-2.jpg",
+    "source/refs/tiles/paradyz/fortess-vein-white-120/face-3.jpg",
+    "source/refs/tiles/paradyz/fortess-vein-white-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 333.33,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-FOVE.WH, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_wave_desert_crema_120",
+   "name": "WAVE DESERT CREMA GRES SZKL. REKT. MAT 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p98175-wave-desert-crema-gres-szkl-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-WAVE.CR",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/wave-desert-crema-120/face-1.jpg",
+    "source/refs/tiles/paradyz/wave-desert-crema-120/face-2.jpg",
+    "source/refs/tiles/paradyz/wave-desert-crema-120/face-3.jpg",
+    "source/refs/tiles/paradyz/wave-desert-crema-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 229.09,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-WAVE.CR, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_sedina_light_beige_120",
+   "name": "SEDINA LIGHT BEIGE GRES SZKL. REKT. MAT 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p107338-sedina-light-beige-gres-szkl-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-SEDI.BELG",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/sedina-light-beige-120/face-1.jpg",
+    "source/refs/tiles/paradyz/sedina-light-beige-120/face-2.jpg",
+    "source/refs/tiles/paradyz/sedina-light-beige-120/face-3.jpg",
+    "source/refs/tiles/paradyz/sedina-light-beige-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 229.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-SEDI.BELG, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_lunella_crema_60",
+   "name": "LUNELLA CREMA GRES SZKL. REKT. STRUKTURA MAT. 59,8X59,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p109701-lunella-crema-gres-szkl-rekt-struktura-mat-598x598-g1",
+   "sku": "RSR-598X598-1-LUNE.CR",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "struktura mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/lunella-crema-60/face-1.jpg",
+    "source/refs/tiles/paradyz/lunella-crema-60/face-2.jpg",
+    "source/refs/tiles/paradyz/lunella-crema-60/face-3.jpg",
+    "source/refs/tiles/paradyz/lunella-crema-60/face-4.jpg",
+    "source/refs/tiles/paradyz/lunella-crema-60/face-5.jpg",
+    "source/refs/tiles/paradyz/lunella-crema-60/face-6.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 149.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU RSR-598X598-1-LUNE.CR, gross price per m². Faces = manufacturer scans (6 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_aveline_ivory_60",
+   "name": "AVELINE IVORY GRES SZKL. REKT. MAT. 59,8X59,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p110157-aveline-ivory-gres-szkl-rekt-mat-598x598-g1",
+   "sku": "R-R-598X598-1-AVEL.IV",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/aveline-ivory-60/face-1.jpg",
+    "source/refs/tiles/paradyz/aveline-ivory-60/face-2.jpg",
+    "source/refs/tiles/paradyz/aveline-ivory-60/face-3.jpg",
+    "source/refs/tiles/paradyz/aveline-ivory-60/face-4.jpg",
+    "source/refs/tiles/paradyz/aveline-ivory-60/face-5.jpg",
+    "source/refs/tiles/paradyz/aveline-ivory-60/face-6.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 149.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-598X598-1-AVEL.IV, gross price per m². Faces = manufacturer scans (6 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_ritual_light_grey_120",
+   "name": "RITUAL LIGHT GREY GRES SZKL. REKT. MAT 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p52481-ritual-light-grey-gres-szkl-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-RITU.GRLG",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/ritual-light-grey-120/face-1.jpg",
+    "source/refs/tiles/paradyz/ritual-light-grey-120/face-2.jpg",
+    "source/refs/tiles/paradyz/ritual-light-grey-120/face-3.jpg",
+    "source/refs/tiles/paradyz/ritual-light-grey-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 333.33,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-RITU.GRLG, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_daybreak_bianco_60",
+   "name": "DAYBREAK BIANCO GRES SZKL. REKT. MAT. 59,8X59,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p75972-daybreak-bianco-gres-szkl-rekt-mat-598x598-g1",
+   "sku": "R-R-598X598-1-DAYB.BI---2",
+   "size_m": [
+    0.6,
+    0.6
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/daybreak-bianco-60/face-1.jpg",
+    "source/refs/tiles/paradyz/daybreak-bianco-60/face-2.jpg",
+    "source/refs/tiles/paradyz/daybreak-bianco-60/face-3.jpg",
+    "source/refs/tiles/paradyz/daybreak-bianco-60/face-4.jpg",
+    "source/refs/tiles/paradyz/daybreak-bianco-60/face-5.jpg",
+    "source/refs/tiles/paradyz/daybreak-bianco-60/face-6.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 139.9,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-598X598-1-DAYB.BI---2, gross price per m². Faces = manufacturer scans (6 different face patterns).",
+   "flat": 1
+  },
+  {
+   "id": "paradyz_soft_cream_white_120",
+   "name": "SOFT CREAM WHITE GRES SZKL. REKT. MAT. 119,8X119,8 G1",
+   "brand": "Ceramika Paradyż",
+   "shop": "paradyz.com",
+   "url": "https://www.paradyz.com/pl/produkty/p98183-soft-cream-white-gres-szkl-rekt-mat-1198x1198-g1",
+   "sku": "R-R-1,2X1,2-1-SOCR.WH",
+   "size_m": [
+    1.2,
+    1.2
+   ],
+   "thickness_mm": 8.0,
+   "finish": "mat",
+   "rectified": true,
+   "cat": "stone",
+   "faces": [
+    "source/refs/tiles/paradyz/soft-cream-white-120/face-1.jpg",
+    "source/refs/tiles/paradyz/soft-cream-white-120/face-2.jpg",
+    "source/refs/tiles/paradyz/soft-cream-white-120/face-3.jpg",
+    "source/refs/tiles/paradyz/soft-cream-white-120/face-4.jpg"
+   ],
+   "face_is_full_tile": true,
+   "price_pln_m2": 229.09,
+   "fetched": "2026-11-15",
+   "maxpx": 2048,
+   "notes": "Ceramika Paradyż official e-shop, SKU R-R-1,2X1,2-1-SOCR.WH, gross price per m². Faces = manufacturer scans (4 different face patterns).",
+   "flat": 1
   }
  ]
 }

@@ -1,7 +1,14 @@
 // Геометрия: оболочка квартиры из plan.generated.json и кухня из kitchen.json.
 // Все размеры в метрах. Оси: X вдоль оконной стены, Z вглубь квартиры, Y вверх.
 // UV у всех коробок в метрах (boxUV), чтобы текстуры лежали в реальном масштабе.
+// Двери с петлями: полотно/створка — группа-пивот на оси петель с userData.door
+// { id, closed, open (rotation.y, рад), isOpen, dir (±1: полотно вдоль ±X пивота), length, thick }.
+// Открывает и закрывает их doors.js; у наружных проёмов userData.passage — чистый проход створки в плане.
 import * as THREE from 'three';
+import { outdoorAreas, areaBeyond } from './walk.js';
+
+// Углы открытия по умолчанию: межкомнатные открыты, наружные (балконные, входная) закрыты
+const DOOR_OPEN = { interior: 85, exterior: 90 };
 
 // Зоны: открытое пространство (кухня-гостиная + холл) делит пол линией state.split, у комнат свои слоты
 const ROOM_WALLS = { room2: 'wallsRoom2', room3: 'wallsRoom3', bath: 'wallsBath' };
@@ -186,12 +193,17 @@ export function buildShell(plan, M) {
   const slab = boxAt(b.x0 - 0.2, b.x1 + 0.2, H, H + 0.25, b.z0 - 0.2, b.z1 + 0.2, M.walls, { receive: false });
   slab.layers.set(1); slab.userData.shadowOnly = true; g.add(slab);
 
-  // Балкон: плита, балкон верхнего этажа (даёт реальную тень), ограждение
-  const bal = plan.balcony;
+  // Балкон: плита (на 2 см ниже пола квартиры), балкон верхнего этажа (даёт реальную тень), ограждение.
+  // По балкону можно пройти через открытую балконную дверь; граница прогулки = внутренние грани ограждения.
+  const bal = plan.balcony, areas = outdoorAreas(plan);
   g.add(boxAt(bal.x0, bal.x1, -0.22, -0.02, bal.z0, bal.z1, M.balcony));
   const upper = boxAt(bal.x0, bal.x1, H + 0.25, H + 0.47, bal.z0, bal.z1, M.facade);
   upper.userData.cut = 'above'; g.add(upper);
-  g.add(buildRailing(bal, M.railing));
+  const balArea = areas.find(a => a.id === 'balcony');
+  if (balArea) g.add(buildRailing(bal, balArea, M.railing));
+  // Площадка подъезда за входной дверью: пол, стены, потолок (видно, когда дверь открыта)
+  const landing = areas.find(a => a.id === 'landing');
+  if (landing) g.add(buildLanding(landing, H, M));
 
   // Окна и наружные двери (межкомнатные строит buildDoors)
   for (const o of plan.openings) if (o.type !== 'interior') g.add(buildOpening(o, plan, M));
@@ -262,14 +274,21 @@ function buildInteriorDoor(o, M) {
     at(W - ov, W - ov + aw, 0, head - ov + aw, t0, t0 + ap);
     at(-W + ov, W - ov, head - ov, head - ov + aw, t0, t0 + ap);
   }
-  // Полотно открыто на 85° в сторону swing; ось петель у края проёма hinge, у грани стены
-  const L = o.leaf, lt = 0.04, ang = THREE.MathUtils.degToRad(85);
+  // Полотно открыто на DOOR_OPEN.interior° в сторону swing; ось петель у края проёма hinge, у грани стены.
+  // Закрытое полотно стоит в проёме заподлицо с гранью стены со стороны открывания.
+  const L = o.leaf, lt = 0.04, ang = THREE.MathUtils.degToRad(DOOR_OPEN.interior);
   const hu = o.hinge === 'start' ? -W + jamb : W - jamb, ht = o.swing * (T / 2 - lt / 2);
-  const du = (o.hinge === 'start' ? 1 : -1) * Math.cos(ang), dt = o.swing * Math.sin(ang);
-  const [wx, wz] = X ? [du, dt] : [dt, du];
-  const pivot = new THREE.Group();
+  // поворот пивота, при котором его локальная X идёт вдоль полотна, открытого на угол a
+  const yawAt = a => {
+    const du = (o.hinge === 'start' ? 1 : -1) * Math.cos(a), dt = o.swing * Math.sin(a);
+    const [wx, wz] = X ? [du, dt] : [dt, du];
+    return Math.atan2(-wz, wx);
+  };
+  const closed = yawAt(0), open = closed + wrapAngle(yawAt(ang) - closed);
+  const pivot = new THREE.Group(); pivot.name = `${o.id}_leaf`;
   pivot.position.set(X ? cu + hu : ct + ht, 0, X ? ct + ht : cu + hu);
-  pivot.rotation.y = Math.atan2(-wz, wx);   // локальная X пивота -> вдоль открытого полотна
+  pivot.rotation.y = open;
+  pivot.userData.door = { id: o.id, closed, open, isOpen: true, dir: 1, length: L, thick: lt };
   const leaf = boxAt(0, L, ly, ly + lh, -lt / 2, lt / 2, M.doors, { slot: 'doors' });
   leaf.userData.cutaway = true; leaf.name = 'leaf'; pivot.add(leaf);
   // Ручка-нажим с двух сторон
@@ -284,23 +303,41 @@ function buildInteriorDoor(o, M) {
   return g;
 }
 
-function buildRailing(bal, mat) {
+const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+// Ограждение балкона 1.08 м: поручень, нижняя полоса, стойки через 11 см, боковые стенки до фасада.
+// Внутренние грани — по зоне прогулки area (outdoorAreas в walk.js), так что тело упирается ровно в перила.
+function buildRailing(bal, area, mat) {
   const g = new THREE.Group(); g.name = 'railing';
-  const top = 1.08, z = bal.z0 + 0.06;
-  g.add(boxAt(bal.x0 + 0.05, bal.x1 - 0.05, top - 0.04, top, z - 0.025, z + 0.025, mat));
-  g.add(boxAt(bal.x0 + 0.05, bal.x1 - 0.05, 0.06, 0.1, z - 0.015, z + 0.015, mat));
-  const n = Math.floor((bal.x1 - bal.x0 - 0.1) / 0.11);
+  const top = 1.08, z = area.z0 - 0.025, xa = area.x0 - 0.02, xb = area.x1 + 0.02;
+  g.add(boxAt(xa, xb, top - 0.04, top, z - 0.025, z + 0.025, mat));
+  g.add(boxAt(xa, xb, 0.06, 0.1, z - 0.015, z + 0.015, mat));
+  const n = Math.floor((xb - xa) / 0.11);
   const bar = new THREE.BoxGeometry(0.014, top - 0.1, 0.014);
   const inst = new THREE.InstancedMesh(bar, mat, n + 1);
   const m4 = new THREE.Matrix4();
-  for (let i = 0; i <= n; i++) { m4.makeTranslation(bal.x0 + 0.05 + i * 0.11, (top + 0.06) / 2, z); inst.setMatrixAt(i, m4); }
+  for (let i = 0; i <= n; i++) { m4.makeTranslation(xa + i * 0.11, (top + 0.06) / 2, z); inst.setMatrixAt(i, m4); }
   inst.castShadow = true; g.add(inst);
-  // боковые ограждения
-  for (const x of [bal.x0 + 0.05, bal.x1 - 0.05]) g.add(boxAt(x - 0.02, x + 0.02, 0, top, bal.z0 + 0.04, bal.z1, mat));
+  // боковые ограждения: от поручня до фасада
+  for (const x of [xa, xb]) g.add(boxAt(x - 0.02, x + 0.02, -0.02, top, z - 0.025, bal.z1, mat));
+  return g;
+}
+
+// Площадка подъезда за входной дверью: пол вровень с квартирой, стены и потолок по краям зоны прогулки.
+function buildLanding(a, H, M) {
+  const g = new THREE.Group(); g.name = 'landing';
+  const t = 0.12, back = 0.06;   // толщина стен площадки; заход стен под фасад, чтобы не было щели
+  g.add(boxAt(a.x0, a.x1, WALL_BASE, 0, a.z0 - back, a.z1, M.balcony, { cast: false }));
+  for (const [x0, x1] of [[a.x0 - t, a.x0], [a.x1, a.x1 + t]]) g.add(boxAt(x0, x1, WALL_BASE, H, a.z0 - back, a.z1 + t, M.facade));
+  g.add(boxAt(a.x0, a.x1, WALL_BASE, H, a.z1, a.z1 + t, M.facade));
+  const top = boxAt(a.x0 - t, a.x1 + t, H, H + 0.25, a.z0 - back, a.z1 + t, M.facade);
+  top.userData.cut = 'above'; g.add(top);
   return g;
 }
 
 // Окно / балконная дверь в локальных осях: u — вдоль проёма, t — толщина стены (плюс — внутрь комнаты).
+// Створка балконной двери — пивот на оси петель (открывается внутрь на DOOR_OPEN.exterior°), глухая часть
+// (fixed_left) остаётся стеклом в раме. Створки окон не открываются (пивот без userData.door).
 function buildOpening(o, plan, M) {
   const g = new THREE.Group(); g.name = o.id;
   const W = o.width, sill = o.sill, head = o.head, h = head - sill;
@@ -308,13 +345,13 @@ function buildOpening(o, plan, M) {
   const along = o.along;
   if (along === 'x') g.position.set((o.x0 + o.x1) / 2, 0, 0);
   if (along === 'z') { g.position.set(6.171, 0, (o.z0 + o.z1) / 2); g.rotation.y = -Math.PI / 2; }
-  if (o.type === 'entry') {
-    // Входная дверь: проём в стене холла, внутрь — к -Z
-    g.position.set((o.x0 + o.x1) / 2, 0, (o.z0 + o.z1) / 2);
-    g.add(boxAt(-W / 2 + 0.05, W / 2 - 0.05, 0.01, head - 0.03, -0.03, 0.03, M.door));
-    const hd = boxAt(W / 2 - 0.2, W / 2 - 0.08, 1.02, 1.04, -0.07, -0.03, M.metal); g.add(hd);
-    return g;
-  }
+  // чистый проход в плане по отрезку [ua, ub] вдоль проёма (для столкновений прогулки, doors.js)
+  const passage = (ua, ub) => (along === 'x'
+    ? { x0: g.position.x + ua, x1: g.position.x + ub, z0: o.z0, z1: o.z1 }
+    : { x0: o.x0, x1: o.x1, z0: g.position.z + ua, z1: g.position.z + ub });
+  const exterior = DOOR_OPEN.exterior * Math.PI / 180;
+  if (o.type === 'entry') return buildEntry(o, g, M, exterior);
+
   const at = (u0, u1, y0, y1, t0, t1, mat) => boxAt(u0, u1, y0, y1, tFrame + t0, tFrame + t1, mat);
   // Коробка рамы
   g.add(at(-W / 2, -W / 2 + p, sill, head, -fd / 2, fd / 2, M.frame));
@@ -330,31 +367,82 @@ function buildOpening(o, plan, M) {
     g.add(at(um - p / 2, um + p / 2, y0, y1, -fd / 2, fd / 2, M.frame));
     sections.push({ a: u0, b: um - p / 2, sash: false }, { a: um + p / 2, b: u1, sash: true, hinge: 'right' });
   } else sections.push({ a: u0, b: u1, sash: true, hinge: 'left' });
+  const door = o.type === 'door';
   for (const s of sections) {
     let a = s.a, b = s.b, ya = y0, yb = y1;
-    if (s.sash) {
-      const q = 0.058, t0 = 0.0, t1 = fd / 2 + 0.012;
-      g.add(at(a, a + q, ya, yb, t0, t1, M.frame));
-      g.add(at(b - q, b, ya, yb, t0, t1, M.frame));
-      g.add(at(a, b, yb - q, yb, t0, t1, M.frame));
-      g.add(at(a, b, ya, ya + q + (sill > 0 ? 0 : 0.04), t0, t1, M.frame));
-      const hu = s.hinge === 'left' ? b - q / 2 : a + q / 2;
-      const hy = sill > 0 ? sill + h / 2 : 1.05;
-      g.add(at(hu - 0.012, hu + 0.012, hy - 0.09, hy + 0.03, t1, t1 + 0.04, M.handle));
-      a += q; b -= q; ya += q + (sill > 0 ? 0 : 0.04); yb -= q;
-    } else {
+    if (!s.sash) {
       const q = 0.02;
       a += q; b -= q; ya += q; yb -= q;
+      const glass = at(a, b, ya, yb, 0.01, 0.022, M.glass);
+      glass.castShadow = false; glass.receiveShadow = false; glass.renderOrder = 2; glass.userData.glass = true;
+      g.add(glass);
+      continue;
     }
-    const glass = at(a, b, ya, yb, 0.01, 0.022, M.glass);
+    // Створка: пивот на оси петель посередине толщины профиля; коробки внутри — в осях пивота
+    const q = 0.058, t0 = 0.0, t1 = fd / 2 + 0.012, tm = (t0 + t1) / 2, bot = q + (sill > 0 ? 0 : 0.04);
+    const left = s.hinge === 'left', uh = left ? a : b;
+    const pivot = new THREE.Group(); pivot.name = `${o.id}_sash`;
+    pivot.position.set(uh, 0, tFrame + tm);
+    const sa = (ua, ub, ya_, yb_, ta, tb, mat) => boxAt(ua - uh, ub - uh, ya_, yb_, ta - tm, tb - tm, mat);
+    pivot.add(sa(a, a + q, ya, yb, t0, t1, M.frame));
+    pivot.add(sa(b - q, b, ya, yb, t0, t1, M.frame));
+    pivot.add(sa(a, b, yb - q, yb, t0, t1, M.frame));
+    pivot.add(sa(a, b, ya, ya + bot, t0, t1, M.frame));
+    const hu = left ? b - q / 2 : a + q / 2;
+    const hy = sill > 0 ? sill + h / 2 : 1.05;
+    pivot.add(sa(hu - 0.012, hu + 0.012, hy - 0.09, hy + 0.03, t1, t1 + 0.04, M.handle));
+    if (door) pivot.add(sa(hu - 0.01, hu + 0.01, hy - 0.06, hy + 0.06, t0 - 0.03, t0, M.handle));   // ручка снаружи
+    const glass = sa(a + q, b - q, ya + bot, yb - q, 0.01, 0.022, M.glass);
     glass.castShadow = false; glass.receiveShadow = false; glass.renderOrder = 2; glass.userData.glass = true;
-    g.add(glass);
+    pivot.add(glass);
+    if (door) {
+      // left: полотно вдоль +u от петли, внутрь (+t) — поворот −90°; right: вдоль −u, поворот +90°
+      const dir = left ? 1 : -1;
+      pivot.userData.door = { id: o.id, closed: 0, open: -dir * exterior, isOpen: false, dir, length: b - a, thick: t1 - t0 };
+      g.userData.passage = passage(s.a, s.b);
+    }
+    g.add(pivot);
   }
   // Подоконник изнутри: лежит на кладке (верх на 6 мм выше низа проёма, не в одной плоскости с ним)
   if (sill > 0) {
     const inner = 0.0 - tFrame + 0.03;
     g.add(at(-W / 2 - 0.04, W / 2 + 0.04, sill - 0.02, sill + 0.006, fd / 2, inner, M.sill));
   }
+  // Дверь, за которой нет балкона («французский балкон»): ограждение снаружи по грани фасада
+  if (door && !areaBeyond(plan, o).area) {
+    const t = (along === 'x' ? o.z0 : -(o.x1 - g.position.x)) - 0.04, top = 1.1, n = Math.round((W - 0.04) / 0.11);
+    const rail = new THREE.Group(); rail.name = 'juliet';
+    rail.add(boxAt(-W / 2, W / 2, top - 0.04, top, t - 0.02, t + 0.02, M.railing));
+    rail.add(boxAt(-W / 2, W / 2, 0.08, 0.12, t - 0.012, t + 0.012, M.railing));
+    for (let i = 0; i <= n; i++) {
+      const u = -W / 2 + 0.02 + (i * (W - 0.04)) / n;
+      rail.add(boxAt(u - 0.007, u + 0.007, 0.08, top, t - 0.007, t + 0.007, M.railing));
+    }
+    g.add(rail);
+  }
+  return g;
+}
+
+// Входная дверь: стальная коробка и полотно на петлях у начала проёма (меньший x), открывается в холл (−z), как на плане.
+// Локальные оси группы: u = x, t = z от середины проёма.
+function buildEntry(o, g, M, ang) {
+  const W = o.width, head = o.head, fw = 0.05, fd = 0.1, lt = 0.06;
+  g.position.set((o.x0 + o.x1) / 2, 0, (o.z0 + o.z1) / 2);
+  g.add(boxAt(-W / 2, -W / 2 + fw, 0, head, -fd / 2, fd / 2, M.door));
+  g.add(boxAt(W / 2 - fw, W / 2, 0, head, -fd / 2, fd / 2, M.door));
+  g.add(boxAt(-W / 2, W / 2, head - 0.04, head, -fd / 2, fd / 2, M.door));
+  const L = W - 2 * fw - 0.006, uh = -W / 2 + fw + 0.003;
+  const pivot = new THREE.Group(); pivot.name = `${o.id}_leaf`;
+  pivot.position.set(uh, 0, 0);
+  pivot.add(boxAt(0, L, 0.01, head - 0.043, -lt / 2, lt / 2, M.door));
+  const hx = L - 0.08;
+  pivot.add(boxAt(hx - 0.12, hx + 0.01, 1.02, 1.04, -lt / 2 - 0.05, -lt / 2 - 0.03, M.metal));   // ручка изнутри
+  pivot.add(boxAt(hx - 0.01, hx + 0.01, 1.0, 1.06, -lt / 2 - 0.03, -lt / 2, M.metal));
+  pivot.add(boxAt(hx - 0.015, hx + 0.015, 0.98, 1.1, lt / 2, lt / 2 + 0.03, M.metal));          // скоба снаружи
+  // полотно вдоль +u; поворот +ang уводит его в −t (в холл)
+  pivot.userData.door = { id: o.id, closed: 0, open: ang, isOpen: false, dir: 1, length: L, thick: lt };
+  g.add(pivot);
+  g.userData.passage = { x0: g.position.x - W / 2 + fw, x1: g.position.x + W / 2 - fw, z0: o.z0, z1: o.z1 };
   return g;
 }
 

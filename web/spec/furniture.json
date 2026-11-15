@@ -3,7 +3,7 @@
 
   "defaults": {
     "sofa": "straight2", "sofaFabric": "linen-sand", "sofaX": 2.86, "sofaZ": 1.14, "sofaRot": 0,
-    "tv": "wall", "tvSize": "65", "tvY": 1.10, "tvAlong": 1.14, "tvOn": "off", "tvLink": "on",
+    "tv": "wall", "tvSize": "65", "tvY": 1.10, "tvAlong": 1.14, "tvOn": "on", "tvLink": "on",
     "console": "low-long", "consoleFinish": "oak", "consoleW": 1.80, "consoleAlong": 1.14,
     "rug": "wool-light", "rugSize": "300x200",
     "table": "round", "tableX": 4.00, "tableZ": 1.14, "tableRot": 0,

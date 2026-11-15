@@ -1,0 +1,1492 @@
+{
+ "zone": "living",
+ "title": "Гостиная: стеллажи",
+ "room": "kitchen_living",
+ "_note": "Генерирует tools/decor/living/compose.py — править раскладки там. Дальняя стена z 3.68, x 2.00–6.17 (ТВ на стене x 6.17). Порядок слотов и опций = код варианта: новое только в конец.",
+ "slots": [
+  {
+   "id": "shelves",
+   "label": "Стеллаж у стены",
+   "default": "billy-3",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "billy-3",
+     "name": "BILLY ×3, imit. dębu — библиотека во всю стену",
+     "brand": "IKEA",
+     "article": "105.089.32 ×3",
+     "url": "https://www.ikea.com/pl/pl/p/billy-regal-imit-debu-10508932/",
+     "price_pln": 1047.0,
+     "finish": "imit. dębu",
+     "note": "BILLY Regał, imit. dębu, 80x28x202 cm ×3 — 349 zł. Три стеллажа 80 см вплотную, 240 см по центру стены; по 88 см до углов. Книги, растения, вазы и рамки — условный реквизит (CC0), не товар.",
+     "size": [
+      2.4,
+      2.02,
+      0.28
+     ],
+     "thumb": "models/decor/living/thumbs/billy-3.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/living/billy-80-oak/model.glb",
+       "pos": [
+        4.086,
+        0.0,
+        3.53
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/living/billy-80-oak/model.glb",
+       "pos": [
+        4.886,
+        0.0,
+        3.53
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/living/billy-80-oak/model.glb",
+       "pos": [
+        3.286,
+        0.0,
+        3.53
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        5.131,
+        0.097,
+        3.527
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.691,
+        0.097,
+        3.536
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l/model.glb",
+       "pos": [
+        5.021,
+        0.447,
+        3.494
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-white/model.glb",
+       "pos": [
+        4.629,
+        0.447,
+        3.456
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-m/model.glb",
+       "pos": [
+        5.04,
+        0.767,
+        3.496
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        4.604,
+        0.767,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l2/model.glb",
+       "pos": [
+        5.014,
+        1.057,
+        3.502
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-black/model.glb",
+       "pos": [
+        4.621,
+        1.057,
+        3.455
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        5.081,
+        1.407,
+        3.536
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        4.663,
+        1.407,
+        3.482
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-pothos-terracotta/model.glb",
+       "pos": [
+        5.138,
+        1.727,
+        3.465
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        4.625,
+        1.727,
+        3.492
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-white-tall/model.glb",
+       "pos": [
+        5.077,
+        2.017,
+        3.507
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        4.649,
+        2.017,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l/model.glb",
+       "pos": [
+        4.221,
+        0.097,
+        3.494
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        3.849,
+        0.097,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-black/model.glb",
+       "pos": [
+        4.352,
+        0.447,
+        3.455
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        3.82,
+        0.447,
+        3.489
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-m2/model.glb",
+       "pos": [
+        4.252,
+        0.767,
+        3.499
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.281,
+        1.057,
+        3.536
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        3.841,
+        1.057,
+        3.527
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        4.309,
+        1.407,
+        3.482
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-white/model.glb",
+       "pos": [
+        3.829,
+        1.407,
+        3.456
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        4.347,
+        1.727,
+        3.492
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        3.804,
+        1.727,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.281,
+        2.017,
+        3.536
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-stone-slim/model.glb",
+       "pos": [
+        3.873,
+        2.017,
+        3.461
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l2/model.glb",
+       "pos": [
+        3.414,
+        0.097,
+        3.502
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        3.049,
+        0.097,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-m/model.glb",
+       "pos": [
+        3.44,
+        0.447,
+        3.496
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-black/model.glb",
+       "pos": [
+        3.552,
+        0.767,
+        3.455
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        3.02,
+        0.767,
+        3.489
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l/model.glb",
+       "pos": [
+        3.421,
+        1.057,
+        3.494
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        3.004,
+        1.057,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        3.531,
+        1.407,
+        3.527
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        3.049,
+        1.407,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        3.063,
+        1.727,
+        3.482
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-jug-white/model.glb",
+       "pos": [
+        3.477,
+        2.017,
+        3.495
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-pothos/model.glb",
+       "pos": [
+        3.058,
+        2.017,
+        3.465
+       ],
+       "rot": 180
+      }
+     ]
+    },
+    {
+     "id": "ivar-3",
+     "name": "IVAR 3 sekcje/półki, sosna — открытый стеллаж",
+     "brand": "IKEA",
+     "article": "894.039.46",
+     "url": "https://www.ikea.com/pl/pl/p/ivar-3-sekcje-polki-sosna-s89403946/",
+     "price_pln": 1205.0,
+     "finish": "sosna, nielakierowana",
+     "note": "IVAR 3 sekcje/półki, sosna, 219x30x226 cm — 1205 zł. 219 см по центру стены, высота 226 см. Книги, растения, вазы и рамки — условный реквизит (CC0), не товар.",
+     "size": [
+      2.19,
+      2.26,
+      0.3
+     ],
+     "thumb": "models/decor/living/thumbs/ivar-3.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/living/ivar-3/model.glb",
+       "pos": [
+        4.086,
+        0.0,
+        3.52
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        4.987,
+        0.118,
+        3.507
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-white-tall/model.glb",
+       "pos": [
+        4.443,
+        0.118,
+        3.487
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l/model.glb",
+       "pos": [
+        4.877,
+        0.589,
+        3.474
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        4.47,
+        0.589,
+        3.477
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.937,
+        0.864,
+        3.514
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-jug-white/model.glb",
+       "pos": [
+        4.432,
+        0.864,
+        3.475
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        4.965,
+        1.235,
+        3.462
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        4.441,
+        1.235,
+        3.469
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-m/model.glb",
+       "pos": [
+        4.896,
+        1.495,
+        3.476
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        4.425,
+        1.495,
+        3.477
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/bowl-wood/model.glb",
+       "pos": [
+        4.952,
+        1.783,
+        3.51
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        4.484,
+        1.783,
+        3.462
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        4.725,
+        2.029,
+        3.477
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-pothos/model.glb",
+       "pos": [
+        4.964,
+        2.258,
+        3.445
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.086,
+        0.118,
+        3.514
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        4.086,
+        0.588,
+        3.472
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-white/model.glb",
+       "pos": [
+        4.086,
+        0.864,
+        3.436
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        4.086,
+        1.235,
+        3.477
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        4.086,
+        1.494,
+        3.477
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-stone-slim/model.glb",
+       "pos": [
+        4.086,
+        1.783,
+        3.441
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l2/model.glb",
+       "pos": [
+        3.593,
+        0.117,
+        3.482
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        3.193,
+        0.117,
+        3.477
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-m2/model.glb",
+       "pos": [
+        3.631,
+        0.588,
+        3.479
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        3.702,
+        0.864,
+        3.477
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        3.185,
+        0.864,
+        3.507
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        3.726,
+        1.235,
+        3.472
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        3.193,
+        1.235,
+        3.477
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-black/model.glb",
+       "pos": [
+        3.731,
+        1.494,
+        3.435
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l2/model.glb",
+       "pos": [
+        3.302,
+        1.494,
+        3.482
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        3.731,
+        1.783,
+        3.469
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        3.207,
+        2.029,
+        3.462
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-jug-white/model.glb",
+       "pos": [
+        3.647,
+        2.258,
+        3.475
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-calathea/model.glb",
+       "pos": [
+        3.249,
+        2.258,
+        3.478
+       ],
+       "rot": 180
+      }
+     ]
+    },
+    {
+     "id": "kallax-5x5",
+     "name": "KALLAX Regał 182×182, dąb bejcowany na biało — 25 ячеек",
+     "brand": "IKEA",
+     "article": "903.245.09",
+     "url": "https://www.ikea.com/pl/pl/p/kallax-regal-imitacja-debu-bejcowanego-na-bialo-90324509/",
+     "price_pln": 799.0,
+     "finish": "imitacja dębu bejcowanego na biało",
+     "note": "KALLAX Regał, imitacja dębu bejcowanego na biało, 182x182 cm — 799 zł. По центру стены; слева, в сторону ТВ-стены, напольная пахира. Книги, растения, вазы и рамки — условный реквизит (CC0), не товар.",
+     "size": [
+      1.82,
+      1.82,
+      0.39
+     ],
+     "thumb": "models/decor/living/thumbs/kallax-5x5.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/living/kallax-5x5/model.glb",
+       "pos": [
+        4.086,
+        0.0,
+        3.475
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        4.79,
+        0.04,
+        3.417
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        4.438,
+        0.04,
+        3.387
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        4.085,
+        0.04,
+        3.379
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/bowl-wood/model.glb",
+       "pos": [
+        3.734,
+        0.04,
+        3.449
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        3.382,
+        0.04,
+        3.372
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        4.79,
+        0.392,
+        3.382
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-white/model.glb",
+       "pos": [
+        4.438,
+        0.392,
+        3.346
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        4.085,
+        0.392,
+        3.417
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        3.734,
+        0.392,
+        3.379
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        3.382,
+        0.392,
+        3.387
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        4.79,
+        0.744,
+        3.387
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        4.438,
+        0.744,
+        3.372
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-pothos/model.glb",
+       "pos": [
+        4.085,
+        0.744,
+        3.355
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        3.734,
+        0.744,
+        3.382
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        3.382,
+        0.744,
+        3.417
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-black/model.glb",
+       "pos": [
+        4.79,
+        1.096,
+        3.345
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        4.438,
+        1.096,
+        3.379
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        4.085,
+        1.096,
+        3.387
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        3.734,
+        1.096,
+        3.372
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        3.382,
+        1.096,
+        3.382
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-jug-white/model.glb",
+       "pos": [
+        4.79,
+        1.448,
+        3.385
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        4.438,
+        1.448,
+        3.417
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        4.085,
+        1.448,
+        3.382
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        3.734,
+        1.448,
+        3.387
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        3.382,
+        1.448,
+        3.387
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-white-tall/model.glb",
+       "pos": [
+        4.778,
+        1.823,
+        3.397
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.232,
+        1.823,
+        3.424
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-stone-slim/model.glb",
+       "pos": [
+        3.868,
+        1.823,
+        3.351
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-calathea/model.glb",
+       "pos": [
+        3.431,
+        1.823,
+        3.478
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-pachira/model.glb",
+       "pos": [
+        5.446,
+        0,
+        3.264
+       ],
+       "rot": 180
+      }
+     ]
+    },
+    {
+     "id": "eket-gallery",
+     "name": "EKET orzech + 2 × MOSSLANDA — комод и галерея",
+     "brand": "IKEA",
+     "article": "995.688.33, 606.366.49 ×2",
+     "url": "https://www.ikea.com/pl/pl/p/eket-kombinacja-szafek-sciennych-brazowy-orzech-s99568833/",
+     "price_pln": 879.98,
+     "finish": "brązowy orzech",
+     "note": "EKET Kombinacja szafek ściennych, brązowy orzech, 175x35x70 cm — 800 zł; MOSSLANDA Półka na zdjęcia, orzech, 115 cm ×2 — 39.99 zł. EKET подвешен на 0.25 м от пола (верх 0.95), полки уступом на 1.30 и 1.80 м; справа сингониум. Книги, растения, вазы и рамки — условный реквизит (CC0), не товар.",
+     "size": [
+      1.75,
+      0.7,
+      0.35
+     ],
+     "thumb": "models/decor/living/thumbs/eket-gallery.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/living/eket-walnut/model.glb",
+       "pos": [
+        4.086,
+        0.25,
+        3.495
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        3.385,
+        0.268,
+        3.419
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        3.385,
+        0.618,
+        3.427
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.751,
+        0.95,
+        3.464
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/bowl-wood/model.glb",
+       "pos": [
+        4.261,
+        0.95,
+        3.489
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-white-tall/model.glb",
+       "pos": [
+        3.623,
+        0.95,
+        3.437
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-pothos/model.glb",
+       "pos": [
+        3.36,
+        0.95,
+        3.395
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/living/mosslanda-115-walnut/model.glb",
+       "pos": [
+        4.306,
+        1.3,
+        3.62
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/art-print-arch/model.glb",
+       "pos": [
+        4.548,
+        1.31,
+        3.631
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-black/model.glb",
+       "pos": [
+        4.076,
+        1.31,
+        3.618
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-stone-slim/model.glb",
+       "pos": [
+        3.846,
+        1.31,
+        3.612
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/living/mosslanda-115-walnut/model.glb",
+       "pos": [
+        3.606,
+        1.8,
+        3.62
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/art-print-sun/model.glb",
+       "pos": [
+        3.928,
+        1.81,
+        3.642
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-white/model.glb",
+       "pos": [
+        3.468,
+        1.81,
+        3.617
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-syngonium/model.glb",
+       "pos": [
+        2.811,
+        0,
+        3.309
+       ],
+       "rot": 180
+      }
+     ]
+    },
+    {
+     "id": "reading-nook",
+     "name": "Уголок для чтения: STRANDMON + ÅRSTID + BILLY 80/40",
+     "brand": "IKEA",
+     "article": "004.946.38, 003.213.17, 105.089.32, 604.773.82",
+     "url": "https://www.ikea.com/pl/pl/p/strandmon-fotel-uszak-grann-bomstad-ciemnobrazowy-00494638/",
+     "price_pln": 2276.0,
+     "finish": "Grann/Bomstad ciemnobrązowy, mosiądz, imit. dębu",
+     "note": "STRANDMON Fotel uszak, Grann/Bomstad ciemnobrązowy — 1499 zł; ÅRSTID Lampa podłogowa, mosiądz/biały — 179 zł; BILLY Regał, imit. dębu, 80x28x202 cm — 349 zł; BILLY Regał, imit. dębu, 40x28x202 cm — 249 zł. Кресло в углу у ТВ-стены развёрнуто к столику; лампа слева от кресла; стеллажи 120 см левее. Книги, растения, вазы и рамки — условный реквизит (CC0), не товар.",
+     "size": [
+      0.82,
+      1.01,
+      0.96
+     ],
+     "thumb": "models/decor/living/thumbs/reading-nook.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/living/strandmon-grann/model.glb",
+       "pos": [
+        5.5,
+        0,
+        3.0
+       ],
+       "rot": 220,
+       "seat": {
+        "h": 0.45,
+        "depth": 0.12,
+        "label": "Сесть в кресло"
+       }
+      },
+      {
+       "model": "models/decor/living/billy-80-oak/model.glb",
+       "pos": [
+        3.98,
+        0.0,
+        3.53
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/living/billy-40-oak/model.glb",
+       "pos": [
+        4.58,
+        0.0,
+        3.53
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l/model.glb",
+       "pos": [
+        4.115,
+        0.097,
+        3.494
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        3.743,
+        0.097,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        4.225,
+        0.447,
+        3.527
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        3.698,
+        0.447,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-m2/model.glb",
+       "pos": [
+        4.146,
+        0.767,
+        3.499
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.175,
+        1.057,
+        3.536
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        3.719,
+        1.057,
+        3.492
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-l2/model.glb",
+       "pos": [
+        4.108,
+        1.407,
+        3.502
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-paper/model.glb",
+       "pos": [
+        4.203,
+        1.727,
+        3.482
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        3.698,
+        1.727,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        4.132,
+        2.017,
+        3.536
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-pothos/model.glb",
+       "pos": [
+        3.751,
+        2.017,
+        3.465
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        4.58,
+        0.097,
+        3.492
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        4.58,
+        0.446,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-aloe/model.glb",
+       "pos": [
+        4.58,
+        0.767,
+        3.497
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-tall/model.glb",
+       "pos": [
+        4.58,
+        1.057,
+        3.527
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/frame-photo-white/model.glb",
+       "pos": [
+        4.58,
+        1.406,
+        3.456
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/books-row-s2/model.glb",
+       "pos": [
+        4.58,
+        1.726,
+        3.489
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/vase-jug-white/model.glb",
+       "pos": [
+        4.58,
+        2.018,
+        3.495
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/living/arstid-lamp/model.glb",
+       "pos": [
+        5.03,
+        0,
+        3.43
+       ],
+       "rot": 180
+      },
+      {
+       "model": "models/decor/props/plant-syngonium/model.glb",
+       "pos": [
+        3.22,
+        0,
+        3.309
+       ],
+       "rot": 180
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "plant",
+   "label": "Растение у окна",
+   "default": "pachira",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "pachira",
+     "name": "Пахира в кашпо, h 176",
+     "brand": "реквизит (CC0)",
+     "note": "Условное растение (пахира, модель Poly Haven CC0), не товар. Стоит у глухой створки балконной двери, вне дуги открывающейся створки (x 4.61–5.56).",
+     "size": [
+      0.79,
+      1.76,
+      0.75
+     ],
+     "thumb": "models/decor/props/plant-pachira/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/props/plant-pachira/model.glb",
+       "pos": [
+        3.68,
+        0,
+        0.44
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "syngonium",
+     "name": "Сингониум в терракоте, h 84",
+     "brand": "реквизит (CC0)",
+     "note": "Условное растение (сингониум, модель Poly Haven CC0), не товар. Стоит у глухой створки балконной двери, вне дуги открывающейся створки (x 4.61–5.56).",
+     "size": [
+      0.7,
+      0.84,
+      0.66
+     ],
+     "thumb": "models/decor/props/plant-syngonium/thumb.jpg",
+     "collide": true,
+     "parts": [
+      {
+       "model": "models/decor/props/plant-syngonium/model.glb",
+       "pos": [
+        3.68,
+        0,
+        0.44
+       ],
+       "rot": 0
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -4,12 +4,15 @@
 //   lighting.apply(mode, state)  — режим day / overcast / evening, солнце state.sunAz/sunEl/sunUp, экспозиция
 //   lighting.update()            — каждый кадр до рендера; true = нужен новый кадр (досчитались переотражения)
 //   lighting.invalidate()        — сцена изменилась (материалы, мебель): пересчитать переотражения
+//   lighting.prepare(add, remove) — Promise: шейдеры сцены, где вместо remove стоит add (новые светильники),
+//                                  собраны в фоне; после него замена в сцене не замораживает кадр
 //   lighting.ready               — Promise: дневная панорама загружена
 //   lighting.lights, .sun, .setQuality(q), .dispose()
 //
 // Как устроено (почему так, а не «один свет на всю сцену»):
 // 1. Зоны. Квартира делится на герметичные по свету зоны: открытое пространство (кухня-гостиная, холл, шахта),
-//    комната 2, комната 3, ванная, плюс каждый проём (окно, дверь) — своя тонкая зона. 0 — улица.
+//    комната 2, комната 3, ванная, площадка подъезда за входной дверью (тёмная лестничная клетка, не улица),
+//    плюс каждый проём (окно, дверь) — своя тонкая зона. 0 — улица (и балкон).
 //    Зона фрагмента ищется по мировой точке, сдвинутой на 4 см по нормали (грань стены попадает в свою комнату).
 // 2. Маска источников. three не умеет «свет только для этих объектов», поэтому в шейдер всех материалов
 //    вставлена маска: источник светит только в своей зоне и в примыкающих проёмах. Так свет окна комнаты 2
@@ -24,12 +27,16 @@
 //    Отражения панорамы внутри помещений нормируются по зонду (normalized reflections): пол комнаты отражает
 //    комнату по яркости и цвету, а не голубое небо.
 // 5. Снаружи (фасад, балкон, торцы стен при взгляде сверху, окружение) — обычный IBL панорамы, как раньше.
+// 6. Экспозиция «глаза»: в комнате — полная поправка EXPOSURE_IN, на балконе — никакой (человек на улице),
+//    камера облёта снаружи — половина. Смена режима и времени не меняет состав источников (солнце гаснет
+//    интенсивностью), а карты окружения одного размера: шейдеры при этом не пересобираются.
 //
 // Обманки помечены userData.rasterOnly (render.js не берёт их в фото): окна-прямоугольники.
 // Физические источники для трассировщика — солнце и панорама.
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { sunFor, sunTimes } from './site.js';
+import { outdoorAreas } from './walk.js';
 
 // ---------- настройки ----------
 
@@ -49,11 +56,18 @@ const PROBES_PER_FRAME = 3;    // 18 маленьких рендеров за к
 const BOUNCES = 4;
 const CELL = 0.2;              // шаг сетки освещённости, м
 const MAX_BOX = 32, MAX_ZONE = 16, MASK_W = 64;
-const OPEN_ROOMS = ['kitchen_living', 'hall', 'shaft'];
+const OPEN_ROOMS = ['kitchen_living', 'hall', 'shaft'];   // одна зона: между ними нет дверей
 // Баланс белого переотражений: глаз в комнате подстраивается под тёплый отскок от дубового пола и стен,
 // поэтому цвет отражённого света приглушается (1 — физически, 0 — серый). Иначе белый потолок выходит персиковым.
 const GI_SAT = 0.3;
-const MIRROR_FACE = 256;       // сторона грани куб-зонда зеркала   // одна зона: между ними нет дверей
+const MIRROR_FACE = 256;       // сторона грани куб-зонда зеркала
+// Площадка подъезда за входной дверью — лестничная клетка без своего света: ни неба, ни солнца, только то,
+// что приходит из холла через открытую дверь (зонды), и ровный нейтральный подсвет подъезда — эта доля
+// освещённости холла (средний зонд холла, яркость без цвета).
+const LANDING_FILL = 0.12;
+// Ширина панорамы для карты окружения (PMREM). Размер PMREM входит в ключ шейдера three: будь панорамы разного
+// размера (вечерняя 1024, дневная 2048), переход день ↔ вечер пересобирал бы шейдеры всех материалов (секунды).
+const ENV_WIDTH = 2048;
 
 // ---------- режим и время суток ----------
 
@@ -88,15 +102,23 @@ function buildZones(plan) {
   for (const [r, room] of Object.entries(plan.rooms)) for (const q of room.rects) {
     roomBoxes.push({ x0: q.x0, z0: q.z0, x1: q.x1, z1: q.z1, y0: -0.02, y1: H + 0.02, zone: roomZone[r] });
   }
+  for (const z of zones) if (z.kind === 'room') z.rects = z.rooms.flatMap(r => plan.rooms[r].rects);
+  // площадка подъезда — закрытая комната без окон (стены и потолок строит model.js по тому же прямоугольнику)
+  const la = outdoorAreas(plan).find(a => a.id === 'landing');
+  if (la) {
+    const z = addZone({ id: 'landing', kind: 'room', rooms: [], rects: [la], landing: true });
+    roomBoxes.push({ x0: la.x0, z0: la.z0, x1: la.x1, z1: la.z1, y0: -0.02, y1: H + 0.02, zone: z.index });
+  }
   const zoneAt = (x, y, z, list = roomBoxes) => list.find(b => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && y >= b.y0 && y <= b.y1)?.zone ?? 0;
 
   const openingBoxes = [];
   for (const o of plan.openings) {
-    const z = addZone({ id: o.id, kind: 'opening', exterior: o.type !== 'interior', rooms: [] });
-    // по обе стороны проёма: какие зоны он соединяет
+    const z = addZone({ id: o.id, kind: 'opening', rooms: [] });
+    // по обе стороны проёма: какие зоны он соединяет; наружный — если с одной стороны улица
     const cx = (o.x0 + o.x1) / 2, cz = (o.z0 + o.z1) / 2, y = Math.min(1, (o.sill + o.head) / 2);
     const side = o.along === 'x' ? [[cx, cz - 0.6], [cx, cz + 0.6]] : [[cx - 0.6, cz], [cx + 0.6, cz]];
     z.adj = [...new Set(side.map(([x, zz]) => zoneAt(x, y, zz)))];
+    z.exterior = z.adj.includes(0);
     z.inner = z.adj.find(a => a > 0) ?? 0;
     openingBoxes.push({ x0: o.x0, z0: o.z0, x1: o.x1, z1: o.z1, y0: o.sill - 0.02, y1: o.head + 0.02, zone: z.index });
   }
@@ -120,10 +142,10 @@ function buildZones(plan) {
     } else { z.accept = 1; z.envKeep = 1; }
   }
 
-  // зонды: сетка в каждом прямоугольнике комнаты
+  // зонды: сетка в каждом прямоугольнике комнаты (и площадки)
   const probes = [];
   for (const z of zones) if (z.kind === 'room') {
-    for (const r of z.rooms) for (const q of plan.rooms[r].rects) {
+    for (const q of z.rects) {
       const w = q.x1 - q.x0, d = q.z1 - q.z0;
       if (w * d < PROBE_MIN_AREA || Math.min(w, d) < 0.35) continue;
       const steps = (a0, a1) => {
@@ -133,7 +155,10 @@ function buildZones(plan) {
       for (const x of steps(q.x0, q.x1)) for (const zz of steps(q.z0, q.z1)) probes.push({ x, y: PROBE_Y, z: zz, zone: z.index });
     }
   }
-  return { zones, boxes, probes, lookup, H };
+  const landing = zones.find(z => z.landing) ?? null;
+  // зона, из которой на площадку идёт свет: комната по другую сторону входной двери
+  if (landing) landing.feed = zones.find(z => z.kind === 'opening' && z.adj.includes(landing.index))?.adj.find(a => a > 0 && a !== landing.index) ?? null;
+  return { zones, boxes, probes, lookup, landing, H };
 }
 
 // ---------- сферические гармоники ----------
@@ -205,6 +230,24 @@ function analyseHDR(THREE, tex, sunUV, capSun) {
   return { sh, sky: { grid, GW, GH, ground: g } };
 }
 
+// Панорама другой ширины — ближайшим пикселем к ширине W (для PMREM одного размера; размытие PMREM скрывает шаг)
+function resizeEquirect(THREE, tex, W) {
+  const { data, width: w, height: h } = tex.image;
+  if (w === W) return tex;
+  const H = W / 2, ch = data.length / (w * h), out = new data.constructor(W * H * ch);
+  for (let r = 0; r < H; r++) {
+    const sr = Math.min(h - 1, Math.floor((r + 0.5) * h / H));
+    for (let c = 0; c < W; c++) {
+      const sc = Math.min(w - 1, Math.floor((c + 0.5) * w / W)), o = (r * W + c) * ch, i = (sr * w + sc) * ch;
+      for (let k = 0; k < ch; k++) out[o + k] = data[i + k];
+    }
+  }
+  const t = new THREE.DataTexture(out, W, H, tex.format, tex.type);
+  Object.assign(t, { mapping: tex.mapping, colorSpace: tex.colorSpace, minFilter: tex.minFilter, magFilter: tex.magFilter, generateMipmaps: false, flipY: tex.flipY });
+  t.needsUpdate = true;
+  return t;
+}
+
 // Средняя яркость неба в окне: косинусное среднее по полусфере наружу (мировые оси), выше occEl — нижняя
 // плоскость балкона/этажа сверху (подсвечена землёй).
 function windowRadiance(sky, theta, n, occEl) {
@@ -230,7 +273,7 @@ const GLSL_PARS = /* glsl */`
 uniform vec4 rlBox[ ${MAX_BOX} ];
 uniform vec4 rlBoxY[ ${MAX_BOX} ];
 uniform int rlBoxCount;
-uniform vec4 rlZoneInfo[ ${MAX_ZONE} ];   // x — зондов нет/есть, y — доля сырого IBL, z — принимаемые зоны (биты)
+uniform vec4 rlZoneInfo[ ${MAX_ZONE} ];   // x — зондов нет/есть, y — доля сырого IBL, z — принимаемые зоны (биты), w — ровный подсвет
 uniform sampler2D rlMaskTex;              // строка = тип источника, столбец = номер в массиве three, значение = биты зон
 uniform sampler2D rlGrid;                 // сетка SH: ячейка = 10 текселей (зона, 9 коэффициентов); ниже — средние зон
 uniform vec4 rlGridA;                     // x0, z0, 1/шаг, nx
@@ -292,7 +335,7 @@ if ( rlZone > 0 && rlGridB.z > 0.5 && rlZoneInfo[ rlZone ].x > 0.5 ) {
 	rlGatherSH( rlZone, vRlWorld + rlNw * 0.04, rlSH );
 	float rlKeep = rlZoneInfo[ rlZone ].y;
 	vec3 rlE = max( shGetIrradianceAt( inverseTransformDirection( geometryNormal, viewMatrix ), rlSH ), vec3( 0.0 ) );
-	rlE = mix( vec3( dot( rlE, vec3( 0.2126, 0.7152, 0.0722 ) ) ), rlE, rlGiSat );
+	rlE = mix( vec3( dot( rlE, vec3( 0.2126, 0.7152, 0.0722 ) ) ), rlE, rlGiSat ) + rlZoneInfo[ rlZone ].w;
 	#ifdef STANDARD
 		iblIrradiance = iblIrradiance * rlKeep + rlE * ( 1.0 - rlKeep );
 	#else
@@ -405,7 +448,9 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     ]);
     t.mapping = THREE.EquirectangularReflectionMapping;
     const a = analyseHDR(THREE, t, sunUV, name === 'day');
-    const e = { bg: t, env: pmrem.fromEquirectangular(t).texture, sunPsi: (sunUV.u - 0.5) * Math.PI * 2, ...a };
+    const src = resizeEquirect(THREE, t, ENV_WIDTH);
+    const e = { bg: t, env: pmrem.fromEquirectangular(src).texture, sunPsi: (sunUV.u - 0.5) * Math.PI * 2, ...a };
+    if (src !== t) src.dispose();
     disposables.push(t, e.env);
     return e;
   }
@@ -417,8 +462,11 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   const maskData = new Float32Array(MASK_W * 5).fill(0xffff);
   const maskTex = new THREE.DataTexture(maskData, MASK_W, 5, THREE.RedFormat, THREE.FloatType);
   maskTex.needsUpdate = true;
-  const gx = Math.ceil((b.x1 - b.x0) / CELL) + 2, gz = Math.ceil((b.z1 - b.z0) / CELL) + 2;
-  const gridX0 = b.x0 - CELL, gridZ0 = b.z0 - CELL;
+  // сетка освещённости — по квартире и площадке подъезда
+  const gb = { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1 };
+  for (const q of Z.landing?.rects ?? []) { gb.x0 = Math.min(gb.x0, q.x0); gb.z0 = Math.min(gb.z0, q.z0); gb.x1 = Math.max(gb.x1, q.x1); gb.z1 = Math.max(gb.z1, q.z1); }
+  const gx = Math.ceil((gb.x1 - gb.x0) / CELL) + 2, gz = Math.ceil((gb.z1 - gb.z0) / CELL) + 2;
+  const gridX0 = gb.x0 - CELL, gridZ0 = gb.z0 - CELL;
   const nZ = Z.zones.length;
   const makeGrid = () => {
     const t = new THREE.DataTexture(new Float32Array(gx * 10 * (gz + nZ) * 4), gx * 10, gz + nZ, THREE.RGBAFormat, THREE.FloatType);
@@ -485,7 +533,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     // комната перед зеркалом
     const front = c.clone().addScaledVector(n, 0.25);
     const zone = Z.zones[Z.lookup(front.x, Math.min(front.y, H - 0.1), front.z)];
-    const rects = zone?.kind === 'room' ? zone.rooms.flatMap(r => plan.rooms[r].rects) : [];
+    const rects = zone?.kind === 'room' ? zone.rects : [];
     if (!rects.length) { console.warn('lighting: зеркало вне комнаты', mesh.name); return; }
     const min = new THREE.Vector3(Math.min(...rects.map(q => q.x0)), 0, Math.min(...rects.map(q => q.z0)));
     const max = new THREE.Vector3(Math.max(...rects.map(q => q.x1)), H, Math.max(...rects.map(q => q.z1)));
@@ -653,6 +701,18 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     });
   }
 
+  // Ровный подсвет площадки: LANDING_FILL от средней освещённости комнаты за входной дверью (по шести осям, без цвета)
+  const AXES = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  function setLandingFill() {
+    const L = Z.landing;
+    if (!L || L.feed == null) return;
+    const list = P.map((p, i) => i).filter(i => P[i].zone === L.feed);
+    if (!list.length) return;
+    let Y = 0;
+    for (const pi of list) for (const n of AXES) { const e = shIrradiance(probeSH[pi], ...n); Y += Math.max(0, 0.2126 * e[0] + 0.7152 * e[1] + 0.0722 * e[2]); }
+    U.rlZoneInfo.value[L.index].w = LANDING_FILL * Y / (list.length * AXES.length);
+  }
+
   const savedClear = new THREE.Color();
   function renderProbes(from, to) {
     const bg = scene.background, rt = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate;
@@ -711,6 +771,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       if (job !== bake || job.gen !== generation) return;
       for (let p = 0; p < nP; p++) projectProbe(p);
       fillGrid(gridBake.image.data); gridBake.needsUpdate = true;
+      setLandingFill();
       job.reading = false; job.pass++; job.next = 0;
       if (job.pass >= BOUNCES) {
         bake = null; mirrorsDirty = true;
@@ -737,25 +798,29 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     return true;
   }
 
-  // --- экспозиция: внутри — поправка «глаза», снаружи — половина
+  // --- экспозиция: доля поправки «глаза» eye — степень EXPOSURE_IN.
+  // 1 — в комнате (и на площадке подъезда); над срезанным потолком — почти полная (смотрим в комнаты, иначе
+  // «кукольный домик» тёмный); облёт снаружи — OUTSIDE_STOPS (фасад и комнаты в одном кадре);
+  // 0 — человек на балконе: он на улице, глаз под комнату не подстраивается, фасад на солнце не выгорает.
+  const EYE_ABOVE = OUTSIDE_STOPS + (1 - OUTSIDE_STOPS) * ABOVE_ADAPT;
+  const balcony = outdoorAreas(plan).find(a => a.id === 'balcony');
   const current = { mode: null, state: null };
-  let inside = 1, lastT = 0;
+  let eye = 1, lastT = 0;
   function exposure() {
     if (!current.state) return;
     const base = EXPOSURE_IN[current.mode] ?? 1;
-    const k = Math.pow(base, OUTSIDE_STOPS + (1 - OUTSIDE_STOPS) * inside);
-    renderer.toneMappingExposure = (current.state.exposure ?? 1) * k;
+    renderer.toneMappingExposure = (current.state.exposure ?? 1) * Math.pow(base, eye);
   }
   function adapt(now) {
     if (!camera) return false;
     const p = camera.position;
-    // Сверху (потолок срезан) смотрим в комнаты, а не на улицу: почти полная поправка, иначе «кукольный домик» тёмный
     const look = controls?.target ?? null;
     const overRooms = p.y >= H && (!look || Z.lookup(look.x, 1.2, look.z) > 0);
-    const want = p.y < H && Z.lookup(p.x, Math.max(0.1, p.y), p.z) > 0 ? 1 : (overRooms ? ABOVE_ADAPT : 0);
+    const onBalcony = balcony && p.y > 0 && p.y < H && p.x >= balcony.x0 && p.x <= balcony.x1 && p.z >= balcony.z0 && p.z <= balcony.z1;
+    const want = p.y < H && Z.lookup(p.x, Math.max(0.1, p.y), p.z) > 0 ? 1 : overRooms ? EYE_ABOVE : onBalcony ? 0 : OUTSIDE_STOPS;
     const dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
-    if (Math.abs(want - inside) < 1e-3) { inside = want; return false; }
-    inside += (want - inside) * (1 - Math.exp(-dt / 0.35));
+    if (Math.abs(want - eye) < 1e-3) { eye = want; return false; }
+    eye += (want - eye) * (1 - Math.exp(-dt / 0.35));
     exposure();
     return true;
   }
@@ -800,9 +865,12 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     sun.target.position.copy(c);
     sun.position.set(c.x + Math.sin(az) * Math.cos(el) * 80, c.y + Math.sin(el) * 80, c.z - Math.cos(az) * Math.cos(el) * 80);
     sun.target.updateMatrixWorld();
-    sun.visible = mode === 'day' && state.sunUp !== false;
+    // Солнце гасится интенсивностью, а не visible: иначе меняется число источников и three пересобирает
+    // шейдеры всех материалов (секунды на переходе день ↔ вечер). Погасшее не перерисовывает карту тени.
+    const sunOn = mode === 'day' && state.sunUp !== false;
     // у горизонта солнце слабее и теплее (атмосфера, формула Мейнела)
-    sun.intensity = SUN_LUX * Math.min(1, meinel(elDeg) / meinel(43));
+    sun.intensity = sunOn ? SUN_LUX * Math.min(1, meinel(elDeg) / meinel(43)) : 0;
+    sun.shadow.autoUpdate = sunOn;
     sun.color.copy(sunWhite).lerp(sunWarm, THREE.MathUtils.smoothstep(18 - elDeg, 0, 15));
     fitSunShadow();
 
@@ -819,6 +887,31 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   }
 
   function invalidate() { dirty = true; dirtyAt = performance.now(); mirrorsDirty = true; requestRender(); }
+
+  // --- шейдеры под новый набор источников — в фоне. Программа материала в three собирается под число источников
+  // каждого типа; поставь новые светильники в сцену сразу — первый кадр синхронно компилирует все материалы
+  // (на этой квартире секунды). Здесь новый набор на мгновение ставится вместо старого, компиляция запускается
+  // без ожидания (KHR_parallel_shader_compile), промис ждёт готовности новых программ; кадры тем временем идут
+  // со старыми светильниками. Два варианта программ: в цель рендера (композер, зонды, зеркала — линейный цвет
+  // без тонмаппинга) и на холст (качество «Быстрое»). Без расширения программы готовы сразу (как раньше).
+  function prepare(add, remove = null) {
+    const before = new Set(renderer.info.programs);
+    const rt = renderer.getRenderTarget(), vis = remove?.visible;
+    if (remove) remove.visible = false;
+    scene.add(add);
+    try {
+      for (const target of [atlas, null]) { renderer.setRenderTarget(target); renderer.compile(scene, camera ?? probeCam); }
+    } finally {
+      scene.remove(add);
+      if (remove) remove.visible = vis;
+      renderer.setRenderTarget(rt);
+    }
+    const fresh = renderer.info.programs.filter(p => !before.has(p));
+    return new Promise(resolve => {
+      const poll = () => (fresh.every(p => p.isReady()) ? resolve() : setTimeout(poll, 16));
+      poll();
+    });
+  }
 
   function update() {
     const now = performance.now();
@@ -850,5 +943,5 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     probeSH, irradianceAt(p, n = [0, 1, 0]) { return shIrradiance(probeSH[p], ...n); }, U,
   };
 
-  return { apply, update, invalidate, setQuality, dispose, ready, sun, lights: [sun, ...windows.map(w => w.light)], windows: windows.map(w => w.light), debug };
+  return { apply, update, invalidate, prepare, setQuality, dispose, ready, sun, lights: [sun, ...windows.map(w => w.light)], windows: windows.map(w => w.light), debug };
 }

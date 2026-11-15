@@ -7,10 +7,15 @@
 // Контрол: { type, key, label, hint, def, src, options, visible(s, has, info), feature, focus: [...] } +
 //   slot      — материал из catalog.SLOTS (key = id слота): строка-сводка, внутри фильтр и сетка миниатюр;
 //   swatches  — сетка образцов из options ({ id, name, note, tex | color });
+//   products  — карточки реальных вещей из options ({ id, name, brand, price_pln, size: [ш, в, г] в метрах, thumb, url, note }):
+//               миниатюра (путь от web/), название, бренд, размер в см, цена в zł, ссылка в магазин.
+//               Вариант с id 'none' («Нет») — узкая первая строка. Пример:
+//               { type: 'products', key: 'd_room2_bed', label: 'Кровать', def: 'malm-160', options: [{ id: 'none', name: 'Нет' }, …] }
 //   chips/seg — выбор из options ({ id, name }); seg с подписью встаёт в строку;
 //   select    — выпадающий список; toggle — переключатель (values: [выкл, вкл], если значения не true/false);
 //   slider    — min, max, step, format(v), presets: [{ label, value }], input(v)/commit(v) вместо setState;
 //   button    — label (строка или (s, info) => строка), primary, value(s, info) -> аргумент действия;
+//               run(s, info) — вместо действия вызвать функцию модуля напрямую (модуль без ui.on, напр. seats.js);
 //   readout   — value (строка или (s, info) => строка) либо info[key]; style: 'dims' | 'hint' | 'keys'; link: { label, run };
 //   progress  — info[key] = { passes, target, running }; format(p) -> подпись;
 //   group     — рамка с вложенными controls.
@@ -18,15 +23,19 @@
 //   'pref' — настройка этого браузера (localStorage); 'info' — живое значение модуля (ui.info({...})).
 //   Либо свои get(s, info) / set(v, s). Изменение pref/info и нажатие кнопки уходят в ui.on(key, fn),
 //   иначе в api.actions[key], иначе во встроенное действие (snapshot, glb, quality, theme).
+// Сам раздел умеет: сводку в свёрнутом виде (без summary — по выбранным вариантам), точку «изменено» и ссылку
+//   «Сбросить раздел» (значения из initUI({ defaults }), иначе из def контрола), поиск по вариантам во вкладках с поиском.
+// Клавиатура: в группе выбора одна остановка Tab, стрелки/Home/End — по вариантам, Пробел/Enter — выбрать;
+//   1–5 — вкладки, / — поиск, ⌘Z / ⇧⌘Z — отмена и возврат.
 import { NAV_HINT } from './nav.js';
 import { SLOTS, MATERIALS, OPTIONS, PRESETS, FLOOR_CATS, resolveItem } from './catalog.js';
 import { LAMP_OPTIONS, DIM } from './lamps.js';
 import { formatSun } from './site.js';
 
 export const TABS = [
-  { id: 'mat',       title: 'Материалы',    short: 'Материалы', icon: 'swatch',  search: true },
-  { id: 'kitchen',   title: 'Кухня',        short: 'Кухня',     icon: 'kitchen', search: true },
-  { id: 'furniture', title: 'Мебель',       short: 'Мебель',    icon: 'sofa',
+  { id: 'mat',       title: 'Материалы',    short: 'Материалы', icon: 'swatch',  search: 'Найти: дуб, микроцемент, Carrea…' },
+  { id: 'kitchen',   title: 'Кухня',        short: 'Кухня',     icon: 'kitchen', search: 'Найти: дуб, кварц, латунь…' },
+  { id: 'furniture', title: 'Мебель',       short: 'Мебель',    icon: 'sofa',    search: 'Найти: IKEA, кровать, стеллаж…',
     empty: 'Здесь появятся диван, ТВ, тумба, ковёр и журнальный столик.' },
   { id: 'light',     title: 'Свет',         short: 'Свет',      icon: 'bulb' },
   { id: 'view',      title: 'Вид и рендер', short: 'Вид',       icon: 'camera' },
@@ -63,6 +72,10 @@ const ICONS = {
   close: '<path d="m5.5 5.5 9 9M14.5 5.5l-9 9"/>',
   ab: '<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M10 4v12"/><path d="M5.5 12.5 7 7.5l1.5 5M6 11h2"/>',
   side: '<rect x="3" y="4" width="14" height="12" rx="1.5"/><path d="M12 4v12"/>',
+  ext: '<path d="M11 4h5v5"/><path d="m16 4-7 7"/><path d="M14 12v3.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5H8"/>',
+  none: '<circle cx="10" cy="10" r="6"/><path d="m5.8 14.2 8.4-8.4"/>',
+  box: '<path d="M3.5 6.5 10 3l6.5 3.5v7L10 17l-6.5-3.5z"/><path d="m3.5 6.5 6.5 3.5 6.5-3.5M10 10v7"/>',
+  reset: '<path d="M4 10a6 6 0 1 0 2-4.5"/><path d="M4 3.5V7h3.5"/>',
 };
 const icon = n => {
   const t = document.createElement('template');
@@ -108,20 +121,51 @@ function fillSwatch(el, it) {
   el.append(h('img', { src: `textures/${it.tex}/thumb.jpg`, alt: '', loading: 'lazy', decoding: 'async', class: it.tint ? 'tinted' : null,
     onerror: e => { const img = e.currentTarget; if (img.src.endsWith('thumb.jpg')) img.src = `textures/${it.tex}/color.jpg`; } }));
 }
+// Сведения о материале для фильтров: вид покрытия, бренд и цена. Берутся из полей kind/brand/price_pln,
+// а у реальных товаров — из note вида «Carrea · 60×60 · 129 zł/m²» (бренд — первая часть, цена — число перед zł).
+const TYPES_ORDER = ['wood', 'concrete', 'tile', 'stone'];
+const priceOf = it => {
+  if (it.price_pln != null) return Number(it.price_pln);
+  const m = /(\d[\d\s]*(?:[.,]\d+)?)\s*zł/.exec(it.note || '');
+  return m ? Number(m[1].replace(/\s/g, '').replace(',', '.')) : null;
+};
+const metaOf = it => {
+  if (it._meta) return it._meta;
+  const note = it.note || '', shop = it.cat === 'shop' || /zł/.test(note);
+  return (it._meta = {
+    type: it.kind || (it.cat === 'shop' ? 'tile' : it.cat) || '',   // магазинная плитка без вида — керамогранит
+    brand: it.brand || (shop ? note.split(' · ')[0].trim() : ''),
+    price: priceOf(it),
+    unit: /zł\s*\/\s*m/.test(note) ? '/м²' : '',
+  });
+};
+const zl = p => `${Number(p).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} zł`;
 function swatch(it, onclick) {
   const img = h('span', { class: 'sw-img' });
   if (it.id !== 'same') fillSwatch(img, it);
-  const b = h('button', { type: 'button', class: 'sw', role: 'radio', 'aria-checked': 'false', 'data-id': String(it.id), 'data-cat': it.cat || '',
+  const m = it.id === 'same' ? null : metaOf(it);
+  const b = h('button', { type: 'button', class: 'sw', role: 'radio', 'aria-checked': 'false', tabindex: '-1', 'data-id': String(it.id), 'data-cat': it.cat || '',
     'aria-label': titleOf(it), 'data-tip': it.name, 'data-tip2': it.note || null, onclick },
-  img, it.id === 'same' ? h('span', { class: 'sw-same' }, '=') : null);
+  img, it.id === 'same' ? h('span', { class: 'sw-same' }, '=') : null,
+  it.id === 'none' && !it.tex && !it.color ? h('span', { class: 'sw-none' }, icon('none')) : null,
+  m?.price != null ? h('span', { class: 'sw-price', 'aria-hidden': 'true' }, zl(m.price).replace(' zł', '')) : null);
   b._img = img;
   return b;
 }
-const catName = id => FLOOR_CATS.find(c => c.id === id)?.name || '';
+const catName = id => FLOOR_CATS.find(c => c.id === id)?.name || '';   // 'all' — «Все»
 const matches = (o, words) => {
-  const t = norm(`${o.name} ${o.note || ''} ${catName(o.cat)} ${o.id} ${o.color && !o.tex ? 'краска' : ''}`);
+  const m = metaOf(o);
+  const t = norm(`${o.name} ${o.note || ''} ${o.brand || ''} ${catName(o.cat)} ${catName(m.type)} ${o.id} ${o.color && !o.tex ? 'краска' : ''}`);
   return words.every(w => t.includes(w));
 };
+// Группа выбора — одна остановка Tab: выбранный вариант (или первый видимый) с tabindex 0, остальные −1.
+const filteredOut = el => !!el.closest('.sr-hide, .flt-hide');
+function fixStop(group, force = false) {
+  const items = [...group.querySelectorAll('[role=radio]')];
+  if (!force && items.some(b => b.tabIndex === 0 && !filteredOut(b))) return;
+  const pick = items.find(b => b.getAttribute('aria-checked') === 'true' && !filteredOut(b)) || items.find(b => !filteredOut(b));
+  items.forEach(b => { b.tabIndex = b === pick ? 0 : -1; });
+}
 
 // ---------- заглушки модулей в работе: ключи состояния предварительные (см. отчёт интегратору) ----------
 
@@ -244,8 +288,8 @@ export function initUI(api) {
               + (same ? ' · полы одинаковые, граница не видна' : '');
           } },
           { type: 'seg', key: 'threshold', label: 'Порожек', options: OPTIONS.threshold },
+          { type: 'seg', key: 'floorDir', label: 'Доска', options: OPTIONS.floorDir },
         ] },
-        { type: 'seg', key: 'floorDir', label: 'Доска', options: OPTIONS.floorDir },
         { type: 'slot', key: 'floorRoom2' }, { type: 'slot', key: 'floorRoom3' }, { type: 'slot', key: 'floorBath' },
       ] },
       { id: 'walls', tab: 'mat', title: 'Стены', order: 20, summary: s => pair(s, 'walls', 'wallAccent'), controls: slots('walls') },
@@ -310,10 +354,10 @@ export function initUI(api) {
         { type: 'button', key: 'snapshot', label: 'Снимок PNG', primary: !ultra, visible: () => api.canExport },
         { type: 'button', key: 'glb', label: 'Модель GLB для Blender', visible: () => api.canExport },
       ] },
-      { id: 'camera', tab: 'view', title: 'Камера', order: 15, open: true, controls: [
+      { id: 'camera', tab: 'view', title: 'Камера', order: 15, summary: () => 'мышь и клавиши', controls: [
         { type: 'readout', key: 'navHint', style: 'hint', value: NAV_HINT.split(' · ').join('\n') },
       ] },
-      { id: 'walk', tab: 'view', title: 'Прогулка', order: 20, feature: 'walk', summary: () => (walkApi()?.active ? 'идёт' : ''), controls: [
+      { id: 'walk', tab: 'view', title: 'Прогулка', order: 20, feature: 'walk', summary: () => (walkApi()?.active ? 'идёт' : walkApi()?.personHeight ? `рост ${Math.round(walkApi().personHeight)} см` : ''), controls: [
         { type: 'toggle', key: 'walking', label: 'Пройтись от первого лица', get: () => !!walkApi()?.active, set: () => walkApi()?.toggle() },
         { type: 'slider', key: 'personHeight', label: 'Рост', min: 150, max: 200, step: 1, def: 180,
           get: () => walkApi()?.personHeight, set: v => walkApi()?.setPersonHeight(v),
@@ -323,7 +367,7 @@ export function initUI(api) {
       { id: 'interface', tab: 'view', title: 'Интерфейс', order: 90, controls: [
         { type: 'seg', key: 'theme', src: 'pref', def: 'auto', label: 'Тема', options: opt(['auto', 'Как в системе'], ['light', 'Светлая'], ['dark', 'Тёмная']) },
         { type: 'readout', key: 'shortcuts', style: 'keys',
-          value: `1–5 — вкладки\n${MOD}Z — отменить, ⇧${MOD}Z — вернуть\nC — переключить A/B\nF — прогулка, Esc — закрыть` },
+          value: `1–5 — вкладки, / — поиск\n${MOD}Z — отменить, ⇧${MOD}Z — вернуть\nСтрелки — по вариантам, Пробел — выбрать\nC — переключить A/B\nF — прогулка, Esc — закрыть` },
         { type: 'readout', key: 'clickHint', style: 'hint', value: 'Нажмите на поверхность в 3D, чтобы открыть её материалы.' },
       ] },
     ];
@@ -332,16 +376,28 @@ export function initUI(api) {
   // --- построители контролов
   const labelOf = c => c.label || c.key;
   const ctlId = c => `ctl-${c.id || c.key}`;
-  const radioSync = (btns, v) => { v = String(v); for (const b of btns) { const on = b.dataset.id === v; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); } };
+  // выбор в группе; tabindex переезжает на выбранный, пока фокус не внутри группы (иначе он там, куда ушли стрелками)
+  const radioSync = (btns, v, group = btns[0]?.closest('[role=radiogroup]')) => {
+    v = String(v);
+    let changed = false;
+    for (const b of btns) {
+      const on = b.dataset.id === v;
+      if (b.classList.contains('on') !== on) changed = true;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
+    }
+    if (group) fixStop(group, changed && !group.contains(document.activeElement));
+  };
 
   const TYPES = {
     slot: buildSlot,
     swatches(c) {
-      const btns = optsOf(c).map(it => swatch(it, () => setV(c, it.id)));
+      const opts = optsOf(c);
+      const btns = opts.map(it => swatch(it, () => setV(c, it.id)));
       const el = h('div', { class: 'ctl', id: ctlId(c) }, c.label ? h('span', { class: 'ctl-label' }, c.label) : null,
         h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': labelOf(c) }, btns));
-      return { el, sync: s => radioSync(btns, getV(c, s)) };
+      return { el, sync: s => radioSync(btns, getV(c, s)), filter: words => filterItems(el, btns, opts, words) };
     },
+    products: buildProducts,
     chips: buildChoice,
     seg: buildChoice,
     select(c) {
@@ -375,7 +431,7 @@ export function initUI(api) {
     },
     button(c) {
       const b = h('button', { type: 'button', class: `btn${c.primary ? ' primary' : ''}`, id: ctlId(c),
-        onclick: () => emit(c.action || c.key, c.value?.(state, info)) });
+        onclick: () => (c.run ? c.run(state, info) : emit(c.action || c.key, c.value?.(state, info))) });
       return { el: b, sync: s => { b.textContent = typeof c.label === 'function' ? c.label(s, info) : c.label; b.disabled = !!c.disabled?.(s, info); } };
     },
     readout(c) {
@@ -399,19 +455,74 @@ export function initUI(api) {
     },
     group(c, sec) {
       const kids = c.controls.map(k => build(k, sec)).filter(Boolean);
-      return { el: h('div', { class: 'grp-box', id: ctlId(c) }, kids.map(k => k.el)), kids, sync: s => kids.forEach(k => syncCtl(k, s)) };
+      return { el: h('div', { class: 'grp-box', id: ctlId(c) }, c.label ? h('span', { class: 'grp-label' }, c.label) : null, kids.map(k => k.el)),
+        kids, sync: s => kids.forEach(k => syncCtl(k, s)) };
     },
   };
 
   function buildChoice(c) {
     const seg = c.type === 'seg';
-    const btns = optsOf(c).map(o => h('button', { type: 'button', class: seg ? null : 'chip', role: 'radio', 'aria-checked': 'false',
+    const btns = optsOf(c).map(o => h('button', { type: 'button', class: seg ? null : 'chip', role: 'radio', 'aria-checked': 'false', tabindex: '-1',
       'data-id': String(o.id), onclick: () => setV(c, o.id) }, o.name));
     const el = h('div', { class: `ctl${seg && c.label ? ' inline' : ''}`, id: ctlId(c) },
       c.label ? h('span', { class: 'ctl-label' }, c.label) : null,
       h('div', { class: seg ? 'seg' : 'chips', role: 'radiogroup', 'aria-label': labelOf(c) }, btns),
       c.hint ? h('p', { class: 'hint' }, c.hint) : null);
     return { el, sync: s => radioSync(btns, getV(c, s)) };
+  }
+
+  // Поиск по вариантам контрола: прячет не совпавшие, весь контрол — если совпадений нет. Возвращает число совпадений.
+  function filterItems(el, items, opts, words) {
+    if (!words.length) { el.classList.remove('sr-hide'); items.forEach(x => x.classList.remove('sr-hide')); return 0; }
+    let n = 0;
+    opts.forEach((o, i) => {
+      const hit = o.id !== 'none' && o.id !== 'same' && matches(o, words);
+      items[i].classList.toggle('sr-hide', !hit);
+      n += hit;
+    });
+    el.classList.toggle('sr-hide', !n);
+    const g = el.querySelector('[role=radiogroup]');
+    if (g) fixStop(g, true);
+    return n;
+  }
+
+  // Карточки реальных вещей: миниатюра, название, бренд и размер, цена, ссылка в магазин. «Нет» — узкая строка.
+  function buildProducts(c) {
+    const opts = optsOf(c);
+    const hits = [], links = [];
+    const cards = opts.map(o => {
+      const pick = () => setV(c, o.id);
+      if (o.id === 'none') {
+        const b = h('button', { type: 'button', class: 'pc-hit', role: 'radio', 'aria-checked': 'false', tabindex: '-1', 'data-id': 'none', onclick: pick },
+          icon('none'), h('span', { class: 'pc-name' }, o.name || 'Нет'));
+        hits.push(b); links.push(null);
+        return h('div', { class: 'pc pc-none' }, b);
+      }
+      const dims = Array.isArray(o.size) ? `${o.size.map(v => Math.round(v * 100)).join('×')} см` : '';
+      const price = o.price_pln != null && o.price_pln !== '' ? zl(o.price_pln) : '';
+      const img = h('span', { class: `pc-img${o.thumb ? '' : ' noimg'}` }, icon('box'),
+        o.thumb ? h('img', { src: o.thumb, alt: '', loading: 'lazy', decoding: 'async', onerror: e => e.currentTarget.parentNode.classList.add('noimg') }) : null);
+      const b = h('button', { type: 'button', class: 'pc-hit', role: 'radio', 'aria-checked': 'false', tabindex: '-1', 'data-id': String(o.id), onclick: pick,
+        'aria-label': [o.name, o.brand, dims && `ширина, высота, глубина ${dims}`, price, o.note].filter(Boolean).join(', '),
+        'data-tip': o.note ? o.name : null, 'data-tip2': o.note || null },
+      img, h('span', { class: 'pc-name' }, o.name),
+      h('span', { class: 'pc-meta' }, [o.brand, dims].filter(Boolean).join(' · ')),
+      h('span', { class: 'pc-price' }, price || '\u00a0'));
+      let host = '';
+      try { host = o.url ? new URL(o.url).hostname.replace(/^www\./, '') : ''; } catch { /* кривая ссылка — без кнопки */ }
+      const link = host ? h('a', { class: 'pc-link', href: o.url, target: '_blank', rel: 'noopener noreferrer', tabindex: '-1',
+        'aria-label': `«${o.name}» на ${host}`, 'data-tip': 'Открыть в магазине', 'data-tip2': host }, icon('ext')) : null;
+      hits.push(b); links.push(link);
+      return h('div', { class: 'pc', 'data-id': String(o.id) }, b, link);
+    });
+    const grid = h('div', { class: 'products', role: 'radiogroup', 'aria-label': labelOf(c) }, cards);
+    const el = h('div', { class: 'ctl', id: ctlId(c) }, c.label ? h('span', { class: 'ctl-label' }, c.label) : null, grid,
+      c.hint ? h('p', { class: 'hint' }, c.hint) : null);
+    return { el, sync: s => {
+      const v = String(getV(c, s));
+      radioSync(hits, v, grid);
+      links.forEach((a, i) => { if (a) a.tabIndex = hits[i].dataset.id === v ? 0 : -1; });
+    }, filter: words => filterItems(el, cards, opts, words) };
   }
 
   // Слот материала: строка «зона · материал», внутри фильтр по виду покрытия и сетка (строится при первом открытии)
@@ -431,14 +542,37 @@ export function initUI(api) {
     const headBtn = h('button', { type: 'button', class: 'slot-head', 'aria-expanded': 'false', 'aria-controls': `slotb-${slot.id}` },
       mini, h('span', { class: 'slot-label' }, slot.short || slot.label), cur, icon('chev'));
     const inner = h('div', { class: 'slot-body' });
-    const fold = h('div', { class: 'fold', id: `slotb-${slot.id}`, inert: true }, inner);
+    const fold = h('div', { class: 'fold', id: `slotb-${slot.id}`, inert: true }, h('div', { class: 'fold-in' }, inner));
     const el = h('div', { class: 'slot', id: `sec-${slot.id}` }, headBtn, fold);
     const key = `slot:${slot.id}`;
-    let sws = null, sel = null, cat = 'all', catBtns = [];
-    const setCat = id => {
-      cat = id;
-      radioSync(catBtns, id);
-      for (const b of sws) b.classList.toggle('cat-hide', id !== 'all' && b.dataset.id !== 'same' && b.dataset.cat !== id);
+    // Фильтр сетки: вид покрытия, бренд (или «все магазины»), порядок по цене. Помнится для слота в этом браузере.
+    let sws = null, sel = null, grid = null, catBtns = [], brandSel = null, sortSel = null, countEl = null, emptyEl = null, searching = false;
+    const real = opts.filter(o => o.id !== 'same');
+    const flt = { type: 'all', brand: '', sort: '', ...(prefs.flt?.[slot.id] || {}) };
+    const fltOn = () => flt.type !== 'all' || !!flt.brand;
+    const passes = o => o.id === 'same' || searching || ((flt.type === 'all' || metaOf(o).type === flt.type)
+      && (!flt.brand || (flt.brand === '*' ? !!metaOf(o).brand : metaOf(o).brand === flt.brand)));
+    const applyFilter = (remember = true) => {
+      if (!sws) return;
+      radioSync(catBtns, flt.type);
+      if (brandSel) brandSel.value = flt.brand;
+      if (sortSel) {
+        sortSel.value = flt.sort;
+        const k = flt.sort === 'up' ? 1 : flt.sort === 'down' ? -1 : 0;
+        const order = k ? [...sws].sort((a, b) => {
+          if (a._opt.id === 'same') return -1;
+          if (b._opt.id === 'same') return 1;
+          const pa = metaOf(a._opt).price, pb = metaOf(b._opt).price;
+          return (pa == null) - (pb == null) || (pa - pb) * k || a._i - b._i;
+        }) : sws;
+        grid.append(...order);
+      }
+      let n = 0;
+      for (const b of sws) { const ok = passes(b._opt); b.classList.toggle('flt-hide', !ok); if (ok && b._opt.id !== 'same') n++; }
+      if (countEl) countEl.textContent = fltOn() && !searching ? `${n} из ${real.length}` : `${real.length} ${plural(real.length, 'вариант', 'варианта', 'вариантов')}`;
+      if (emptyEl) emptyEl.hidden = n > 0;
+      if (!grid.contains(document.activeElement)) fixStop(grid, true);
+      if (remember) { (prefs.flt ||= {})[slot.id] = { ...flt }; savePrefs(); }
     };
     const syncGrid = s => {
       const val = String(s[slot.id]);
@@ -446,20 +580,45 @@ export function initUI(api) {
         sel?.classList.remove('on'); sel?.setAttribute('aria-checked', 'false');
         sel = sws.find(b => b.dataset.id === val) || null;
         sel?.classList.add('on'); sel?.setAttribute('aria-checked', 'true');
+        if (!grid.contains(document.activeElement)) fixStop(grid, true);
       }
       if (slot.same) fillSwatch(sws[0]._img, resolveItem({ ...s, [slot.id]: 'same' }, slot.id));
     };
     const build = () => {
       if (sws) return;
-      sws = opts.map(it => swatch(it, () => setV(c, it.id)));
-      const cats = FLOOR_CATS.filter(k => k.id === 'all' || opts.some(o => o.cat === k.id));
-      if (cats.length > 2 && opts.length > 12) {
-        catBtns = cats.map(k => h('button', { type: 'button', role: 'radio', 'data-id': k.id, onclick: () => setCat(k.id) },
-          k.name, h('span', { class: 'n' }, String(k.id === 'all' ? opts.filter(o => o.id !== 'same').length : opts.filter(o => o.cat === k.id).length))));
-        inner.append(h('div', { class: 'filter', role: 'radiogroup', 'aria-label': 'Вид покрытия' }, catBtns));
+      sws = opts.map((it, i) => Object.assign(swatch(it, () => setV(c, it.id)), { _opt: it, _i: i }));
+      grid = h('div', { class: `swatches${real.length > 30 ? ' many' : ''}`, role: 'radiogroup', 'aria-label': slot.label }, sws);
+      if (real.length > 12) {
+        const types = TYPES_ORDER.filter(t => real.some(o => metaOf(o).type === t));
+        if (types.length > 1) {
+          catBtns = ['all', ...types].map(t => h('button', { type: 'button', role: 'radio', tabindex: '-1', 'data-id': t,
+            'aria-label': `${catName(t)}: ${t === 'all' ? real.length : real.filter(o => metaOf(o).type === t).length}`,
+            onclick: () => { flt.type = t; applyFilter(); } }, catName(t)));
+          inner.append(h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Вид покрытия' }, catBtns));
+        }
+        const brands = [...new Set(real.map(o => metaOf(o).brand).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        const priced = real.filter(o => metaOf(o).price != null).length;
+        const tools = [];
+        if (brands.length) {
+          brandSel = h('select', { class: 'mini-sel', 'aria-label': 'Бренд', onchange: e => { flt.brand = e.target.value; applyFilter(); } },
+            h('option', { value: '' }, 'Все бренды'),
+            h('option', { value: '*' }, `Только из магазинов · ${real.filter(o => metaOf(o).brand).length}`),
+            brands.map(b => h('option', { value: b }, `${b} · ${real.filter(o => metaOf(o).brand === b).length}`)));
+          tools.push(brandSel);
+        }
+        if (priced >= 4) {
+          sortSel = h('select', { class: 'mini-sel', 'aria-label': 'Порядок по цене', onchange: e => { flt.sort = e.target.value; applyFilter(); } },
+            h('option', { value: '' }, 'По каталогу'), h('option', { value: 'up' }, 'Дешевле'), h('option', { value: 'down' }, 'Дороже'));
+          tools.push(sortSel);
+        }
+        countEl = h('span', { class: 'grid-count', 'aria-live': 'polite' });
+        inner.append(h('div', { class: 'grid-tools' }, tools, countEl));
+        if (!brands.includes(flt.brand) && flt.brand !== '*') flt.brand = '';
       }
-      inner.append(h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': slot.label }, sws));
-      setCat(cat);
+      emptyEl = h('p', { class: 'grid-empty', hidden: true }, 'С таким фильтром ничего нет. ',
+        h('button', { type: 'button', class: 'link', onclick: () => { Object.assign(flt, { type: 'all', brand: '' }); applyFilter(); } }, 'Показать все'));
+      inner.append(grid, emptyEl);
+      applyFilter(false);
       syncGrid(state);
     };
     const setOpen = (open, remember = true) => {
@@ -485,14 +644,19 @@ export function initUI(api) {
         if (!words.length) {
           el.classList.remove('sr-hide');
           sws?.forEach(b => b.classList.remove('sr-hide'));
+          if (searching) { searching = false; applyFilter(false); }
           setOpen(!!prefs.open[key], false);
           return 0;
         }
-        const hits = new Set(opts.filter(o => o.id !== 'same' && matches(o, words)).map(o => String(o.id)));
+        const hits = new Set(real.filter(o => matches(o, words)).map(o => String(o.id)));
         el.classList.toggle('sr-hide', !hits.size);
         if (hits.size) {
-          setOpen(true, false); setCat('all');
+          setOpen(true, false);
+          searching = true; applyFilter(false);   // при поиске фильтр не мешает: ищем по всему слоту
           for (const b of sws) b.classList.toggle('sr-hide', !hits.has(b.dataset.id));
+          if (countEl) countEl.textContent = `${hits.size} из ${real.length}`;
+          if (emptyEl) emptyEl.hidden = true;
+          fixStop(grid, true);
         }
         return hits.size;
       },
@@ -512,6 +676,48 @@ export function initUI(api) {
     inst.el.hidden = inst.sync(s) === false;
   }
 
+  // Контролы раздела по порядку, с вложенными группами
+  const flatCtls = list => list.flatMap(k => (k.def.type === 'group' ? [k, ...flatCtls(k.kids || [])] : [k]));
+  const RESETTABLE = new Set(['slot', 'swatches', 'products', 'chips', 'seg', 'select', 'toggle', 'slider']);
+  // по умолчанию: initUI({ defaults }), иначе первое готовое сочетание («Как в эскизе»), иначе def контрола
+  const defaultOf = c => {
+    if (api.defaults && c.key in api.defaults) return api.defaults[c.key];
+    if (PRESETS[0] && c.key in PRESETS[0].state) return PRESETS[0].state[c.key];
+    return c.get || c.set ? undefined : c.def;
+  };
+  // {ключ: значение по умолчанию} для полей раздела, которые сейчас отличаются; видимые контролы важнее скрытых
+  function resetPatch(sec, s) {
+    const patch = {}, seen = new Set();
+    const list = flatCtls(sec.ctls).filter(k => RESETTABLE.has(k.def.type) && !k.def.src && k.def.key && !SLOTS.find(x => x.id === k.def.key)?.locked);
+    list.sort((a, b) => shown(b.def, s) - shown(a.def, s));
+    for (const k of list) {
+      const key = k.def.key;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const def = defaultOf(k.def);
+      if (def !== undefined && (s[key] ?? def) !== def) patch[key] = def;
+    }
+    return patch;
+  }
+  // Сводка свёрнутого раздела без своей summary: выбранные варианты первых двух видимых контролов выбора
+  // («Нет» пропускается; если выбрано только «Нет» — так и пишем)
+  function autoSummary(sec, s) {
+    const out = [];
+    let none = '';
+    for (const k of flatCtls(sec.ctls)) {
+      if (out.length >= 2) break;
+      const c = k.def;
+      if (!shown(c, s)) continue;
+      if (['chips', 'seg', 'swatches', 'products', 'select'].includes(c.type)) {
+        const v = getV(c, s), n = optName(optsOf(c), v);
+        if (String(v) === 'none') none ||= n;
+        else if (n) out.push(n);
+      } else if (c.type === 'slot') out.push(resolveItem(s, c.key)?.name || '');
+      else if (c.type === 'toggle' && (c.values ? getV(c, s) === c.values[1] : !!getV(c, s))) out.push(labelOf(c));
+    }
+    return out.filter(Boolean).join(' · ') || none;
+  }
+
   function buildSection(d) {
     const sec = { def: d, ctls: [] };
     const inner = h('div', { class: 'sec-body' });
@@ -523,10 +729,20 @@ export function initUI(api) {
       else { row = null; inner.append(inst.el); }
       sec.ctls.push(inst);
     }
+    // «Сбросить раздел»: поля состояния раздела, у которых известно значение по умолчанию
+    const resetBtn = h('button', { type: 'button', class: 'reset', 'data-tip': 'Вернуть значения по умолчанию', 'data-tip2': `как в «${PRESETS[0]?.name || 'исходном'}»`,
+      onclick: () => {
+        const patch = resetPatch(sec, state);
+        if (!Object.keys(patch).length) return;
+        api.setState(patch);
+        toast(`«${d.title}»: сброшено`, { label: 'Отменить', run: undo });
+      } }, icon('reset'), 'Сбросить раздел');
+    const foot = h('div', { class: 'sec-foot' }, resetBtn);
+    inner.append(foot);
     const sum = h('span', { class: 'sec-sum' });
     const headBtn = h('button', { type: 'button', class: 'sec-head', 'aria-controls': `grpb-${d.id}` },
       h('span', { class: 'sec-title' }, d.title), sum, icon('chev'));
-    const fold = h('div', { class: 'fold', id: `grpb-${d.id}` }, inner);
+    const fold = h('div', { class: 'fold', id: `grpb-${d.id}` }, h('div', { class: 'fold-in' }, inner));
     sec.el = h('section', { class: 'sec', id: d.elId || `grp-${d.id}`, 'aria-label': d.title }, h('h3', {}, headBtn), fold);
     sec.userOpen = () => prefs.open[d.id] ?? !!d.open;
     sec.setOpen = (open, remember = true) => {
@@ -545,7 +761,10 @@ export function initUI(api) {
       sec.el.hidden = !shown(d, s);
       if (sec.el.hidden) return;
       for (const c of sec.ctls) syncCtl(c, s);
-      sum.textContent = d.summary ? d.summary(s, info) : '';
+      sum.textContent = d.summary ? d.summary(s, info) : autoSummary(sec, s);
+      const changed = Object.keys(resetPatch(sec, s)).length > 0;
+      foot.hidden = !changed;
+      sec.el.classList.toggle('changed', changed);
     };
     for (const k of d.focus || []) if (!focusMap.has(k)) focusMap.set(k, { el: sec.el, sec });
     return sec;
@@ -609,6 +828,7 @@ export function initUI(api) {
       panes[t.id].hidden = !on;
     }
     searchRow.hidden = !TAB(id).search;
+    if (TAB(id).search) search.placeholder = TAB(id).search;
     grabTitle.textContent = TAB(id).title;
     update();
     body.scrollTop = scrolls[id] || 0;
@@ -701,15 +921,15 @@ export function initUI(api) {
     lastGesture = gesture; lastT = now; gesture = null;
     base = snap(s);
   }
-  function restore(from, to, msg) {
+  function restore(from, to, msg, action) {
     if (!from.length) return;
     to.push(snap(state));
     const s = from.pop();
     restoring = true;
     try { api.setState(s); } finally { restoring = false; }
-    toast(msg);
+    toast(msg, action);
   }
-  const undo = () => restore(undoStack, redoStack, 'Отменено');
+  const undo = () => restore(undoStack, redoStack, 'Отменено', { label: 'Вернуть', run: () => redo() });
   const redo = () => restore(redoStack, undoStack, 'Возвращено');
 
   // --- сравнение A/B: две ячейки, открытая правится вживую
@@ -800,20 +1020,33 @@ export function initUI(api) {
   panel.addEventListener('focusout', hideTip);
   body.addEventListener('scroll', hideTip, { passive: true });
 
-  // стрелки внутри групп выбора (образцы, чипы, сегменты)
+  // стрелки внутри групп выбора (образцы, карточки, чипы, сегменты): двигают фокус, Пробел/Enter выбирает
   body.addEventListener('keydown', e => {
-    const dir = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 'down', ArrowUp: 'up' }[e.key];
+    const dir = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 'down', ArrowUp: 'up', Home: 'home', End: 'end' }[e.key];
     const group = dir && e.target.closest?.('[role=radiogroup]');
-    if (!group) return;
-    const items = [...group.children].filter(b => b.tagName === 'BUTTON' && b.offsetParent !== null);
+    if (!group || e.target.getAttribute('role') !== 'radio') return;
+    const items = [...group.querySelectorAll('[role=radio]')].filter(b => b.closest('[role=radiogroup]') === group && b.offsetParent !== null);
     const i = items.indexOf(e.target);
     if (i < 0) return;
-    let step = dir;
-    if (typeof dir === 'string') {
-      const cols = Math.max(1, items.findIndex(b => b.offsetTop !== items[0].offsetTop));
-      step = dir === 'down' ? cols : -cols;
+    let j = i;
+    if (dir === 'home') j = 0;
+    else if (dir === 'end') j = items.length - 1;
+    else if (typeof dir === 'number') j = i + dir;
+    else {
+      // колонка по экрану: ближайший по X элемент в соседнем ряду
+      const r = e.target.getBoundingClientRect(), cx = r.left + r.width / 2;
+      const rows = items.map(b => b.getBoundingClientRect());
+      const cand = items.map((b, k) => ({ k, r: rows[k] })).filter(x => (dir === 'down' ? x.r.top > r.top + 2 : x.r.top < r.top - 2));
+      if (cand.length) {
+        const rowTop = dir === 'down' ? Math.min(...cand.map(x => x.r.top)) : Math.max(...cand.map(x => x.r.top));
+        j = cand.filter(x => Math.abs(x.r.top - rowTop) < 2)
+          .reduce((a, x) => (Math.abs(x.r.left + x.r.width / 2 - cx) < Math.abs(a.r.left + a.r.width / 2 - cx) ? x : a)).k;
+      }
     }
-    items[Math.min(items.length - 1, Math.max(0, i + step))].focus();
+    j = Math.min(items.length - 1, Math.max(0, j));
+    group.querySelectorAll('[role=radio]').forEach(b => { b.tabIndex = b === items[j] ? 0 : -1; });
+    items[j].focus();
+    items[j].scrollIntoView({ block: 'nearest' });
     e.preventDefault();
   });
 
@@ -876,6 +1109,7 @@ export function initUI(api) {
     if (typing(e.target) || mod || e.altKey || walking) return;
     const n = /^[1-9]$/.test(e.key) ? TABS[e.key - 1] : null;
     if (n) { setTab(n.id); if (!open) setPanelOpen(true); e.preventDefault(); }
+    else if (e.key === '/' && TAB(tab).search) { if (!open) setPanelOpen(true); search.focus(); search.select(); e.preventDefault(); }
     else if (e.code === 'KeyC' && ab && !e.repeat) switchAB(ab.side === 'A' ? 'B' : 'A');
   });
 
@@ -910,7 +1144,10 @@ export function initUI(api) {
   // --- всплывающее сообщение
   const toastEl = $('#toast');
   let tt = 0;
-  function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(tt); tt = setTimeout(() => { toastEl.hidden = true; }, 2600); }
+  function toast(msg, action) {
+    toastEl.replaceChildren(h('span', {}, msg), action ? h('button', { type: 'button', class: 'toast-act', onclick: () => { toastEl.hidden = true; action.run(); } }, action.label) : null);
+    toastEl.hidden = false; clearTimeout(tt); tt = setTimeout(() => { toastEl.hidden = true; }, action ? 5000 : 2600);
+  }
 
   function applyTheme(t) {
     if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;

@@ -1,0 +1,422 @@
+{
+ "mullsjo-135": {
+  "art": "30553240",
+  "name": "MULLSJÖ",
+  "type": "Biurko",
+  "measure": "135x70 cm",
+  "price": 649.0,
+  "finish": "okl dęb",
+  "url": "https://www.ikea.com/pl/pl/p/mullsjoe-biurko-okl-deb-30553240/",
+  "itemType": "ART"
+ },
+ "tonstad-120": {
+  "art": "60538205",
+  "name": "TONSTAD",
+  "type": "Biurko",
+  "measure": "120x47 cm",
+  "price": 899.0,
+  "finish": "okl dęb",
+  "url": "https://www.ikea.com/pl/pl/p/tonstad-biurko-okl-deb-60538205/",
+  "itemType": "ART"
+ },
+ "mittzon-120-oak": {
+  "art": "09525862",
+  "name": "MITTZON",
+  "type": "Biurko",
+  "measure": "120x60 cm",
+  "price": 699.0,
+  "finish": "okl dęb/biały",
+  "url": "https://www.ikea.com/pl/pl/p/mittzon-biurko-okl-deb-bialy-s09525862/",
+  "itemType": "SPR"
+ },
+ "idasen-120": {
+  "art": "49281027",
+  "name": "IDÅSEN",
+  "type": "Biurko",
+  "measure": "120x70 cm",
+  "price": 999.0,
+  "finish": "brązowy/ciemnoszary",
+  "url": "https://www.ikea.com/pl/pl/p/idasen-biurko-brazowy-ciemnoszary-s49281027/",
+  "itemType": "SPR"
+ },
+ "alefjall": {
+  "art": "40419982",
+  "name": "ALEFJÄLL",
+  "type": "Krzesło biurowe",
+  "measure": "",
+  "price": 999.0,
+  "finish": "Grann złoto-brązowy",
+  "url": "https://www.ikea.com/pl/pl/p/alefjaell-krzeslo-biurowe-grann-zloto-brazowy-40419982/",
+  "itemType": "ART"
+ },
+ "fjallberget": {
+  "art": "20485242",
+  "name": "FJÄLLBERGET",
+  "type": "Krzesło konferencyjne z kółkami",
+  "measure": "",
+  "price": 799.0,
+  "finish": "okleina dębowa bejcowana na biało/Gunnared beżowy",
+  "url": "https://www.ikea.com/pl/pl/p/fjaellberget-krzeslo-konferencyjne-z-kolkami-okleina-debowa-bejcowana-na-bialo-gunnared-bezowy-20485242/",
+  "itemType": "ART"
+ },
+ "markus": {
+  "art": "70261150",
+  "name": "MARKUS",
+  "type": "Krzesło biurowe",
+  "measure": "Średnie",
+  "price": 699.0,
+  "finish": "Vissle ciemnoszary",
+  "url": "https://www.ikea.com/pl/pl/p/markus-krzeslo-biurowe-vissle-ciemnoszary-70261150/",
+  "itemType": "ART"
+ },
+ "flintan": {
+  "art": "89424468",
+  "name": "FLINTAN",
+  "type": "Krzesło biurowe z podłokietnikami",
+  "measure": "",
+  "price": 299.0,
+  "finish": "czarny",
+  "url": "https://www.ikea.com/pl/pl/p/flintan-krzeslo-biurowe-z-podlokietnikami-czarny-s89424468/",
+  "itemType": "SPR"
+ },
+ "ranarp": {
+  "art": "30231315",
+  "name": "RANARP",
+  "type": "Lampa biurkowa",
+  "measure": "",
+  "price": 149.0,
+  "finish": "kremowy",
+  "url": "https://www.ikea.com/pl/pl/p/ranarp-lampa-biurkowa-kremowy-30231315/",
+  "itemType": "ART"
+ },
+ "isnalen": {
+  "art": "60501264",
+  "name": "ISNÅLEN",
+  "type": "Lampa biurkowa LED",
+  "measure": "",
+  "price": 99.99,
+  "finish": "biały/kolor mosiądzu",
+  "url": "https://www.ikea.com/pl/pl/p/isnalen-lampa-biurkowa-led-bialy-kolor-mosiadzu-60501264/",
+  "itemType": "ART"
+ },
+ "skurup": {
+  "art": "80516778",
+  "name": "SKURUP",
+  "type": "Lampa biurkowa",
+  "measure": "",
+  "price": 59.99,
+  "finish": "czarny",
+  "url": "https://www.ikea.com/pl/pl/p/skurup-lampa-biurkowa-czarny-80516778/",
+  "itemType": "ART"
+ },
+ "forsa": {
+  "art": "30439117",
+  "name": "FORSÅ",
+  "type": "Lampa biurkowa",
+  "measure": "",
+  "price": 69.99,
+  "finish": "biały",
+  "url": "https://www.ikea.com/pl/pl/p/forsa-lampa-biurkowa-bialy-30439117/",
+  "itemType": "ART"
+ },
+ "billy-200-walnut": {
+  "art": "29483535",
+  "name": "BILLY",
+  "type": "Kombinacja regałowa z nadstawkami",
+  "measure": "200x28x237 cm",
+  "price": 1202.0,
+  "finish": "brązowy orzech",
+  "url": "https://www.ikea.com/pl/pl/p/billy-kombinacja-regalowa-z-nadstawkami-brazowy-orzech-s29483535/",
+  "itemType": "SPR"
+ },
+ "billy-120-oak": {
+  "art": "89483392",
+  "name": "BILLY",
+  "type": "Kombinacja regałowa z nadstawkami",
+  "measure": "120x28x237 cm",
+  "price": 972.0,
+  "finish": "imit. dębu",
+  "url": "https://www.ikea.com/pl/pl/p/billy-kombinacja-regalowa-z-nadstawkami-imit-debu-s89483392/",
+  "itemType": "SPR"
+ },
+ "billy-160-white": {
+  "art": "79017837",
+  "name": "BILLY",
+  "type": "Regał",
+  "measure": "160x28x202 cm",
+  "price": 558.0,
+  "finish": "biały",
+  "url": "https://www.ikea.com/pl/pl/p/billy-regal-bialy-s79017837/",
+  "itemType": "SPR"
+ },
+ "ivar-89": {
+  "art": "29590578",
+  "name": "IVAR",
+  "type": "Regał",
+  "measure": "89x30x226 cm",
+  "price": 630.0,
+  "finish": "z 2 pojemnikami/sosna",
+  "url": "https://www.ikea.com/pl/pl/p/ivar-regal-z-2-pojemnikami-sosna-s29590578/",
+  "itemType": "SPR"
+ },
+ "strandmon-leather": {
+  "art": "00494638",
+  "name": "STRANDMON",
+  "type": "Fotel uszak",
+  "measure": "",
+  "price": 1499.0,
+  "finish": "Grann/Bomstad ciemnobrązowy",
+  "url": "https://www.ikea.com/pl/pl/p/strandmon-fotel-uszak-grann-bomstad-ciemnobrazowy-00494638/",
+  "itemType": "ART"
+ },
+ "strandmon-grey": {
+  "art": "20343224",
+  "name": "STRANDMON",
+  "type": "Fotel uszak",
+  "measure": "",
+  "price": 799.0,
+  "finish": "Nordvalla ciemnoszary",
+  "url": "https://www.ikea.com/pl/pl/p/strandmon-fotel-uszak-nordvalla-ciemnoszary-20343224/",
+  "itemType": "ART"
+ },
+ "poang": {
+  "art": "59514385",
+  "name": "POÄNG",
+  "type": "Fotel",
+  "measure": "",
+  "price": 399.0,
+  "finish": "okl brzoz/Gunnared beżowy",
+  "url": "https://www.ikea.com/pl/pl/p/poaeng-fotel-okl-brzoz-gunnared-bezowy-s59514385/",
+  "itemType": "SPR"
+ },
+ "oskarshamn": {
+  "art": "20523611",
+  "name": "OSKARSHAMN",
+  "type": "Fotel uszak",
+  "measure": "",
+  "price": 999.0,
+  "finish": "Tibbleby beżowy/szary",
+  "url": "https://www.ikea.com/pl/pl/p/oskarshamn-fotel-uszak-tibbleby-bezowy-szary-20523611/",
+  "itemType": "ART"
+ },
+ "lillesater": {
+  "art": "00618686",
+  "name": "LILLESÄTER",
+  "type": "Fotel obrotowy",
+  "measure": "",
+  "price": 899.0,
+  "finish": "Axvall kremowy",
+  "url": "https://www.ikea.com/pl/pl/p/lillesaeter-fotel-obrotowy-axvall-kremowy-00618686/",
+  "itemType": "ART"
+ },
+ "gladom": {
+  "art": "50411990",
+  "name": "GLADOM",
+  "type": "Stolik z tacą",
+  "measure": "45x53 cm",
+  "price": 49.99,
+  "finish": "czarny",
+  "url": "https://www.ikea.com/pl/pl/p/gladom-stolik-z-taca-czarny-50411990/",
+  "itemType": "ART"
+ },
+ "arstid-floor": {
+  "art": "00321317",
+  "name": "ÅRSTID",
+  "type": "Lampa podłogowa",
+  "measure": "",
+  "price": 179.0,
+  "finish": "mosiądz/biały",
+  "url": "https://www.ikea.com/pl/pl/p/arstid-lampa-podlogowa-mosiadz-bialy-00321317/",
+  "itemType": "ART"
+ },
+ "jarnvag": {
+  "art": "40624242",
+  "name": "JÄRNVÄG",
+  "type": "Dywan z krótkim włosiem",
+  "measure": "133x195 cm",
+  "price": 299.0,
+  "finish": "ozdobny wzór beżowy/ciemny beż",
+  "url": "https://www.ikea.com/pl/pl/p/jaernvaeg-dywan-z-krotkim-wlosiem-ozdobny-wzor-bezowy-ciemny-bez-40624242/",
+  "itemType": "ART"
+ },
+ "lohals": {
+  "art": "30511288",
+  "name": "LOHALS",
+  "type": "Dywan tkany na płasko",
+  "measure": "133x195 cm",
+  "price": 199.0,
+  "finish": "naturalny",
+  "url": "https://www.ikea.com/pl/pl/p/lohals-dywan-tkany-na-plasko-naturalny-30511288/",
+  "itemType": "ART"
+ },
+ "tidtabell": {
+  "art": "10561849",
+  "name": "TIDTABELL",
+  "type": "Dywan tkany na płasko",
+  "measure": "133x195 cm",
+  "price": 299.0,
+  "finish": "beżowy",
+  "url": "https://www.ikea.com/pl/pl/p/tidtabell-dywan-tkany-na-plasko-bezowy-10561849/",
+  "itemType": "ART"
+ },
+ "stoense": {
+  "art": "10425526",
+  "name": "STOENSE",
+  "type": "Dywan z krótkim włosiem",
+  "measure": "133x195 cm",
+  "price": 199.0,
+  "finish": "kremowy",
+  "url": "https://www.ikea.com/pl/pl/p/stoense-dywan-z-krotkim-wlosiem-kremowy-10425526/",
+  "itemType": "ART"
+ },
+ "fejka-ficus": {
+  "art": "30615276",
+  "name": "FEJKA",
+  "type": "Sztuczna roślina doniczkowa",
+  "measure": "21 cm",
+  "price": 299.0,
+  "finish": "do wewnątrz/na zewnątrz Figa płacząca",
+  "url": "https://www.ikea.com/pl/pl/p/fejka-sztuczna-roslina-doniczkowa-do-wewnatrz-na-zewnatrz-figa-placzaca-30615276/",
+  "itemType": "ART"
+ },
+ "dypsis": {
+  "art": "46804005",
+  "name": "DYPSIS LUTESCENS",
+  "type": "Roślina doniczkowa",
+  "measure": "24 cm",
+  "price": 129.0,
+  "finish": "Palma Areka",
+  "url": "https://www.ikea.com/pl/pl/p/dypsis-lutescens-roslina-doniczkowa-palma-areka-46804005/",
+  "itemType": "ART"
+ },
+ "klynnon": {
+  "art": "20516408",
+  "name": "KLYNNON",
+  "type": "Osłonka doniczki",
+  "measure": "24 cm",
+  "price": 39.99,
+  "finish": "wykonano ręcznie bambus",
+  "url": "https://www.ikea.com/pl/pl/p/klynnon-oslonka-doniczki-wykonano-recznie-bambus-20516408/",
+  "itemType": "ART"
+ },
+ "strelitzia": {
+  "art": "10426719",
+  "name": "STRELITZIA",
+  "type": "Roślina doniczkowa",
+  "measure": "19 cm",
+  "price": 79.99,
+  "finish": "Rajski ptak",
+  "url": "https://www.ikea.com/pl/pl/p/strelitzia-roslina-doniczkowa-rajski-ptak-10426719/",
+  "itemType": "ART"
+ },
+ "hasselbukett": {
+  "art": "40621823",
+  "name": "HASSELBUKETT",
+  "type": "Osłonka doniczki",
+  "measure": "19 cm",
+  "price": 59.99,
+  "finish": "do wewnątrz/na zewnątrz/beżowy",
+  "url": "https://www.ikea.com/pl/pl/p/hasselbukett-oslonka-doniczki-do-wewnatrz-na-zewnatrz-bezowy-40621823/",
+  "itemType": "ART"
+ },
+ "fejka-bamboo": {
+  "art": "40610607",
+  "name": "FEJKA",
+  "type": "Sztuczna roślina doniczkowa",
+  "measure": "21 cm",
+  "price": 199.0,
+  "finish": "do wewnątrz/na zewnątrz/bambus",
+  "url": "https://www.ikea.com/pl/pl/p/fejka-sztuczna-roslina-doniczkowa-do-wewnatrz-na-zewnatrz-bambus-40610607/",
+  "itemType": "ART"
+ },
+ "knoppang-botanic": {
+  "art": "50578895",
+  "name": "KNOPPÄNG",
+  "type": "Rama z plakatem",
+  "measure": "40x50 cm",
+  "price": 79.99,
+  "finish": "karty botaniczne owoców vintage",
+  "url": "https://www.ikea.com/pl/pl/p/knoppaeng-rama-z-plakatem-karty-botaniczne-owocow-vintage-50578895/",
+  "itemType": "ART"
+ },
+ "blodflader-seine": {
+  "art": "20601915",
+  "name": "BLODFLÄDER",
+  "type": "Obraz",
+  "measure": "118x78 cm",
+  "price": 199.0,
+  "finish": "Sekwana w Giverny",
+  "url": "https://www.ikea.com/pl/pl/p/blodflaeder-obraz-sekwana-w-giverny-20601915/",
+  "itemType": "ART"
+ },
+ "pjatteryd-lilies": {
+  "art": "00578906",
+  "name": "PJÄTTERYD",
+  "type": "Obraz",
+  "measure": "70x50 cm",
+  "price": 99.99,
+  "finish": "Lilie wodne, 1916 19",
+  "url": "https://www.ikea.com/pl/pl/p/pjaetteryd-obraz-lilie-wodne-1916-19-00578906/",
+  "itemType": "ART"
+ },
+ "pjatteryd-pearl": {
+  "art": "20578910",
+  "name": "PJÄTTERYD",
+  "type": "Obraz",
+  "measure": "30x40 cm",
+  "price": 39.99,
+  "finish": "dziewczyna z perłą, 2",
+  "url": "https://www.ikea.com/pl/pl/p/pjaetteryd-obraz-dziewczyna-z-perla-2-20578910/",
+  "itemType": "ART"
+ },
+ "valtning": {
+  "art": "50589002",
+  "name": "VÄLTNING",
+  "type": "Pojemnik",
+  "measure": "25x35x15 cm",
+  "price": 49.99,
+  "finish": "naturalny",
+  "url": "https://www.ikea.com/pl/pl/p/vaeltning-pojemnik-naturalny-50589002/",
+  "itemType": "ART"
+ },
+ "trummis": {
+  "art": "20500817",
+  "name": "TRUMMIS",
+  "type": "Kosz",
+  "measure": "18x25x14 cm",
+  "price": 39.99,
+  "finish": "wykonano ręcznie rattan",
+  "url": "https://www.ikea.com/pl/pl/p/trummis-kosz-wykonano-recznie-rattan-20500817/",
+  "itemType": "ART"
+ },
+ "bekna": {
+  "art": "10513392",
+  "name": "BEKNA",
+  "type": "Kosz",
+  "measure": "25x35x20 cm",
+  "price": 69.99,
+  "finish": "technorattan",
+  "url": "https://www.ikea.com/pl/pl/p/bekna-kosz-technorattan-10513392/",
+  "itemType": "ART"
+ },
+ "micke-142": {
+  "art": "90214308",
+  "name": "MICKE",
+  "type": "Biurko",
+  "measure": "142x50 cm",
+  "price": 499.0,
+  "finish": "biały",
+  "url": "https://www.ikea.com/pl/pl/p/micke-biurko-bialy-90214308/",
+  "itemType": "ART"
+ },
+ "knagglig": {
+  "art": "10292357",
+  "name": "KNAGGLIG",
+  "type": "Pudełko",
+  "measure": "23x31x15 cm",
+  "price": 29.99,
+  "finish": "sosna",
+  "url": "https://www.ikea.com/pl/pl/p/knagglig-pudelko-sosna-10292357/",
+  "itemType": "ART"
+ }
+}

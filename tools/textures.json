@@ -225,6 +225,10 @@
     {"id": "g_tile_terrazzo_60", "pattern": "tiles", "base": "Terrazzo013", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "grade": false, "grout": "#d4cfc7", "rough": 0.35},
     {"id": "g_tile_marble_60", "pattern": "tiles", "base": "Marble019", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "grade": false, "grout": "#dcdad6", "rough": 0.2},
     {"id": "g_tile_limestone_60", "pattern": "tiles", "base": "Concrete048", "tw": 0.6, "th": 0.6, "nx": 4, "ny": 4, "color": "#ddd5c8", "grout": "#cdc5b8", "contrast": 0.45, "rough": 0.6},
-    {"id": "g_tile_halcon_torcello_60", "pattern": "photo", "name": "Halcon Doge Torcello mat 60x60", "faces": ["source/refs/tiles/halcon-doge-torcello-60x60.png"], "size_m": [0.6, 0.6], "n": [3, 3], "finish": "mat", "rough": 0.7, "grout": "#c8c7c3", "gain": 0.85}
+    {"id": "g_tile_halcon_torcello_60", "pattern": "photo", "name": "Halcon Doge Torcello mat 60x60", "faces": ["source/refs/tiles/halcon-doge-torcello-60x60.png"], "size_m": [0.6, 0.6], "n": [3, 3], "finish": "mat", "rough": 0.7, "grout": "#c8c7c3", "gain": 0.85},
+    {"id": "festfloor_go_taupe_beige", "pattern": "solid", "base": "Concrete034", "color": "#dcd9d5", "contrast": 0.4, "rough": 0.6, "ref": "source/refs/tiles/festfloor/SOURCE.md"},
+    {"id": "festfloor_go_warm_beige", "pattern": "solid", "base": "Concrete034", "color": "#dad1c8", "contrast": 0.45, "rough": 0.6, "ref": "source/refs/tiles/festfloor/SOURCE.md"},
+    {"id": "festfloor_go_silk_grey", "pattern": "solid", "base": "Concrete014", "color": "#d1cdc1", "contrast": 0.5, "rough": 0.6, "ref": "source/refs/tiles/festfloor/SOURCE.md"},
+    {"id": "festfloor_life_warm_beige", "pattern": "solid", "base": "Concrete034", "color": "#f6f3ec", "contrast": 0.35, "rough": 0.55, "ref": "source/refs/tiles/festfloor/SOURCE.md"}
   ]
 }

@@ -2,6 +2,12 @@
 // three r169: свет в физических единицах (точечный и прожектор — кандела, RectAreaLight — нит,
 // Hemisphere — люкс). Паспорта ламп ниже в реальных люменах; NIGHT_SCALE переводит их в масштаб сцены.
 // Оси как в model.js: X вдоль оконной стены, Z вглубь квартиры, Y вверх, метры.
+//
+//   const lamps = buildLamps(plan, kit, state, M, island)  — { group, fixtures, lights, above, update(state, mode), dispose() }
+//
+// Включение, яркость и цвет не меняют состав источников: выключенный светит с интенсивностью 0, а не прячется
+// (иначе three пересобирает шейдеры всех материалов — секунды заморозки). Новый набор светильников меняет
+// состав; его шейдеры main.js собирает в фоне (lighting.prepare) и только потом ставит в сцену.
 import * as THREE from 'three';
 
 // ---------- варианты (id идут в код варианта по номеру: новые только в конец) ----------
@@ -60,8 +66,11 @@ const WHITE_BALANCE_K = 4800;
 const TEMP_K = { k2700: 2700, k3000: 3000, k4000: 4000 };
 // Переотражения: формула интегрирующей сферы E = ρΦ / (A(1−ρ)), ρ — средний коэффициент отражения.
 const RHO = 0.45;
-// Тени: только самые заметные источники. Точечный свет с тенью — 6 проходов, поэтому не больше одного.
-const SHADOW_BUDGET = 6, POINT_SHADOW_BUDGET = 1, SHADOW_MAP = 1024;
+// Тени: только самые заметные источники. Бюджет — по текстурным блокам шейдера (WebGL2 гарантирует 16):
+// 5 карт материала (GLB мебели: цвет, нормали, шероховатость, металл, AO) + окружение + 2 текстуры зон
+// (lighting.js) + 2 таблицы RectAreaLight + тень солнца = 11, на светильники остаётся 5. Больше — шейдер
+// тяжёлых материалов не собирается. Точечный свет с тенью — 6 проходов и блок, поэтому без теней.
+const SHADOW_BUDGET = 5, POINT_SHADOW_BUDGET = 0, SHADOW_MAP = 1024;
 
 // Паспорта светильников (реальные изделия этого класса).
 const SPEC = {
@@ -135,6 +144,16 @@ function mats() {
 
 // ---------- сборка ----------
 
+// Геометрия деталей общая на все пересборки (одинаковые размеры — один буфер на GPU) и не освобождается:
+// смена светильников не грузит заново то, что уже было на видеокарте.
+const GEO = new Map();
+function geo(Kind, ...args) {
+  const k = Kind.name + JSON.stringify(args);
+  let g = GEO.get(k);
+  if (!g) { g = new Kind(...args); GEO.set(k, g); }
+  return g;
+}
+
 // Прямоугольники зон. Кухня — до острова плюс 40 см, гостиная — дальше; холл — две самые большие части.
 function zonesOf(plan, island) {
   const kl = plan.rooms.kitchen_living;
@@ -190,7 +209,7 @@ export function buildLamps(plan, kit, state, M, island) {
     return m;
   };
   const disc = (r, h, material, name, parent, y, opts) => {
-    const m = mesh(new THREE.CylinderGeometry(r, r, h, 40), material, name, parent, opts);
+    const m = mesh(geo(THREE.CylinderGeometry, r, r, h, 40), material, name, parent, opts);
     m.position.y = y; return m;
   };
   const fixture = (name, x, z) => { const f = new THREE.Group(); f.name = name; f.position.set(x, 0, z); fixtures.add(f); return f; };
@@ -249,7 +268,7 @@ export function buildLamps(plan, kit, state, M, island) {
   // Встроенная линия: светит вниз, вдоль axis ('x' или 'z'), центр c, длина len.
   function line(name, c, axis, len) {
     const f = fixture(name, c.x, c.z), w = SPEC.line.w, alongX = axis === 'x';
-    const box = (a, b, h) => new THREE.BoxGeometry(alongX ? a : b, h, alongX ? b : a);
+    const box = (a, b, h) => geo(THREE.BoxGeometry, alongX ? a : b, h, alongX ? b : a);
     mesh(box(len + 0.02, w + 0.02, 0.003), mat.housing, `${name}_frame`, f, { ceil: true }).position.y = H - 0.0015;
     mesh(box(len, w, 0.002), mat.diffuser, `${name}_diffuser`, f, { ceil: true }).position.y = H - 0.004;
     rect(SPEC.line.lmPerM * len, len, w, V(c.x, H - 0.006, c.z), DOWN, alongX ? AX : AZ, name);
@@ -258,18 +277,18 @@ export function buildLamps(plan, kit, state, M, island) {
   function track(name, a, b, aims, pri) {
     const f = fixture(name, 0, 0), alongX = Math.abs(b.x - a.x) > Math.abs(b.z - a.z);
     const len = Math.hypot(b.x - a.x, b.z - a.z), rail = 0.035;
-    const r = mesh(new THREE.BoxGeometry(alongX ? len : rail, rail, alongX ? rail : len), mat.housing, `${name}_rail`, f, { ceil: true });
+    const r = mesh(geo(THREE.BoxGeometry, alongX ? len : rail, rail, alongX ? rail : len), mat.housing, `${name}_rail`, f, { ceil: true });
     r.position.set((a.x + b.x) / 2, H - rail / 2, (a.z + b.z) / 2);
     aims.forEach((aim, i) => {
       const t = aims.length === 1 ? 0.5 : (i + 0.5) / aims.length;
       const pivot = V(a.x + (b.x - a.x) * t, H - rail - 0.05, a.z + (b.z - a.z) * t);
       const dir = aim.clone().sub(pivot).normalize();
       const q = new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir);
-      const stem = mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.05, 10), mat.housing, `${name}_stem${i + 1}`, f, { ceil: true });
+      const stem = mesh(geo(THREE.CylinderGeometry, 0.006, 0.006, 0.05, 10), mat.housing, `${name}_stem${i + 1}`, f, { ceil: true });
       stem.position.set(pivot.x, pivot.y + 0.025, pivot.z);
-      const head = mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.12, 28), mat.housing, `${name}_head${i + 1}`, f, { ceil: true });
+      const head = mesh(geo(THREE.CylinderGeometry, 0.032, 0.032, 0.12, 28), mat.housing, `${name}_head${i + 1}`, f, { ceil: true });
       head.quaternion.copy(q); head.position.copy(pivot).addScaledVector(dir, 0.03);
-      const lens = mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.002, 24), mat.diffuser, `${name}_lens${i + 1}`, f, { ceil: true });
+      const lens = mesh(geo(THREE.CylinderGeometry, 0.026, 0.026, 0.002, 24), mat.diffuser, `${name}_lens${i + 1}`, f, { ceil: true });
       lens.quaternion.copy(q); lens.position.copy(pivot).addScaledVector(dir, 0.09);
       spot(SPEC.track, pivot.clone().addScaledVector(dir, 0.095), aim, pri(i), `${name}_${i + 1}`);
     });
@@ -361,11 +380,11 @@ export function buildLamps(plan, kit, state, M, island) {
   // --- подвесы над островом
   const rose = (f, name) => disc(0.05, 0.02, shade, `${name}_rose`, f, H - 0.01, { ceil: true });
   const wire = (f, name, y0, x = 0, z = 0) => {
-    const c = mesh(new THREE.CylinderGeometry(0.003, 0.003, H - y0, 6), cord, `${name}_cord`, f);
+    const c = mesh(geo(THREE.CylinderGeometry, 0.003, 0.003, H - y0, 6), cord, `${name}_cord`, f);
     c.position.set(x, (H + y0) / 2, z);
   };
   const lathe = (pts, material, name, f, y, cast) => {
-    const m = mesh(new THREE.LatheGeometry(pts, 48), material, name, f, { cast });
+    const m = mesh(geo(THREE.LatheGeometry, pts, 48), material, name, f, { cast });
     m.position.y = y; return m;
   };
   const kind = state.pendants;
@@ -381,7 +400,7 @@ export function buildLamps(plan, kit, state, M, island) {
       }
       lathe(outer, shade, `${name}_shade`, f, bottom, true);
       lathe(inner, mat.reflector, `${name}_reflector`, f, bottom, false);
-      mesh(new THREE.SphereGeometry(0.045, 24, 16), mat.bulb, `${name}_bulb`, f).position.y = bottom + 0.04;
+      mesh(geo(THREE.SphereGeometry, 0.045, 24, 16), mat.bulb, `${name}_bulb`, f).position.y = bottom + 0.04;
       wire(f, name, bottom + 0.16); rose(f, name);
       spot(SPEC.dome, V(icx, bottom + 0.03, icz + dz), V(icx, 0, icz + dz), 10, name);
     });
@@ -390,7 +409,7 @@ export function buildLamps(plan, kit, state, M, island) {
       const dz = k * Math.min(0.6, iL / 3), name = `pendant_${kind}_${i + 1}`, f = fixture(name, icx, icz + dz);
       if (kind === 'globe') {
         const bottom = 1.62, r = 0.13;
-        const g = mesh(new THREE.SphereGeometry(r, 48, 32), mat.opal, `${name}_globe`, f); g.position.y = bottom + r;
+        const g = mesh(geo(THREE.SphereGeometry, r, 48, 32), mat.opal, `${name}_globe`, f); g.position.y = bottom + r;
         disc(0.03, 0.04, shade, `${name}_cap`, f, bottom + 2 * r + 0.01);
         wire(f, name, bottom + 2 * r + 0.03); rose(f, name);
         point(SPEC.globe.lm * SPEC.globe.eff, V(icx, bottom + r, icz + dz), k === 0 ? 6 : 0, name);
@@ -405,8 +424,8 @@ export function buildLamps(plan, kit, state, M, island) {
   } else if (kind === 'linear') {
     const name = 'pendant_linear', f = fixture(name, icx, icz), bottom = 1.65;
     const len = Math.min(1.2, iL - 0.4), w = SPEC.bar.w;
-    const body = mesh(new THREE.BoxGeometry(0.05, 0.04, len), shade, `${name}_body`, f, { cast: true }); body.position.y = bottom + 0.02;
-    const dif = mesh(new THREE.BoxGeometry(w, 0.003, len - 0.02), mat.diffuser, `${name}_diffuser`, f); dif.position.y = bottom - 0.0015;
+    const body = mesh(geo(THREE.BoxGeometry, 0.05, 0.04, len), shade, `${name}_body`, f, { cast: true }); body.position.y = bottom + 0.02;
+    const dif = mesh(geo(THREE.BoxGeometry, w, 0.003, len - 0.02), mat.diffuser, `${name}_diffuser`, f); dif.position.y = bottom - 0.0015;
     for (const s of [-1, 1]) { wire(f, `${name}_${s > 0 ? 'b' : 'a'}`, bottom + 0.04, 0, s * (len / 2 - 0.1)); }
     for (const s of [-1, 1]) { const rr = disc(0.025, 0.015, shade, `${name}_rose_${s > 0 ? 'b' : 'a'}`, f, H - 0.0075, { ceil: true }); rr.position.z = s * (len / 2 - 0.1); }
     rect(SPEC.bar.lmPerM * len, len, w, V(icx, bottom - 0.004, icz), DOWN, AZ, name);
@@ -419,7 +438,7 @@ export function buildLamps(plan, kit, state, M, island) {
       const len = b - a; if (len < 0.1) return;
       const c = along === 'z' ? { x: fixed, z: (a + b) / 2 } : { x: (a + b) / 2, z: fixed };
       const f = fixture(name, c.x, c.z);
-      const g = mesh(new THREE.BoxGeometry(along === 'z' ? 0.012 : len, 0.004, along === 'z' ? len : 0.012), mat.led, `${name}_led`, f);
+      const g = mesh(geo(THREE.BoxGeometry, along === 'z' ? 0.012 : len, 0.004, along === 'z' ? len : 0.012), mat.led, `${name}_led`, f);
       g.position.y = y;
       rect(SPEC.strip.lmPerM * len, len, SPEC.strip.w, V(c.x, y - 0.003, c.z), V(out.x * 0.6, -1, out.z * 0.6), along === 'z' ? AZ : AX, name);
     };
@@ -472,12 +491,12 @@ export function buildLamps(plan, kit, state, M, island) {
   const color = new THREE.Color();
   function update(s, mode = s.light) {
     const on = s.lampsOn === 'on' || (s.lampsOn !== 'off' && mode === 'evening');
-    lightsGroup.visible = on;   // выключенные не считаются в шейдере и не рисуют тени
     const dim = THREE.MathUtils.clamp(s.lampDim ?? LAMP_DEFAULTS.lampDim, DIM.min, DIM.max);
     const gain = on ? dim * (MODE_GAIN[mode] ?? 1) : 0;
     kelvinColor(TEMP_K[s.lampTemp] ?? 3000, color);
     for (const { light, base } of entries) {
       light.intensity = base * NIGHT_SCALE * gain;
+      if (light.castShadow) light.shadow.autoUpdate = light.intensity > 0;   // погасший не перерисовывает тень
       light.color.copy(color);
       if (light.isHemisphereLight) light.groundColor.copy(color).multiplyScalar(0.55);
     }
@@ -485,8 +504,8 @@ export function buildLamps(plan, kit, state, M, island) {
     const fin = FINISH[s.lampFinish] || FINISH.white;
     mat.housing.color.set(fin.color); mat.housing.roughness = fin.rough; mat.housing.metalness = fin.metal;
   }
+  // геометрия общая (GEO) — освобождаются только источники (карты теней)
   function dispose() {
-    fixtures.traverse(o => { if (o.geometry) o.geometry.dispose(); });
     for (const { light } of entries) light.dispose();
   }
   update(state);

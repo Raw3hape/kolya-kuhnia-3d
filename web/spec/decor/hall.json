@@ -1,0 +1,319 @@
+{
+  "zone": "hall",
+  "title": "Прихожая",
+  "room": "hall",
+  "_note": "Порядок слотов и опций = код варианта: новое только в конец. Позиции — центр следа в координатах квартиры, rot вокруг +Y (0 = перед в +Z). Входная дверь открывается внутрь, петли слева: левая стена от z 5.45 до двери свободна.",
+  "slots": [
+    {
+      "id": "shoes",
+      "label": "Обувница",
+      "default": "stall-oak",
+      "options": [
+        { "id": "none", "name": "Нет" },
+        {
+          "id": "stall-oak",
+          "name": "STÄLL szafka na buty, 4 przegrody",
+          "brand": "IKEA",
+          "article": "405.302.29",
+          "url": "https://www.ikea.com/pl/pl/p/staell-szafka-na-buty-4-przegrody-okl-deb-40530229/",
+          "price_pln": 499,
+          "finish": "okleina dębowa",
+          "size": [0.96, 0.9, 0.17],
+          "thumb": "models/decor/hall/stall-oak/thumb.jpg",
+          "note": "глубина 17 см — проход почти не занимает",
+          "collide": true,
+          "parts": [
+            { "model": "models/decor/hall/stall-oak/model.glb", "pos": [-0.855, 0, 5.46], "rot": -90 }
+          ]
+        },
+        {
+          "id": "bissa-white",
+          "name": "BISSA szafka na buty, 3 przegrody",
+          "brand": "IKEA",
+          "article": "105.302.59",
+          "url": "https://www.ikea.com/pl/pl/p/bissa-szafka-na-buty-3-przegrody-bialy-10530259/",
+          "price_pln": 199,
+          "finish": "biały",
+          "size": [0.49, 1.35, 0.28],
+          "thumb": "models/decor/hall/bissa-white/thumb.jpg",
+          "collide": true,
+          "parts": [
+            { "model": "models/decor/hall/bissa-white/model.glb", "pos": [-0.911, 0, 5.46], "rot": -90 }
+          ]
+        },
+        {
+          "id": "gullaberg-grey",
+          "name": "GULLABERG szafka na buty, 2 przegrody",
+          "brand": "IKEA",
+          "article": "405.876.97",
+          "url": "https://www.ikea.com/pl/pl/p/gullaberg-szafka-na-buty-2-przegrody-szary-40587697/",
+          "price_pln": 599,
+          "finish": "szary",
+          "size": [0.88, 1.22, 0.3],
+          "thumb": "models/decor/hall/gullaberg-grey/thumb.jpg",
+          "collide": true,
+          "parts": [
+            { "model": "models/decor/hall/gullaberg-grey/model.glb", "pos": [-0.926, 0, 5.46], "rot": -90 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bench",
+      "label": "Скамья",
+      "default": "nipasen-black",
+      "options": [
+        { "id": "none", "name": "Нет" },
+        {
+          "id": "tjusig-bench-white",
+          "name": "TJUSIG ławka z półkami na buty",
+          "brand": "IKEA",
+          "article": "701.527.02",
+          "url": "https://www.ikea.com/pl/pl/p/tjusig-lawka-z-polkami-na-buty-bialy-70152702/",
+          "price_pln": 249,
+          "finish": "biały",
+          "size": [1.08, 0.5, 0.34],
+          "thumb": "models/decor/hall/tjusig-bench-white/thumb.jpg",
+          "collide": true,
+          "seat": { "h": 0.5, "depth": 0.03, "label": "Сесть на скамью" },
+          "parts": [
+            { "model": "models/decor/hall/tjusig-bench-white/model.glb", "pos": [-2.446, 0, 4.9], "rot": 90 }
+          ]
+        },
+        {
+          "id": "nipasen-black",
+          "name": "NIPÅSEN ławka z półkami na buty",
+          "brand": "IKEA",
+          "article": "205.861.42",
+          "url": "https://www.ikea.com/pl/pl/p/nipasen-lawka-z-polkami-na-buty-czarny-20586142/",
+          "price_pln": 149,
+          "finish": "czarny",
+          "size": [0.79, 0.52, 0.35],
+          "thumb": "models/decor/hall/nipasen-black/thumb.jpg",
+          "collide": true,
+          "seat": { "h": 0.52, "depth": 0.03, "label": "Сесть на скамью" },
+          "parts": [
+            { "model": "models/decor/hall/nipasen-black/model.glb", "pos": [-2.442, 0, 4.9], "rot": 90 }
+          ]
+        },
+        {
+          "id": "kallso-grey",
+          "name": "KALLSÖ ławka ze schowkiem",
+          "brand": "IKEA",
+          "article": "805.993.25",
+          "url": "https://www.ikea.com/pl/pl/p/kallsoe-lawka-ze-schowkiem-szary-80599325/",
+          "price_pln": 499,
+          "finish": "szary",
+          "size": [0.8, 0.555, 0.375],
+          "thumb": "models/decor/hall/kallso-grey/thumb.jpg",
+          "collide": true,
+          "seat": { "h": 0.555, "depth": 0.03, "label": "Сесть на скамью" },
+          "parts": [
+            { "model": "models/decor/hall/kallso-grey/model.glb", "pos": [-2.416, 0, 4.9], "rot": 90 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "coats",
+      "label": "Вешалка",
+      "default": "hovolm-oak",
+      "options": [
+        { "id": "none", "name": "Нет" },
+        {
+          "id": "hovolm-oak",
+          "name": "HÖVOLM wieszak z 6 gałkami",
+          "brand": "IKEA",
+          "article": "105.000.59",
+          "url": "https://www.ikea.com/pl/pl/p/hoevolm-wieszak-z-6-galkami-dab-10500059/",
+          "price_pln": 49.99,
+          "finish": "dąb",
+          "size": [0.57, 0.05, 0.05],
+          "thumb": "models/decor/hall/hovolm-oak/thumb.jpg",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/hovolm-oak/model.glb", "pos": [-2.596, 1.68, 4.9], "rot": 90 }
+          ]
+        },
+        {
+          "id": "tjusig-hanger-white",
+          "name": "TJUSIG wieszak, 2 szt.",
+          "brand": "IKEA",
+          "article": "602.917.08",
+          "url": "https://www.ikea.com/pl/pl/p/tjusig-wieszak-bialy-60291708/",
+          "price_pln": 119.98,
+          "finish": "biały",
+          "size": [0.19, 0.78, 0.07],
+          "thumb": "models/decor/hall/tjusig-hanger-white/thumb.jpg",
+          "note": "две вешалки по 59,99 zł",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/tjusig-hanger-white/model.glb", "pos": [-2.587, 1.12, 4.62], "rot": 90 },
+            { "model": "models/decor/hall/tjusig-hanger-white/model.glb", "pos": [-2.587, 1.12, 5.18], "rot": 90 }
+          ]
+        },
+        {
+          "id": "mackapar-white",
+          "name": "MACKAPÄR wieszak na czapki i kurtki",
+          "brand": "IKEA",
+          "article": "105.309.90",
+          "url": "https://www.ikea.com/pl/pl/p/mackapaer-wieszak-na-czapki-i-kurtki-bialy-10530990/",
+          "price_pln": 129,
+          "finish": "biały",
+          "size": [0.78, 0.37, 0.32],
+          "thumb": "models/decor/hall/mackapar-white/thumb.jpg",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/mackapar-white/model.glb", "pos": [-2.462, 1.45, 4.9], "rot": 90 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mirror",
+      "label": "Зеркало",
+      "default": "lindbyn-60x120",
+      "options": [
+        { "id": "none", "name": "Нет" },
+        {
+          "id": "nissedal-65x150",
+          "name": "NISSEDAL lustro 65x150 cm",
+          "brand": "IKEA",
+          "article": "703.203.19",
+          "url": "https://www.ikea.com/pl/pl/p/nissedal-lustro-czarny-70320319/",
+          "price_pln": 199,
+          "finish": "czarny",
+          "size": [0.65, 1.5, 0.05],
+          "thumb": "models/decor/hall/nissedal-65x150/thumb.jpg",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/nissedal-65x150/model.glb", "pos": [-0.95, 0.35, 3.77], "rot": 0 }
+          ]
+        },
+        {
+          "id": "lindbyn-60x120",
+          "name": "LINDBYN lustro 60x120 cm",
+          "brand": "IKEA",
+          "article": "304.586.10",
+          "url": "https://www.ikea.com/pl/pl/p/lindbyn-lustro-czarny-30458610/",
+          "price_pln": 249,
+          "finish": "czarny",
+          "size": [0.6, 1.2, 0.02],
+          "thumb": "models/decor/hall/lindbyn-60x120/thumb.jpg",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/lindbyn-60x120/model.glb", "pos": [-0.95, 0.65, 3.754], "rot": 0 }
+          ]
+        },
+        {
+          "id": "lindbyn-80",
+          "name": "LINDBYN lustro, 80 cm",
+          "brand": "IKEA",
+          "article": "504.586.14",
+          "url": "https://www.ikea.com/pl/pl/p/lindbyn-lustro-czarny-50458614/",
+          "price_pln": 249,
+          "finish": "czarny",
+          "size": [0.8, 0.8, 0.03],
+          "thumb": "models/decor/hall/lindbyn-80/thumb.jpg",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/lindbyn-80/model.glb", "pos": [-0.95, 1.05, 3.756], "rot": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "shelf",
+      "label": "Полка для ключей",
+      "default": "none",
+      "options": [
+        { "id": "none", "name": "Нет" },
+        {
+          "id": "klavrestrom-oak",
+          "name": "KLAVRESTRÖM półka ścienna 60x20 cm",
+          "brand": "IKEA",
+          "article": "306.016.89",
+          "url": "https://www.ikea.com/pl/pl/p/klavrestroem-polka-scienna-dab-30601689/",
+          "price_pln": 149,
+          "finish": "dąb",
+          "size": [0.6, 0.2, 0.17],
+          "thumb": "models/decor/hall/klavrestrom-oak/thumb.jpg",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/klavrestrom-oak/model.glb", "pos": [-0.855, 1.55, 5.46], "rot": -90 }
+          ]
+        },
+        {
+          "id": "mosslanda-55",
+          "name": "MOSSLANDA półka na zdjęcia, 55 cm",
+          "brand": "IKEA",
+          "article": "805.898.35",
+          "url": "https://www.ikea.com/pl/pl/p/mosslanda-polka-na-zdjecia-imit-debu-80589835/",
+          "price_pln": 19.99,
+          "finish": "imitacja dębu",
+          "size": [0.55, 0.07, 0.12],
+          "thumb": "models/decor/hall/mosslanda-55/thumb.jpg",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/mosslanda-55/model.glb", "pos": [-0.83, 1.55, 5.46], "rot": -90 }
+          ]
+        },
+        {
+          "id": "nereby-birch",
+          "name": "NEREBY półka ścienna 40x10 cm",
+          "brand": "IKEA",
+          "article": "904.659.24",
+          "url": "https://www.ikea.com/pl/pl/p/nereby-polka-scienna-brzoza-90465924/",
+          "price_pln": 29.99,
+          "finish": "brzoza",
+          "size": [0.4, 0.1, 0.12],
+          "thumb": "models/decor/hall/nereby-birch/thumb.jpg",
+          "collide": false,
+          "parts": [
+            { "model": "models/decor/hall/nereby-birch/model.glb", "pos": [-0.83, 1.55, 5.46], "rot": -90 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "plant",
+      "label": "Растение",
+      "default": "fejka-fig",
+      "options": [
+        { "id": "none", "name": "Нет" },
+        {
+          "id": "fejka-fig",
+          "name": "FEJKA sztuczna roślina doniczkowa, figa płacząca, 21 cm",
+          "brand": "IKEA",
+          "article": "306.152.76",
+          "url": "https://www.ikea.com/pl/pl/p/fejka-sztuczna-roslina-doniczkowa-do-wewnatrz-na-zewnatrz-figa-placzaca-30615276/",
+          "price_pln": 299,
+          "finish": "zielony",
+          "size": [0.73, 1.64, 0.74],
+          "thumb": "models/decor/hall/fejka-fig/thumb.jpg",
+          "note": "искусственная: в прихожей нет окна",
+          "collide": true,
+          "parts": [
+            { "model": "models/decor/hall/fejka-fig/model.glb", "pos": [-1.15, 0, 6.056], "rot": 0 }
+          ]
+        },
+        {
+          "id": "fejka-areca",
+          "name": "FEJKA sztuczna roślina doniczkowa, palma areka, 19 cm",
+          "brand": "IKEA",
+          "article": "006.008.94",
+          "url": "https://www.ikea.com/pl/pl/p/fejka-sztuczna-roslina-doniczkowa-do-wewnatrz-na-zewnatrz-palma-areka-00600894/",
+          "price_pln": 129,
+          "finish": "zielony",
+          "size": [0.81, 1.29, 0.87],
+          "thumb": "models/decor/hall/fejka-areca/thumb.jpg",
+          "note": "искусственная: в прихожей нет окна",
+          "collide": true,
+          "parts": [
+            { "model": "models/decor/hall/fejka-areca/model.glb", "pos": [-1.19, 0, 6.0], "rot": 0 }
+          ]
+        }
+      ]
+    }
+  ]
+}
