@@ -1,6 +1,7 @@
 // Сесть от первого лица: на унитаз, на диван (смотреть ТВ), на стулья, скамьи и кресла из обстановки.
 // Места берутся из данных, ничего не вписано руками: диван — furn.items.sofa (seatH и backH из spec/sofas.json,
-// спинка находится лучом по самой модели), унитаз — wcSeat(spec/bath.json), обстановка — decor.seats.
+// спинка находится лучом по самой модели), унитаз — wcSeat(spec/bath.json), обстановка — decor.seats
+// (их пересчитывает placeDecor, когда вещь сдвинули в редакторе или она едет за своей опорой).
 // Места пересчитываются, когда меняется сцена (диван сдвинули или выбрали другой, другая обстановка), не каждый кадр.
 //
 // createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender,
@@ -99,9 +100,9 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     const list = Array.isArray(decor?.seats) ? decor.seats : [];
     const holders = decor?.group?.children ?? [];
     return list.filter(s => [s.x, s.y, s.z, s.yaw].every(Number.isFinite)).map(s => {
-      // объект для прицела — ближайшая вещь обстановки к месту (по полу, не дальше метра)
-      let root = null, best = 1;
-      for (const h of holders) { const dd = Math.hypot(h.position.x - s.x, h.position.z - s.z); if (dd < best) { best = dd; root = h; } }
+      // объект для прицела — сама часть (decor.js отдаёт root), иначе ближайшая вещь к месту (по полу, не дальше метра)
+      let root = s.root?.isObject3D ? s.root : null, best = 1;
+      if (!root) for (const h of holders) { const dd = Math.hypot(h.position.x - s.x, h.position.z - s.z); if (dd < best) { best = dd; root = h; } }
       return { id: String(s.id), label: s.label || 'Сесть', root, hip: V(s.x, s.y, s.z), face: s.yaw, look: null };
     });
   }

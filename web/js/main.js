@@ -10,14 +10,14 @@ import { applyItem, makeMat, setAnisotropy } from './materials.js';
 import * as model from './model.js';
 import { initUI, addSection } from './ui.js';
 import { buildFurniture, placeFurniture, furnitureKey, createFurnitureEditor, registerFurnitureUI,
-  furnitureResetPatch, FURN_SPEC, FURN_DEFAULTS, FURN_SCHEMA, FURN_SCHEMA_2, preloadSofas, normalizeFurniture } from './furniture.js';
+  furnitureResetPatch, FURN_SPEC, FURN_DEFAULTS, FURN_SCHEMA, FURN_SCHEMA_2, preloadSofas, normalizeFurniture, furnitureAnchors } from './furniture.js';
 import { initWalk } from './walk.js';
 import { initDoors } from './doors.js';
 import { createSeats, registerSeatsUI } from './seats.js';
 import { createTV } from './tv.js';
 import { createViewmodel, registerViewmodelUI } from './viewmodel.js';
 import { createHunt, registerHuntUI } from './hunt.js';
-import { buildDecor, decorKey, registerDecorUI, DECOR_SCHEMA, DECOR_DEFAULTS } from './decor.js';
+import { buildDecor, placeDecor, disposeDecor, normalizeMoves, decorKey, registerDecorUI, DECOR_SCHEMA, DECOR_DEFAULTS } from './decor.js';
 import { createNav } from './nav.js';
 import { buildLamps, LAMP_DEFAULTS, LAMP_SCHEMA, LAMP_SCHEMA_ROOMS, LAMP_ROOM_DEFAULTS, DIM, NIGHT_SCALE } from './lamps.js';
 import { createLighting, lightTimePatch } from './lighting.js';
@@ -89,7 +89,7 @@ function encode(s) {
     if (t === 'doy') return doyOf(s[k]);
     if (t === 'q15') return Math.round(s[k] * 4);
     return Math.max(0, t.indexOf(s[k]));
-  }).join('-');
+  }).join('-') + (s.moves ? '~' + s.moves : '');
 }
 function decodeWith(schema, parts) {
   const s = {};
@@ -106,11 +106,14 @@ function decodeWith(schema, parts) {
   return s;
 }
 function decode(code) {
-  const parts = String(code || '').trim().replace(/^#/, '').split('-');
+  const raw = String(code || '').trim().replace(/^#/, ''), cut = raw.indexOf('~');
+  const moves = cut < 0 ? '' : normalizeMoves(raw.slice(cut + 1));   // сдвиги вещей (decor.js), хвост после «~»
+  const parts = (cut < 0 ? raw : raw.slice(0, cut)).split('-');
   const v3 = parts[0] === 'v3' && parts.length > SCHEMA_V2.length && parts.length <= SCHEMA_V3.length + 1;
   if (v3 || (parts[0] === 'v2' && parts.length === SCHEMA_V2.length + 1)) {
     const s = decodeWith(v3 ? SCHEMA_V3 : SCHEMA_V2, parts);
     if (s.split != null) s.split = clampSplit(s.split);
+    s.moves = moves;
     return s;
   }
   if (parts[0] === 'v1' && parts.length === SCHEMA_V1.length + 1) {
@@ -118,7 +121,7 @@ function decode(code) {
     // в v1 был один пол и не было зон: всё новое — как в эскизе
     return {
       floorRoom2: 'same', floorRoom3: 'same', wallAccent: 'same', wallsRoom2: 'same', wallsRoom3: 'same',
-      wallsBath: DEFAULT.wallsBath, doors: DEFAULT.doors, split: DEFAULT.split, threshold: 'none', fridge: 'under',
+      wallsBath: DEFAULT.wallsBath, doors: DEFAULT.doors, split: DEFAULT.split, threshold: 'none', fridge: 'under', moves: '',
       ...(floor ? { floorA: floor, floorB: floor } : {}), ...s,
     };
   }
@@ -254,8 +257,8 @@ function rebuildFurniture() {
 // Обстановка остальных комнат (спальня, кабинет, стеллажи, прихожая) — decor.js, каталог spec/decor/
 let decor = null;
 function rebuildDecor() {
-  if (decor?.group) { scene.remove(decor.group); decor.group.traverse(o => o.geometry?.dispose()); }
-  decor = buildDecor(state, plan, M);
+  if (decor?.group) { scene.remove(decor.group); disposeDecor(decor); }
+  decor = buildDecor(state, plan, M, furnitureAnchors(furn, state, plan, kit));
   if (decor?.group) scene.add(decor.group);
   decor?.ready?.then(() => { lighting.invalidate(); requestRender(); });
 }
@@ -356,6 +359,7 @@ export async function setState(patch, { push = true } = {}) {
   else placeFurniture(furn, state, plan, kit, FURN_SPEC);
   const decKey = decorKey(state);
   if (decKey !== lastDecorKey) { lastDecorKey = decKey; rebuildDecor(); }
+  else placeDecor(decor, state, furnitureAnchors(furn, state, plan, kit));
   const floorsKey = [state.split, state.threshold].join('|');
   if (floorsKey !== lastFloorsKey) { lastFloorsKey = floorsKey; rebuildFloors(); }
   applyLight();
@@ -505,7 +509,7 @@ export async function exportGLB() {
   const parts = [shell.group, floors, doorsGroup, kitchen.group, lamps?.fixtures, furn?.group, decor?.group, bath.group, scene.getObjectByName('fixtures')].filter(Boolean);
   const glb = await new GLTFExporter().parseAsync(parts, { binary: true, onlyVisible: true, maxTextureSize: 2048 });
   hidden.forEach(o => { o.visible = true; });
-  return saveBlob(new Blob([glb], { type: 'model/gltf-binary' }), `kitchen-${encode(state)}.glb`);
+  return saveBlob(new Blob([glb], { type: 'model/gltf-binary' }), `kitchen-${encode(state).split('~')[0]}.glb`);
 }
 
 // ---------- запуск ----------

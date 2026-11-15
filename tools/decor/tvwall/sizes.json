@@ -1,0 +1,220 @@
+{
+ "fig-rubber-duck": {
+  "kind": "props",
+  "W": 0.0636,
+  "H": 0.085,
+  "D": 0.0893,
+  "tris": 4288,
+  "source": "polyhaven:rubber_duck_toy",
+  "scale": 0.2977
+ },
+ "fig-wooden-elephant": {
+  "kind": "props",
+  "W": 0.1092,
+  "H": 0.0962,
+  "D": 0.0576,
+  "tris": 2752,
+  "source": "polyhaven:carved_wooden_elephant",
+  "scale": 1.0
+ },
+ "fig-concrete-cat": {
+  "kind": "props",
+  "W": 0.0703,
+  "H": 0.13,
+  "D": 0.1148,
+  "tris": 11950,
+  "source": "polyhaven:concrete_cat_statue",
+  "scale": 0.4593
+ },
+ "fig-garden-gnome": {
+  "kind": "props",
+  "W": 0.0603,
+  "H": 0.14,
+  "D": 0.049,
+  "tris": 28858,
+  "source": "polyhaven:garden_gnome",
+  "scale": 0.2337
+ },
+ "fig-porcelain-horse": {
+  "kind": "props",
+  "W": 0.1111,
+  "H": 0.15,
+  "D": 0.0735,
+  "tris": 22388,
+  "source": "polyhaven:horse_statue_01",
+  "scale": 0.6819
+ },
+ "camera-vintage": {
+  "kind": "props",
+  "W": 0.2139,
+  "H": 0.0778,
+  "D": 0.2628,
+  "tris": 26987,
+  "source": "polyhaven:Camera_01",
+  "scale": 1.0
+ },
+ "fig-bronze-whale": {
+  "kind": "props",
+  "W": 0.1528,
+  "H": 0.12,
+  "D": 0.1042,
+  "tris": 3816,
+  "source": "polyhaven:bronze_whale_statue",
+  "scale": 0.1118
+ },
+ "plant-haworthia-mini": {
+  "kind": "props",
+  "W": 0.0942,
+  "H": 0.15,
+  "D": 0.1036,
+  "tris": 8929,
+  "source": "polyhaven:potted_plant_04",
+  "scale": 0.5608
+ },
+ "clock-alarm-retro": {
+  "kind": "props",
+  "W": 0.0907,
+  "H": 0.12,
+  "D": 0.0429,
+  "tris": 8265,
+  "source": "polyhaven:alarm_clock_01",
+  "scale": 0.689
+ },
+ "shell-lambis": {
+  "kind": "props",
+  "W": 0.1395,
+  "H": 0.0465,
+  "D": 0.0745,
+  "tris": 12498,
+  "source": "polyhaven:lambis_shell",
+  "scale": 1.0
+ },
+ "bust-marble-mini": {
+  "kind": "props",
+  "W": 0.0792,
+  "H": 0.15,
+  "D": 0.0873,
+  "tris": 17456,
+  "source": "polyhaven:marble_bust_01",
+  "scale": 0.2913
+ },
+ "rodalm-30x40-vertumnus": {
+  "kind": "tvwall",
+  "W": 0.3179,
+  "H": 0.418,
+  "D": 0.0321,
+  "tris": 1380,
+  "source": "ikea:20548918",
+  "aperture": [
+   0.278,
+   0.378
+  ],
+  "window": [
+   0.21,
+   0.28
+  ]
+ },
+ "rodalm-40x50-poker": {
+  "kind": "tvwall",
+  "W": 0.5179,
+  "H": 0.4179,
+  "D": 0.0321,
+  "tris": 1182,
+  "source": "ikea:10548914",
+  "aperture": [
+   0.478,
+   0.378
+  ],
+  "window": [
+   0.4,
+   0.3
+  ]
+ },
+ "lomviken-21x30-hare": {
+  "kind": "tvwall",
+  "W": 0.224,
+  "H": 0.314,
+  "D": 0.018,
+  "tris": 5452,
+  "source": "ikea:20419389",
+  "aperture": [
+   0.204,
+   0.294
+  ],
+  "window": [
+   0.15,
+   0.2
+  ]
+ },
+ "lomviken-50x70-tiger": {
+  "kind": "tvwall",
+  "W": 0.714,
+  "H": 0.5138,
+  "D": 0.0181,
+  "tris": 3373,
+  "source": "ikea:70286773",
+  "aperture": [
+   0.694,
+   0.4945
+  ],
+  "window": [
+   0.585,
+   0.45
+  ]
+ },
+ "fig-moai": {
+  "kind": "props",
+  "W": 0.07,
+  "H": 0.15,
+  "D": 0.066,
+  "tris": 1348,
+  "source": "procedural"
+ },
+ "fig-tin-robot": {
+  "kind": "props",
+  "W": 0.0816,
+  "H": 0.12,
+  "D": 0.0374,
+  "tris": 3068,
+  "source": "procedural"
+ },
+ "fig-cheeky-cactus": {
+  "kind": "props",
+  "W": 0.07,
+  "H": 0.1355,
+  "D": 0.07,
+  "tris": 4768,
+  "source": "procedural"
+ },
+ "candle-pillar": {
+  "kind": "props",
+  "W": 0.096,
+  "H": 0.1035,
+  "D": 0.096,
+  "tris": 1356,
+  "source": "procedural"
+ },
+ "mosslanda-55-gallery": {
+  "kind": "tvwall",
+  "W": 0.5501,
+  "H": 0.3315,
+  "D": 0.1201,
+  "tris": 8188,
+  "source": "ikea:80589835+50566393+20419389",
+  "shelfTop": 0.0121,
+  "lipTop": 0.0301,
+  "wallY": 0.0601,
+  "frames": [
+   {
+    "art": "catfish",
+    "x": -0.16,
+    "W": 0.2281
+   },
+   {
+    "art": "hare",
+    "x": 0.04,
+    "W": 0.224
+   }
+  ]
+ }
+}

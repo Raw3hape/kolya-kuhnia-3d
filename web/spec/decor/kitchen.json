@@ -1,0 +1,1102 @@
+{
+ "zone": "kitchen",
+ "title": "Кухня",
+ "room": "kitchen_living",
+ "_note": "Генерирует tools/decor/kitchen/compose.py — править раскладки там. Ряд вдоль стены X = 0, остров X 1.78–2.38 (части острова с anchor island). Порядок слотов и опций = код варианта: новое только в конец.",
+ "slots": [
+  {
+   "id": "shelves",
+   "label": "Открытые полки",
+   "default": "tranhult",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "tranhult",
+     "name": "TRANHULT / SANDSHULT ×2, osika — тёплые деревянные полки",
+     "brand": "IKEA",
+     "article": "993.260.90",
+     "url": "https://www.ikea.com/pl/pl/p/tranhult-sandshult-polka-scienna-osika-s99326090/",
+     "price_pln": 553.84,
+     "finish": "osika",
+     "note": "TRANHULT / SANDSHULT Półka ścienna, 120x30 cm, osika ×2 — 180 zł · KORKEN Słoik z pokrywką, 0.5 l, szkło bezbarwne ×2 — 9.99 zł · KORKEN Słoik z pokrywką, 1 l, szkło bezbarwne — 12.99 zł · FÄRGKLAR Miska, 16 cm, Matowy zielony — 29.99 zł · GODMIDDAG Miska, 16 cm, biały ×2 — 7.99 zł · DAGGASTER Talerz, 26 cm, w kropki/jasnobeżowy — 12.99 zł · KRUSTISTEL Talerz, 25 cm, wzór/jasnobeżowy ×2 — 12.99 zł · SILVERSIDA Talerz, 26 cm, wzór/niebieski — 14.99 zł · GODMIDDAG Talerz, 26 cm, biały ×4 — 9.99 zł · DAGGASTER Kubek, 40 cl, w kropki/jasnobeżowy — 12.99 zł · FÄRGKLAR Kubek, 37 cl, Matowy zielony — 7.99 zł. Две полки 120 см над мойкой и холодильником, от шахты: верх 1.47 и 1.89 м. На полках — тарелки, миски, кружки и банки KORKEN с крупами (товары IKEA, в цене), потос и книги — условный реквизит (CC0). Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      1.2,
+      0.897,
+      0.356
+     ],
+     "thumb": "models/decor/kitchen/thumbs/shelves-tranhult.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/tranhult-sandshult-120/model.glb",
+       "pos": [
+        0.162,
+        1.222,
+        2.169
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/kitchen/tranhult-sandshult-120/model.glb",
+       "pos": [
+        0.15,
+        1.642,
+        2.169
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/jars-korken-pantry/model.glb",
+       "pos": [
+        0.113,
+        1.47,
+        1.8
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/bowls-stack-godmiddag/model.glb",
+       "pos": [
+        0.124,
+        1.47,
+        2.1
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plates-lean-silversida/model.glb",
+       "pos": [
+        0.0865,
+        1.47,
+        2.45
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plant-pothos-terracotta/model.glb",
+       "pos": [
+        0.225,
+        1.89,
+        1.72
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plates-stack-godmiddag/model.glb",
+       "pos": [
+        0.1605,
+        1.89,
+        2.0
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/mugs-daggaster-fargklar/model.glb",
+       "pos": [
+        0.083,
+        1.89,
+        2.29
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        0.091,
+        1.89,
+        2.6
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "bergshult",
+     "name": "BERGSHULT / SANDSHULT ×2, biały/osika — белые полки",
+     "brand": "IKEA",
+     "article": "593.260.25",
+     "url": "https://www.ikea.com/pl/pl/p/bergshult-sandshult-polka-scienna-bialy-osika-s59326025/",
+     "price_pln": 435.82,
+     "finish": "biały/osika",
+     "note": "BERGSHULT / SANDSHULT Półka ścienna, 120x30 cm, biały/osika ×2 — 120.99 zł · KORKEN Słoik z pokrywką, 0.5 l, szkło bezbarwne ×2 — 9.99 zł · KORKEN Słoik z pokrywką, 1 l, szkło bezbarwne — 12.99 zł · FÄRGKLAR Miska, 16 cm, Matowy zielony — 29.99 zł · GODMIDDAG Miska, 16 cm, biały ×2 — 7.99 zł · DAGGASTER Talerz, 26 cm, w kropki/jasnobeżowy — 12.99 zł · KRUSTISTEL Talerz, 25 cm, wzór/jasnobeżowy ×2 — 12.99 zł · SILVERSIDA Talerz, 26 cm, wzór/niebieski — 14.99 zł · GODMIDDAG Talerz, 26 cm, biały ×4 — 9.99 zł · DAGGASTER Kubek, 40 cl, w kropki/jasnobeżowy — 12.99 zł · FÄRGKLAR Kubek, 37 cl, Matowy zielony — 7.99 zł. Две полки 120 см над мойкой и холодильником, от шахты: верх 1.47 и 1.89 м. На полках — тарелки, миски, кружки и банки KORKEN с крупами (товары IKEA, в цене), потос и книги — условный реквизит (CC0). Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      1.2,
+      0.893,
+      0.356
+     ],
+     "thumb": "models/decor/kitchen/thumbs/shelves-bergshult.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/bergshult-sandshult-120/model.glb",
+       "pos": [
+        0.162,
+        1.226,
+        2.169
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/kitchen/bergshult-sandshult-120/model.glb",
+       "pos": [
+        0.15,
+        1.646,
+        2.169
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/jars-korken-pantry/model.glb",
+       "pos": [
+        0.113,
+        1.47,
+        1.8
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/bowls-stack-godmiddag/model.glb",
+       "pos": [
+        0.124,
+        1.47,
+        2.1
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plates-lean-silversida/model.glb",
+       "pos": [
+        0.0865,
+        1.47,
+        2.45
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plant-pothos-terracotta/model.glb",
+       "pos": [
+        0.225,
+        1.89,
+        1.72
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plates-stack-godmiddag/model.glb",
+       "pos": [
+        0.1605,
+        1.89,
+        2.0
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/mugs-daggaster-fargklar/model.glb",
+       "pos": [
+        0.083,
+        1.89,
+        2.29
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        0.091,
+        1.89,
+        2.6
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "lack",
+     "name": "LACK ×2, biały — парящие полки без кронштейнов",
+     "brand": "IKEA",
+     "article": "902.821.80",
+     "url": "https://www.ikea.com/pl/pl/p/lack-polka-scienna-bialy-90282180/",
+     "price_pln": 333.82,
+     "finish": "biały",
+     "note": "LACK Półka ścienna, 110x26 cm, biały ×2 — 69.99 zł · KORKEN Słoik z pokrywką, 0.5 l, szkło bezbarwne ×2 — 9.99 zł · KORKEN Słoik z pokrywką, 1 l, szkło bezbarwne — 12.99 zł · FÄRGKLAR Miska, 16 cm, Matowy zielony — 29.99 zł · GODMIDDAG Miska, 16 cm, biały ×2 — 7.99 zł · DAGGASTER Talerz, 26 cm, w kropki/jasnobeżowy — 12.99 zł · KRUSTISTEL Talerz, 25 cm, wzór/jasnobeżowy ×2 — 12.99 zł · SILVERSIDA Talerz, 26 cm, wzór/niebieski — 14.99 zł · GODMIDDAG Talerz, 26 cm, biały ×4 — 9.99 zł · DAGGASTER Kubek, 40 cl, w kropki/jasnobeżowy — 12.99 zł · FÄRGKLAR Kubek, 37 cl, Matowy zielony — 7.99 zł. Две полки 110 см без видимого крепежа, верх 1.47 и 1.89 м. На полках посуда и банки (в цене), потос и книги — условный реквизит (CC0). Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      1.103,
+      0.701,
+      0.319
+     ],
+     "thumb": "models/decor/kitchen/thumbs/shelves-lack.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/lack-110/model.glb",
+       "pos": [
+        0.1435,
+        1.418,
+        2.219
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/kitchen/lack-110/model.glb",
+       "pos": [
+        0.1315,
+        1.838,
+        2.219
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/jars-korken-pantry/model.glb",
+       "pos": [
+        0.113,
+        1.47,
+        1.89
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/bowls-stack-godmiddag/model.glb",
+       "pos": [
+        0.124,
+        1.47,
+        2.2
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plates-lean-silversida/model.glb",
+       "pos": [
+        0.0865,
+        1.47,
+        2.55
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plant-pothos-terracotta/model.glb",
+       "pos": [
+        0.188,
+        1.89,
+        1.8
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plates-stack-godmiddag/model.glb",
+       "pos": [
+        0.1305,
+        1.89,
+        2.07
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/mugs-daggaster-fargklar/model.glb",
+       "pos": [
+        0.083,
+        1.89,
+        2.36
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/books-row-s/model.glb",
+       "pos": [
+        0.091,
+        1.89,
+        2.64
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "kungsfors",
+     "name": "KUNGSFORS 60, stal nierdz/jesion — рейка с полками",
+     "brand": "IKEA",
+     "article": "593.083.47",
+     "url": "https://www.ikea.com/pl/pl/p/kungsfors-szyna-do-zawieszania-z-polkami-stal-nierdz-jesion-s59308347/",
+     "price_pln": 522.85,
+     "finish": "stal nierdz/jesion",
+     "note": "KUNGSFORS Szyna do zawieszania z półkami, 60 cm, stal nierdz/jesion — 369.98 zł · KORKEN Słoik z pokrywką, 0.5 l, szkło bezbarwne ×2 — 9.99 zł · KORKEN Słoik z pokrywką, 1 l, szkło bezbarwne — 12.99 zł · GODMIDDAG Talerz, 26 cm, biały ×4 — 9.99 zł · KRUSTISTEL Talerz, 25 cm, wzór/jasnobeżowy — 12.99 zł · FÄRGKLAR Miska, 16 cm, Matowy zielony — 29.99 zł · GODMIDDAG Miska, 16 cm, biały ×2 — 7.99 zł · DAGGASTER Kubek, 40 cl, w kropki/jasnobeżowy — 12.99 zł · FÄRGKLAR Kubek, 37 cl, Matowy zielony — 7.99 zł. Рейка с тремя полками над холодильником (стойки не над смесителем), верх полок 1.47 / 1.71 / 1.95 м. Посуда и банки в цене, потос — условный реквизит (CC0). Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.64,
+      0.841,
+      0.376
+     ],
+     "thumb": "models/decor/kitchen/thumbs/shelves-kungsfors.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/kungsfors-shelves-60/model.glb",
+       "pos": [
+        0.172,
+        1.314,
+        2.4
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/jars-korken-pantry/model.glb",
+       "pos": [
+        0.113,
+        1.47,
+        2.4
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plates-stack-godmiddag/model.glb",
+       "pos": [
+        0.1725,
+        1.71,
+        2.26
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/bowls-stack-godmiddag/model.glb",
+       "pos": [
+        0.144,
+        1.71,
+        2.58
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/plant-pothos-terracotta/model.glb",
+       "pos": [
+        0.257,
+        1.95,
+        2.25
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/mugs-daggaster-fargklar/model.glb",
+       "pos": [
+        0.115,
+        1.95,
+        2.56
+       ],
+       "rot": 90
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "counter",
+   "label": "На столешнице",
+   "default": "everyday",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "everyday",
+     "name": "Каждый день: доски, масло, кофе, чайник",
+     "brand": "IKEA",
+     "article": "403.397.11",
+     "url": "https://www.ikea.com/pl/pl/p/norrsjoen-deska-do-krojenia-dab-40339711/",
+     "price_pln": 499.92,
+     "finish": "dąb",
+     "note": "ARTISTISK Deska do krojenia, 59x25 cm, dąb — 199 zł · NORRSJÖN Deska do krojenia, 44x42 cm, dąb — 99.99 zł · SMÅÄTA Deska do krojenia, 28x22 cm, akacja — 29.99 zł · KORKEN Słoik w kształcie butelki z pokr, 0.4 l, szkło bezbarwne — 7.99 zł · KORKEN Słoik w kształcie butelki z pokr, 1 l, szkło bezbarwne — 9.99 zł · DAGGASTER Kubek, 40 cl, w kropki/jasnobeżowy — 12.99 zł · KORKEN Słoik z pokrywką, 0.5 l, szkło bezbarwne — 9.99 zł · IKEA 365+ Zaparzacz do kawy/herbaty, 1 l, szkło bezbarwne/stal nierdz — 49.99 zł · VATTENTÄT Czajnik, 2 l, stal nierdz/czarny — 79.99 zł. Доски у фартука между варочной и мойкой, масло и кофейный набор у холодильника, чайник у окна. Масло, уксус, кофе — условное наполнение. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      2.558,
+      0.583,
+      0.484
+     ],
+     "thumb": "models/decor/kitchen/thumbs/counter-everyday.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/boards-lean-oak-acacia/model.glb",
+       "pos": [
+        0.085,
+        0.9,
+        1.34
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/bottles-korken-oil/model.glb",
+       "pos": [
+        0.0765,
+        0.9,
+        2.3
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/coffee-press-set/model.glb",
+       "pos": [
+        0.1415,
+        0.9,
+        2.56
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/kettle-vattentat/model.glb",
+       "pos": [
+        0.4045,
+        0.9,
+        0.27
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "cook",
+     "name": "Для готовки: доски, лопатки в кувшине, масло",
+     "brand": "IKEA",
+     "article": "905.961.71",
+     "url": "https://www.ikea.com/pl/pl/p/brugdhaj-pojemnik-na-przybory-bezowy-90596171/",
+     "price_pln": 545.9,
+     "finish": "beżowy",
+     "note": "ARTISTISK Deska do krojenia, 59x25 cm, dąb — 199 zł · NORRSJÖN Deska do krojenia, 44x42 cm, dąb — 99.99 zł · SMÅÄTA Deska do krojenia, 28x22 cm, akacja — 29.99 zł · BRUGDHAJ Pojemnik na przybory, 15 cm, beżowy — 59.99 zł · IKEA 365+ HJÄLTE Chochla do zupy, stal nierdz/czarny — 19.99 zł · KNORRHANE Łyżka cedzakowa, 34 cm, ciemnozielony/antracyt — 12.99 zł · KNORRHANE Głęboka łyżka do gotowania, 31 cm, ciemnoszarobrązowy/czerwonobrązowy — 12.99 zł · KNORRHANE Łopatka, 32 cm, jasnobeżowy/antracyt — 12.99 zł · KORKEN Słoik w kształcie butelki z pokr, 0.4 l, szkło bezbarwne — 7.99 zł · KORKEN Słoik w kształcie butelki z pokr, 1 l, szkło bezbarwne — 9.99 zł · VATTENTÄT Czajnik, 2 l, stal nierdz/czarny — 79.99 zł. Кувшин с лопатками и масло у мойки, доски у фартука, чайник у окна. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      2.462,
+      0.583,
+      0.484
+     ],
+     "thumb": "models/decor/kitchen/thumbs/counter-cook.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/boards-lean-oak-acacia/model.glb",
+       "pos": [
+        0.085,
+        0.9,
+        1.34
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/crock-brugdhaj-utensils/model.glb",
+       "pos": [
+        0.1035,
+        0.9,
+        2.3
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/bottles-korken-oil/model.glb",
+       "pos": [
+        0.0765,
+        0.9,
+        2.52
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/kettle-vattentat/model.glb",
+       "pos": [
+        0.4045,
+        0.9,
+        0.27
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "coffee",
+     "name": "Кофейный угол: френч-пресс, кружки, чайник",
+     "brand": "IKEA",
+     "article": "205.327.24",
+     "url": "https://www.ikea.com/pl/pl/p/ikea-365-zaparzacz-do-kawy-herbaty-szklo-bezbarwne-stal-nierdz-20532724/",
+     "price_pln": 152.96,
+     "finish": "szkło bezbarwne/stal nierdz",
+     "note": "VATTENTÄT Czajnik, 2 l, stal nierdz/czarny — 79.99 zł · DAGGASTER Kubek, 40 cl, w kropki/jasnobeżowy — 12.99 zł · KORKEN Słoik z pokrywką, 0.5 l, szkło bezbarwne — 9.99 zł · IKEA 365+ Zaparzacz do kawy/herbaty, 1 l, szkło bezbarwne/stal nierdz — 49.99 zł. Чайник и френч-пресс с кружкой на модуле у холодильника; остальная столешница свободна. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.569,
+      0.234,
+      0.239
+     ],
+     "thumb": "models/decor/kitchen/thumbs/counter-coffee.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/kettle-vattentat/model.glb",
+       "pos": [
+        0.1175,
+        0.9,
+        2.26
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/coffee-press-set/model.glb",
+       "pos": [
+        0.1415,
+        0.9,
+        2.56
+       ],
+       "rot": 90
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "island",
+   "label": "На острове",
+   "default": "fruit-eucalyptus",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "fruit-eucalyptus",
+     "name": "Фрукты в STOCKHOLM 2025 и эвкалипт SMYCKA в PÄRLHÄGG",
+     "brand": "IKEA",
+     "article": "505.924.29",
+     "url": "https://www.ikea.com/pl/pl/p/stockholm-2025-miska-bezowy-50592429/",
+     "price_pln": 174.95,
+     "finish": "beżowy",
+     "note": "STOCKHOLM 2025 Miska, 34 cm, beżowy — 79.99 zł · PÄRLHÄGG Wazon, 22 cm, beżowy — 49.99 zł · SMYCKA Sztuczny liść, 65 cm, eukaliptus/zielony ×3 — 14.99 zł. Чаша с фруктами по центру, ваза с тремя ветками эвкалипта у торца к окну (вне светильников). Фрукты — модели Poly Haven (CC0), не товар. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      1.229,
+      0.693,
+      0.431
+     ],
+     "thumb": "models/decor/kitchen/thumbs/island-fruit-eucalyptus.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/fruit-bowl-stockholm/model.glb",
+       "pos": [
+        2.08,
+        0.9,
+        1.3
+       ],
+       "rot": 90,
+       "anchor": "island"
+      },
+      {
+       "model": "models/decor/props/vase-parlhagg-eucalyptus/model.glb",
+       "pos": [
+        2.08,
+        0.9,
+        0.4
+       ],
+       "rot": 90,
+       "anchor": "island"
+      }
+     ]
+    },
+    {
+     "id": "fruit",
+     "name": "Только фрукты в STOCKHOLM 2025",
+     "brand": "IKEA",
+     "article": "505.924.29",
+     "url": "https://www.ikea.com/pl/pl/p/stockholm-2025-miska-bezowy-50592429/",
+     "price_pln": 79.99,
+     "finish": "beżowy",
+     "note": "STOCKHOLM 2025 Miska, 34 cm, beżowy — 79.99 zł. Чаша с фруктами по центру острова. Фрукты — модели Poly Haven (CC0), не товар. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.34,
+      0.123,
+      0.34
+     ],
+     "thumb": "models/decor/kitchen/thumbs/island-fruit.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/fruit-bowl-stockholm/model.glb",
+       "pos": [
+        2.08,
+        0.9,
+        1.14
+       ],
+       "rot": 90,
+       "anchor": "island"
+      }
+     ]
+    },
+    {
+     "id": "books-vase",
+     "name": "Книги, ваза KÄLLARHALS и фрукты",
+     "brand": "IKEA",
+     "article": "505.837.12",
+     "url": "https://www.ikea.com/pl/pl/p/kaellarhals-wazon-pomaranczowy-50583712/",
+     "price_pln": 119.98,
+     "finish": "pomarańczowy",
+     "note": "KÄLLARHALS Wazon, 26 cm, pomarańczowy — 39.99 zł · STOCKHOLM 2025 Miska, 34 cm, beżowy — 79.99 zł. Стопка книг (условный реквизит) с оранжевой вазой и чаша с фруктами (Poly Haven, CC0). Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      1.091,
+      0.37,
+      0.34
+     ],
+     "thumb": "models/decor/kitchen/thumbs/island-books-vase.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        2.08,
+        0.9,
+        0.7
+       ],
+       "rot": 90,
+       "anchor": "island"
+      },
+      {
+       "model": "models/decor/props/vase-kallarhals/model.glb",
+       "pos": [
+        2.08,
+        1.01,
+        0.7
+       ],
+       "rot": 90,
+       "anchor": "island"
+      },
+      {
+       "model": "models/decor/props/fruit-bowl-stockholm/model.glb",
+       "pos": [
+        2.08,
+        0.9,
+        1.45
+       ],
+       "rot": 90,
+       "anchor": "island"
+      }
+     ]
+    },
+    {
+     "id": "pelarbjork",
+     "name": "Ваза PELARBJÖRK и фрукты",
+     "brand": "IKEA",
+     "article": "806.073.11",
+     "url": "https://www.ikea.com/pl/pl/p/pelarbjoerk-wazon-bialy-80607311/",
+     "price_pln": 119.98,
+     "finish": "biały",
+     "note": "PELARBJÖRK Wazon, 14 cm, biały — 39.99 zł · STOCKHOLM 2025 Miska, 34 cm, beżowy — 79.99 zł. Белая ваза-скульптура и чаша с фруктами (Poly Haven, CC0). Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.926,
+      0.139,
+      0.34
+     ],
+     "thumb": "models/decor/kitchen/thumbs/island-pelarbjork.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/vase-pelarbjork-white/model.glb",
+       "pos": [
+        2.08,
+        0.9,
+        0.62
+       ],
+       "rot": 90,
+       "anchor": "island"
+      },
+      {
+       "model": "models/decor/props/fruit-bowl-stockholm/model.glb",
+       "pos": [
+        2.08,
+        0.9,
+        1.3
+       ],
+       "rot": 90,
+       "anchor": "island"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "stools",
+   "label": "Барные стулья",
+   "default": "ravsten",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "ravsten",
+     "name": "RÄVSTEN ×2, drewno kauczukowe — табуреты без спинки",
+     "brand": "IKEA",
+     "article": "305.970.55",
+     "url": "https://www.ikea.com/pl/pl/p/raevsten-stolek-barowy-wysokosc-blatu-drewno-kauczukowe-30597055/",
+     "price_pln": 358.0,
+     "finish": "wysokość blatu drewno kauczukowe",
+     "note": "RÄVSTEN Stołek barowy, 62 cm, wysokość blatu drewno kauczukowe ×2 — 179 zł. Два стула у торца острова, лицом к нему; высота сиденья 62 см под столешницу 90 см. Проход в кухню из прихожей остаётся ≥ 1 м. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.7,
+      0.62,
+      0.33
+     ],
+     "thumb": "models/decor/kitchen/thumbs/stools-ravsten.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/ravsten/model.glb",
+       "pos": [
+        1.895,
+        0.0,
+        2.265
+       ],
+       "rot": 180,
+       "anchor": "island",
+       "seat": {
+        "h": 0.62,
+        "depth": 0.0,
+        "label": "Сесть на барный стул"
+       }
+      },
+      {
+       "model": "models/decor/kitchen/ravsten/model.glb",
+       "pos": [
+        2.265,
+        0.0,
+        2.265
+       ],
+       "rot": 180,
+       "anchor": "island",
+       "seat": {
+        "h": 0.62,
+        "depth": 0.0,
+        "label": "Сесть на барный стул"
+       }
+      }
+     ]
+    },
+    {
+     "id": "rosentorp",
+     "name": "ROSENTORP ×2, biały — со спинкой",
+     "brand": "IKEA",
+     "article": "506.181.94",
+     "url": "https://www.ikea.com/pl/pl/p/rosentorp-stolek-barowy-z-oparciem-wysokosc-blatu-bialy-50618194/",
+     "price_pln": 558.0,
+     "finish": "wysokość blatu/biały",
+     "note": "ROSENTORP Stołek barowy z oparciem, 63 cm, wysokość blatu/biały ×2 — 279 zł. Два стула у торца острова, лицом к нему; высота сиденья 63 см под столешницу 90 см. Проход в кухню из прихожей остаётся ≥ 1 м. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.85,
+      0.917,
+      0.453
+     ],
+     "thumb": "models/decor/kitchen/thumbs/stools-rosentorp.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/rosentorp/model.glb",
+       "pos": [
+        1.8575,
+        0.0,
+        2.3265
+       ],
+       "rot": 180,
+       "anchor": "island",
+       "seat": {
+        "h": 0.63,
+        "depth": 0.03,
+        "label": "Сесть на барный стул"
+       }
+      },
+      {
+       "model": "models/decor/kitchen/rosentorp/model.glb",
+       "pos": [
+        2.3025,
+        0.0,
+        2.3265
+       ],
+       "rot": 180,
+       "anchor": "island",
+       "seat": {
+        "h": 0.63,
+        "depth": 0.03,
+        "label": "Сесть на барный стул"
+       }
+      }
+     ]
+    },
+    {
+     "id": "bergmund",
+     "name": "BERGMUND ×2, imit. dębu/Gunnared — мягкие со спинкой",
+     "brand": "IKEA",
+     "article": "193.847.05",
+     "url": "https://www.ikea.com/pl/pl/p/bergmund-stolek-barowy-z-oparciem-wysokosc-blatu-imit-debu-gunnared-sredni-szary-s19384705/",
+     "price_pln": 798.0,
+     "finish": "wysokość blatu imit. dębu/Gunnared średni szary",
+     "note": "BERGMUND Stołek barowy z oparciem, 62 cm, wysokość blatu imit. dębu/Gunnared średni szary ×2 — 399 zł. Два стула у торца острова, лицом к нему; высота сиденья 62 см под столешницу 90 см. Проход в кухню из прихожей остаётся ≥ 1 м. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.948,
+      0.975,
+      0.487
+     ],
+     "thumb": "models/decor/kitchen/thumbs/stools-bergmund.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/bergmund/model.glb",
+       "pos": [
+        1.833,
+        0.0,
+        2.3435
+       ],
+       "rot": 180,
+       "anchor": "island",
+       "seat": {
+        "h": 0.62,
+        "depth": 0.03,
+        "label": "Сесть на барный стул"
+       }
+      },
+      {
+       "model": "models/decor/kitchen/bergmund/model.glb",
+       "pos": [
+        2.327,
+        0.0,
+        2.3435
+       ],
+       "rot": 180,
+       "anchor": "island",
+       "seat": {
+        "h": 0.62,
+        "depth": 0.03,
+        "label": "Сесть на барный стул"
+       }
+      }
+     ]
+    },
+    {
+     "id": "skogsta",
+     "name": "SKOGSTA ×2, czarny — со спинкой",
+     "brand": "IKEA",
+     "article": "006.210.09",
+     "url": "https://www.ikea.com/pl/pl/p/skogsta-stolek-barowy-z-oparciem-wysokosc-blatu-czarny-00621009/",
+     "price_pln": 598.0,
+     "finish": "wysokość blatu czarny",
+     "note": "SKOGSTA Stołek barowy z oparciem, 62 cm, wysokość blatu czarny ×2 — 299 zł. Два стула у торца острова, лицом к нему; высота сиденья 62 см под столешницу 90 см. Проход в кухню из прихожей остаётся ≥ 1 м. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.86,
+      0.915,
+      0.458
+     ],
+     "thumb": "models/decor/kitchen/thumbs/stools-skogsta.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/skogsta/model.glb",
+       "pos": [
+        1.855,
+        0.0,
+        2.329
+       ],
+       "rot": 180,
+       "anchor": "island",
+       "seat": {
+        "h": 0.62,
+        "depth": 0.03,
+        "label": "Сесть на барный стул"
+       }
+      },
+      {
+       "model": "models/decor/kitchen/skogsta/model.glb",
+       "pos": [
+        2.305,
+        0.0,
+        2.329
+       ],
+       "rot": 180,
+       "anchor": "island",
+       "seat": {
+        "h": 0.62,
+        "depth": 0.03,
+        "label": "Сесть на барный стул"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "art",
+   "label": "Картины",
+   "default": "gallery",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "gallery",
+     "name": "Галерея: RÖDALM и LOMVIKEN, Лир и лимон",
+     "brand": "IKEA",
+     "article": "605.489.21",
+     "url": "https://www.ikea.com/pl/pl/p/roedalm-ramka-orzech-60548921/",
+     "price_pln": 94.96,
+     "finish": "orzech",
+     "note": "RÖDALM Ramka, 30x40 cm, orzech — 29.99 zł · RÖDALM Ramka, 21x30 cm, imit. dębu — 14.99 zł · LOMVIKEN Ramka, 21x30 cm, czarny — 19.99 zł · RÖDALM Ramka, 30x40 cm, czarny — 29.99 zł. Три рамки на шахте (видны из гостиной), омар Лира — в углу у окна над торцевым модулем. Картины — общественное достояние: Эдвард Лир, «More Nonsense» (1872), и акварель Эллен Шутт из USDA Pomological Watercolor Collection (1911), печать на бумаге цвета слоновой кости. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      3.525,
+      0.678,
+      0.448
+     ],
+     "thumb": "models/decor/kitchen/thumbs/art-gallery.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/frame-rodalm-walnut-lemon/model.glb",
+       "pos": [
+        0.6173,
+        1.35,
+        3.366
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/frame-rodalm-oak-lear-minspysia/model.glb",
+       "pos": [
+        0.6178,
+        1.6,
+        3.033
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/frame-lomviken-lear-dinnerbell/model.glb",
+       "pos": [
+        0.6103,
+        1.24,
+        3.033
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/frame-rodalm-black-lear-lobster/model.glb",
+       "pos": [
+        0.345,
+        1.4,
+        0.016
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "ledge",
+     "name": "Полка MOSSLANDA с картинами и омар у окна",
+     "brand": "IKEA",
+     "article": "805.898.35",
+     "url": "https://www.ikea.com/pl/pl/p/mosslanda-polka-na-zdjecia-imit-debu-80589835/",
+     "price_pln": 99.95,
+     "finish": "imit. dębu",
+     "note": "HÄCKHAGTORN Ramka, 30x40 cm, sosna — 14.99 zł · LOMVIKEN Ramka, 21x30 cm, czarny — 19.99 zł · MOSSLANDA Półka na zdjęcia, 55 cm, imit. dębu — 19.99 zł · RÖDALM Ramka, 21x30 cm, biały — 14.99 zł · RÖDALM Ramka, 30x40 cm, czarny — 29.99 zł. Три рамки стоят на полке 55 см на шахте, омар — в углу у окна. Картины — общественное достояние: Эдвард Лир, «More Nonsense» (1872), и акварель Эллен Шутт из USDA Pomological Watercolor Collection (1911), печать на бумаге цвета слоновой кости. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      3.511,
+      0.518,
+      0.535
+     ],
+     "thumb": "models/decor/kitchen/thumbs/art-ledge.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/ledge-mosslanda-prints/model.glb",
+       "pos": [
+        0.6613,
+        1.3,
+        3.22
+       ],
+       "rot": 90
+      },
+      {
+       "model": "models/decor/props/frame-rodalm-black-lear-lobster/model.glb",
+       "pos": [
+        0.345,
+        1.4,
+        0.016
+       ],
+       "rot": 0
+      }
+     ]
+    },
+    {
+     "id": "lobster",
+     "name": "Только омар Лира у окна, RÖDALM czarny",
+     "brand": "IKEA",
+     "article": "205.489.18",
+     "url": "https://www.ikea.com/pl/pl/p/roedalm-ramka-czarny-20548918/",
+     "price_pln": 29.99,
+     "finish": "czarny",
+     "note": "RÖDALM Ramka, 30x40 cm, czarny — 29.99 zł. Одна рамка 30×40 в углу у окна над торцевым модулем. Картины — общественное достояние: Эдвард Лир, «More Nonsense» (1872), и акварель Эллен Шутт из USDA Pomological Watercolor Collection (1911), печать на бумаге цвета слоновой кости. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.318,
+      0.418,
+      0.032
+     ],
+     "thumb": "models/decor/kitchen/thumbs/art-lobster.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/frame-rodalm-black-lear-lobster/model.glb",
+       "pos": [
+        0.345,
+        1.4,
+        0.016
+       ],
+       "rot": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rail",
+   "label": "Рейлинг с утварью",
+   "default": "kungsfors",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "kungsfors",
+     "name": "KUNGSFORS 56 с крючками и лопатками KNORRHANE",
+     "brand": "IKEA",
+     "article": "403.349.16",
+     "url": "https://www.ikea.com/pl/pl/p/kungsfors-szyna-stal-nierdz-40334916/",
+     "price_pln": 98.94,
+     "finish": "stal nierdz",
+     "note": "IKEA 365+ HJÄLTE Chochla do zupy, stal nierdz/czarny — 19.99 zł · KNORRHANE Łyżka cedzakowa, 34 cm, ciemnozielony/antracyt — 12.99 zł · KNORRHANE Głęboka łyżka do gotowania, 31 cm, ciemnoszarobrązowy/czerwonobrązowy — 12.99 zł · KNORRHANE Łopatka, 32 cm, jasnobeżowy/antracyt — 12.99 zł · KUNGSFORS Szyna, 56 cm, stal nierdz — 29.99 zł · KUNGSFORS Haczyk \"s\", stal nierdz ×1 уп. по 5 — 9.99 zł. Рейлинг на высоте 1.38 м над торцевым модулем у окна, на крючках — шумовка, половник, лопатка, ложка. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.56,
+      0.406,
+      0.096
+     ],
+     "thumb": "models/decor/kitchen/thumbs/rail-kungsfors.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/rail-kungsfors-utensils/model.glb",
+       "pos": [
+        0.06,
+        0.999,
+        0.3
+       ],
+       "rot": 90
+      }
+     ]
+    },
+    {
+     "id": "hultarp",
+     "name": "HULTARP 60, czarny, с набором GRUNKA",
+     "brand": "IKEA",
+     "article": "004.487.69",
+     "url": "https://www.ikea.com/pl/pl/p/hultarp-szyna-czarny-00448769/",
+     "price_pln": 89.97,
+     "finish": "czarny",
+     "note": "GRUNKA Przybory kuchenne, 4 szt., stal nierdz — 49.99 zł · HULTARP Hak, 7 cm, czarny ×1 уп. по 5 — 14.99 zł · HULTARP Szyna, 60 cm, czarny — 24.99 zł. Чёрный рейлинг на высоте 1.38 м над торцевым модулем, на крючках — набор GRUNKA. Модели IKEA (rotera) — только для личной визуализации.",
+     "size": [
+      0.6,
+      0.435,
+      0.121
+     ],
+     "thumb": "models/decor/kitchen/thumbs/rail-hultarp.jpg",
+     "parts": [
+      {
+       "model": "models/decor/kitchen/rail-hultarp-grunka/model.glb",
+       "pos": [
+        0.0725,
+        0.99,
+        0.3
+       ],
+       "rot": 90
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

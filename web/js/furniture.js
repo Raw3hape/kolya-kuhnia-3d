@@ -3,6 +3,9 @@
 // ковры — из web/spec/rugs.json; без каталогов работает запасной процедурный диван и однотонный ковёр.
 // Оси как везде: X вдоль окон, Z вглубь, Y вверх, метры. Состояние — поля FURN_SCHEMA + FURN_SCHEMA_2,
 // позиции в метрах и градусах, округлённые до см и градуса.
+// Редактор расстановки (createFurnitureEditor) двигает и эту мебель, и любую часть обстановки (decor.js):
+// сдвиги обстановки он пишет в state.moves. furnitureAnchors(...) — где сейчас тумба, ТВ, столик, диван и остров
+// относительно их мест по умолчанию: по ним decor.js двигает вещи с полем anchor.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -12,6 +15,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { applyItem, loadMeta } from './materials.js';
 import { islandBox } from './model.js';
 import { tvPosterTexture } from './tv.js';
+import { decorOf, decorPart, placeDecor, setDecorPose, commitDecorPart, resetDecorPart, isDecorMoved } from './decor.js';
 
 // Спеки грузятся сами (как в main.js — относительно страницы). Нет файла — нет и того, что в нём; приложение живёт.
 const getJSON = url => fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null);
@@ -158,9 +162,9 @@ export function furnitureKey(state) {
   return FURN_KEYS.filter(k => !FURN_PLACE_KEYS.includes(k)).map(k => S[k]).join('|');
 }
 
-// Позиции по умолчанию — для кнопки «Вернуть на место» (setState(furnitureResetPatch())).
+// Позиции по умолчанию — для кнопки «Всё на место» (setState(furnitureResetPatch())): мебель и вся обстановка.
 export function furnitureResetPatch() {
-  return Object.fromEntries(FURN_PLACE_KEYS.filter(k => k in FURN_DEFAULTS).map(k => [k, FURN_DEFAULTS[k]]));
+  return { ...Object.fromEntries(FURN_PLACE_KEYS.filter(k => k in FURN_DEFAULTS).map(k => [k, FURN_DEFAULTS[k]])), moves: '' };
 }
 
 /**
@@ -270,8 +274,9 @@ export function registerFurnitureUI(addSection) {
     controls: [
       { type: 'toggle', key: 'furnEdit', src: 'info', label: 'Двигать мебель' },
       { type: 'readout', key: 'furnHint', style: 'keys', visible: (st, _, i) => !!i?.furnEdit,
-        value: 'Клик по предмету — выделить, тянуть за стрелки или квадрат. R — повернуть, T — двигать, Shift — без привязки, Esc — готово.' },
-      { type: 'button', key: 'furnReset', action: 'furnReset', label: 'Вернуть на место' },
+        value: 'Двигается всё: мебель и любая вещь в комнатах. Тяните сам предмет или стрелки. Настенное едет по стене, '
+          + 'мелочи — по полке и встают на ту, куда перенесли. R — повернуть, T — двигать, Shift — без привязки, Esc — готово.' },
+      { type: 'button', key: 'furnReset', action: 'furnReset', label: 'Всё на место' },
     ] });
 }
 
@@ -1098,16 +1103,108 @@ function collidersOf(furn) {
   return out;
 }
 
+// ---------- опоры для обстановки (decor.js: поле anchor части) ----------
+// Кадр вещи { x, y, z, r } (r — поворот вокруг Y): диван — по высоте сиденья, тумба — передняя кромка крышки
+// (смена типа тумбы меняет высоту и глубину — вещи на ней едут следом), столик — по столешнице, ТВ — центр экрана,
+// остров — центр следа на полу. def — та же вещь в состоянии по умолчанию: её один раз собирают из FURN_DEFAULTS
+// (геометрия сразу освобождается). У ТВ и тумбы есть span { z0, z1 } — концы стены ТВ: часть с опорой, что
+// вылезла бы за конец стены, decor.js прячет. Объекты переиспользуются: зов без выделений.
+const ANCHOR_ITEMS = ['sofa', 'tv', 'console', 'table'];
+let DEF_FRAMES = null;
+const frame = () => ({ x: 0, y: 0, z: 0, r: 0 });
+const CUR_FRAMES = { sofa: frame(), tv: frame(), console: frame(), table: frame(), island: frame() };
+const PAIRS = Object.fromEntries(Object.keys(CUR_FRAMES).map(k => [k, { cur: CUR_FRAMES[k], def: null, span: null }]));
+const ANCHORS_OUT = {};
+let SPAN_PLAN = null;
+const seatHOf = S => sofaEntry(S)?.seatH ?? FURN_SPEC?.sofas?.[basicShape(S, FURN_SPEC)]?.seatH ?? 0.45;
+function itemFrame(out, id, o, S) {
+  if (!o) return null;
+  out.x = o.position.x; out.z = o.position.z; out.r = yawOf(o);
+  out.y = id === 'sofa' ? seatHOf(S) : id === 'console' ? (o.userData.top ?? 0) : id === 'table' ? (FURN_SPEC.tables?.[S.table]?.h ?? 0) : o.position.y;
+  if (id === 'console') { const h = (o.userData.depth ?? 0) / 2; out.x += Math.sin(out.r) * h; out.z += Math.cos(out.r) * h; }
+  return out;
+}
+function islandFrame(out, isl) {
+  if (!isl) return null;
+  out.x = (isl.x0 + isl.x1) / 2; out.z = (isl.z0 + isl.z1) / 2; out.y = 0; out.r = 0;
+  return out;
+}
+/**
+ * Опоры для decor.js: { sofa, tv, console, table, island } -> { cur, def } (вещь есть), null (вещи сейчас нет)
+ * или undefined (нет её положения по умолчанию — опора не применяется). furn — результат buildFurniture
+ * (положения берутся с живых объектов: годится и во время перетаскивания). Без plan — undefined.
+ */
+export function furnitureAnchors(furn, state, plan, kit = kitJSON) {
+  if (!plan) return undefined;
+  if (!DEF_FRAMES) {
+    const d = FURN_SPEC?.sofas ? buildFurniture(FURN_SPEC, FURN_DEFAULTS, {}, plan, kit) : null, S = norm(FURN_DEFAULTS);
+    DEF_FRAMES = { island: islandFrame(frame(), kit ? islandBox(kit, {}) : null) };
+    for (const id of ANCHOR_ITEMS) DEF_FRAMES[id] = itemFrame(frame(), id, d?.items[id], S);
+    d?.group.traverse(o => o.geometry?.dispose());   // модель дивана (GLB) приедет позже и в эту группу: её не трогаем
+  }
+  if (SPAN_PLAN !== plan) {   // концы стены ТВ — раз на план
+    SPAN_PLAN = plan;
+    let w = null;
+    try { w = FURN_SPEC?.room && wallOf(plan, FURN_SPEC); } catch { w = null; }
+    PAIRS.tv.span = PAIRS.console.span = w ? { z0: w.z0, z1: w.z1 } : null;
+  }
+  const S = norm(state), it = furn?.items ?? {};
+  for (const id of ANCHOR_ITEMS) {
+    const def = DEF_FRAMES[id], cur = def && itemFrame(CUR_FRAMES[id], id, it[id]?.visible === false ? null : it[id], S);
+    if (cur) PAIRS[id].def = def;
+    ANCHORS_OUT[id] = !def ? undefined : cur ? PAIRS[id] : null;
+  }
+  const isl = DEF_FRAMES.island && islandFrame(CUR_FRAMES.island, kit ? islandBox(kit, state) : null);
+  PAIRS.island.def = DEF_FRAMES.island;
+  ANCHORS_OUT.island = !DEF_FRAMES.island ? undefined : isl ? PAIRS.island : null;
+  return ANCHORS_OUT;
+}
+
 // ---------- редактор в сцене ----------
 
 const NAMES = { sofa: 'Диван', tv: 'Телевизор', console: 'Тумба', table: 'Столик', rug: 'Ковёр' };
 const ROTATABLE = new Set(['sofa', 'table', 'rug']);
 const MAGNET = 0.05;   // диван липнет к стороне острова и к его середине ближе 5 см
+// Поля положения каждой вещи — для «На место» у выделенной
+const PLACE_OF = { sofa: ['sofaX', 'sofaZ', 'sofaRot', 'sofaSnap'], table: ['tableX', 'tableZ', 'tableRot'], rug: ['rugX', 'rugZ', 'rugRot'],
+  tv: ['tvY', 'tvAlong', 'consoleAlong'], console: ['consoleAlong', 'tvAlong'] };
+const SUPPORT_GROUPS = new Set(['decor', 'furniture', 'kitchen', 'floors', 'fixtures', 'bath']);   // на что можно поставить вещь
+const holderOf = o => { while (o) { if (decorPart(o)) return o; o = o.parent; } return null; };
+const shown = o => { while (o) { if (!o.visible) return false; o = o.parent; } return true; };
+
+// След (прямоугольник [x0,z0,x1,z1] в координатах части) против прямоугольников по осям и границ R — без выделений.
+const CR = new Float64Array(8);
+function rectHits(r, px, pz, yaw, obs, R) {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  CR[0] = px + r[0] * c + r[1] * s; CR[1] = pz - r[0] * s + r[1] * c;
+  CR[2] = px + r[2] * c + r[1] * s; CR[3] = pz - r[2] * s + r[1] * c;
+  CR[4] = px + r[2] * c + r[3] * s; CR[5] = pz - r[2] * s + r[3] * c;
+  CR[6] = px + r[0] * c + r[3] * s; CR[7] = pz - r[0] * s + r[3] * c;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < 8; i += 2) { x0 = Math.min(x0, CR[i]); x1 = Math.max(x1, CR[i]); z0 = Math.min(z0, CR[i + 1]); z1 = Math.max(z1, CR[i + 1]); }
+  if (x0 < R.x0 || x1 > R.x1 || z0 < R.z0 || z1 > R.z1) return true;
+  for (const o of obs) {
+    if (x1 <= o.x0 + 1e-6 || x0 >= o.x1 - 1e-6 || z1 <= o.z0 + 1e-6 || z0 >= o.z1 - 1e-6) continue;   // оси X и Z
+    let apart = false;
+    for (let k = 0; k < 2 && !apart; k++) {   // свои оси прямоугольника
+      const ax = k ? s : c, az = k ? c : -s;
+      let p0 = Infinity, p1 = -Infinity, q0 = Infinity, q1 = -Infinity;
+      for (let i = 0; i < 8; i += 2) { const p = CR[i] * ax + CR[i + 1] * az; p0 = Math.min(p0, p); p1 = Math.max(p1, p); }
+      for (const bx of [o.x0, o.x1]) for (const bz of [o.z0, o.z1]) { const q = bx * ax + bz * az; q0 = Math.min(q0, q); q1 = Math.max(q1, q); }
+      apart = p1 <= q0 + 1e-6 || q1 <= p0 + 1e-6;
+    }
+    if (!apart) return true;
+  }
+  return false;
+}
 
 /**
- * Редактор: клик по мебели выделяет её, гизмо двигает по полу (X/Z) и вращает вокруг Y.
+ * Редактор: клик по мебели или любой части обстановки выделяет её; тянуть мышью сам предмет или стрелки гизмо.
+ * Напольное ездит по полу (стены не пускают), настенное — вдоль своей стены (в её плоскости, в пределах стены),
+ * стоящее на чём-то (полка, тумба, остров, столешница) — по своей поверхности и опускается на то, что под ним.
  * Привязка 1 см и 15°, Shift — без привязки. R — вращать, T/G — двигать, Esc — снять выделение.
- * Пока тянешь, OrbitControls выключен; в state пишется один раз, когда отпустил (setState).
+ * Пока тянешь, облёт выключен; в state пишется один раз, когда отпустил (setState): мебель — своими полями,
+ * обстановка — строкой state.moves (decor.js). Вещи на опорах (тумба, ТВ, остров…) едут за ними сразу.
  * main должен звать editor.renderOverlay() после каждого кадра: гизмо рисуется поверх (вне GTAO
  * и вне основного raycast), подписи замеров обновляются там же.
  */
@@ -1123,11 +1220,18 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
   overlayScene.add(tc.getHelper());
   const W = wallOf(plan, spec), wObs = wallObstacles(plan, spec);
   const passage = spec.clearance?.passage ?? 0.9;
-  let enabled = false, selId = null, obj = null, mode = 'translate', free = false, changed = false;
+  const H = plan.ceiling ?? 2.64, BOUNDS = plan.bounds ?? { x0: -1e3, x1: 1e3, z0: -1e3, z1: 1e3 };
+  const WALLS = plan.walls.map(w => ({ x0: w.x0, z0: w.z0, x1: w.x1, z1: w.z1 }));
+  const ROOM_RECTS = Object.values(plan.rooms).flatMap(r => r.rects ?? []);
+  let enabled = false, selId = null, obj = null, part = null, mode = 'translate', free = false, changed = false;
   let last = null;   // последнее допустимое положение при перетаскивании: {x, z, yaw}
 
   const furnGroup = () => scene.getObjectByName('furniture');
-  const itemObj = id => furnGroup()?.children.find(o => o.userData.isItem && o.userData.furnId === id) || null;
+  const decorNow = () => decorOf(scene.children.find(o => o.name === 'decor'));
+  const itemObj = id => {
+    if (id?.startsWith('d:')) { const h = decorNow()?.parts.get(id.slice(2)); return h && h.visible ? h : null; }
+    return furnGroup()?.children.find(o => o.userData.isItem && o.userData.furnId === id) || null;
+  };
   const items = () => {
     const r = {};
     for (const k of ['sofa', 'tv', 'console', 'table', 'rug']) r[k] = itemObj(k);
@@ -1139,12 +1243,75 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
     scene.traverse(o => { if (o.isMesh && o.userData.slot === 'islandTop') box.expandByObject(o); });
     return box.isEmpty() ? null : { x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z };
   }
+  // Обстановка на опорах (тумба, ТВ, столик, диван) едет за мебелью прямо во время перетаскивания
+  function followAnchors() {
+    const d = decorNow(), f = furnGroup();
+    if (d && f) placeDecor(d, getState(), furnitureAnchors(RESULTS.get(f), getState(), plan, kit ?? kitJSON), { live: true });
+  }
+
+  // --- лучи: опора под вещью и поверхность под курсором ---
+  const ray = new THREE.Raycaster(); ray.layers.set(0);
+  const hits = [], targets = [], skip = new Set();
+  const DOWN = new THREE.Vector3(0, -1, 0), _o = new THREE.Vector3(), _n = new THREE.Vector3(), _ndc = new THREE.Vector2();
+  const support = { y: 0, on: '0' };
+  function collectTargets() {
+    targets.length = 0;
+    for (const o of scene.children) if (SUPPORT_GROUPS.has(o.name)) targets.push(o);
+  }
+  function skipFrom(h) {   // сама вещь и всё, что на ней стоит, — не опора
+    skip.add(h);
+    for (const d of decorPart(h)?.deps ?? []) skipFrom(d);
+  }
+  const usable = h => !h.object.userData.glass && !h.object.userData.shadowOnly && shown(h.object) && !skip.has(holderOf(h.object));
+  const upward = h => !!h.face && _n.copy(h.face.normal).transformDirection(h.object.matrixWorld).y > 0.5;
+  function onOf(o) {   // на чём стоим: часть обстановки, вещь-опора, остров или ничего
+    const h = holderOf(o);
+    if (h) return decorPart(h).pkey;
+    for (let p = o; p; p = p.parent) {
+      const f = p.userData.furnId;
+      if (f && f !== 'rug') return f;
+      if (p.userData.slot === 'island' || p.userData.slot === 'islandTop') return 'island';
+    }
+    return '0';
+  }
+  // Первая обращённая вверх поверхность под точкой (x, from, z); нет ничего — пол
+  function supportAt(x, from, z) {
+    _o.set(x, from + 0.05, z); ray.set(_o, DOWN); ray.far = from + 0.06;
+    hits.length = 0; ray.intersectObjects(targets, true, hits);
+    support.y = 0; support.on = '0';
+    for (const h of hits) if (usable(h) && upward(h)) { support.y = h.point.y; support.on = onOf(h.object); break; }
+    return support;
+  }
+  function cursorRay(e) {
+    const r = canvas.getBoundingClientRect();
+    _ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(_ndc, camera); ray.far = Infinity;
+    return ray;
+  }
+
+  // Как держится часть без явного mount: есть опора прямо под основанием — стоит на ней, иначе висит на стене.
+  function inferMount(h, info) {
+    if (info.mount) return info.mount;
+    collectTargets(); skip.clear(); skipFrom(h);
+    const s = supportAt(h.position.x, h.position.y - 0.04, h.position.z);   // луч от самого основания (+1 см) вниз
+    info.mount = h.position.y - s.y < 0.04 ? 'surface' : 'wall';
+    skip.clear();
+    return info.mount;
+  }
 
   // --- выделение и настройка гизмо ---
+  const rotatable = () => (part ? part.mount !== 'wall' : ROTATABLE.has(selId));
   function configure() {
     if (!obj) return;
     const S = norm(getState());
-    if (ROTATABLE.has(selId)) {
+    tc.setSpace('world');
+    if (part) {
+      if (part.mount === 'wall') mode = 'translate';
+      tc.setMode(mode);
+      if (mode === 'rotate') { tc.showX = false; tc.showY = true; tc.showZ = false; }
+      else if (part.mount === 'wall') { tc.setSpace('local'); tc.showX = true; tc.showY = true; tc.showZ = false; }
+      else { tc.showX = true; tc.showY = false; tc.showZ = true; }
+    } else if (ROTATABLE.has(selId)) {
       tc.setMode(mode);
       if (mode === 'rotate') { tc.showX = false; tc.showY = true; tc.showZ = false; }
       else { tc.showX = true; tc.showY = false; tc.showZ = true; }
@@ -1159,6 +1326,8 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
   }
   function attach() {
     obj = selId ? itemObj(selId) : null;
+    part = obj && selId.startsWith('d:') ? decorPart(obj) : null;
+    if (part) inferMount(obj, part);
     if (obj) tc.attach(obj); else { tc.detach(); selId = null; }
     configure();
   }
@@ -1171,13 +1340,13 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
     requestRender();
     onSelect?.(selId);
   }
-  // После setState main пересобирает мебель: заново найти выделенный предмет
+  // После setState main пересобирает мебель или обстановку: заново найти выделенный предмет
   function resync() {
-    if (!selId || tc.dragging) return;
+    if (!selId || tc.dragging || drag) return;
     const o = itemObj(selId);
     if (o !== obj) { if (!o) onSelect?.(null); attach(); }
   }
-  function setMode(m) { if (ROTATABLE.has(selId)) { mode = m; configure(); requestRender(); } }
+  function setMode(m) { if (rotatable()) { mode = m; configure(); requestRender(); } }
 
   // --- ограничения при перетаскивании ---
   function floorObstaclesFor(id) {
@@ -1191,6 +1360,7 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
   }
   function constrain() {
     if (!obj) return;
+    if (part) { constrainPart(); return; }
     const S = norm(getState());
     if (ROTATABLE.has(selId)) {
       // Скольжение вдоль препятствий: из последнего допустимого положения, без «туннеля» сквозь остров
@@ -1227,9 +1397,74 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
       if (it.console) it.console.position.set(P.cx, 0, P.cz);
       if (it.tv) { it.tv.position.set(P.tx, P.ty, P.tz); fitFloorStand(it.tv, P.ty); }
     }
+    followAnchors();
+  }
+
+  // --- части обстановки: контекст перетаскивания (готовится один раз в начале) ---
+  const mv = {
+    fp: [0, 0, 0, 0], bad: false, y0: 0, refY: 0, on: undefined,
+    // настенное: точка стены c0, касательная t, нормаль n, допустимый сдвиг вдоль стены [s0, s1] и высота [y0, y1]
+    cx: 0, cz: 0, tx: 1, tz: 0, nx: 0, nz: 1, s0: 0, s1: 0, ya: 0, yb: H,
+  };
+  const inRoom = (x, z) => ROOM_RECTS.some(r => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1);
+  const inOpening = (x, z) => plan.openings.some(o => x >= o.x0 - 0.02 && x <= o.x1 + 0.02 && z >= o.z0 - 0.02 && z <= o.z1 + 0.02);
+  function beginPart() {
+    const b = part.box, yaw = yawOf(obj);
+    mv.y0 = mv.refY = obj.position.y; mv.on = undefined;
+    collectTargets(); skip.clear(); skipFrom(obj);
+    if (b) { mv.fp[0] = b.min.x + 0.01; mv.fp[1] = b.min.z + 0.01; mv.fp[2] = b.max.x - 0.01; mv.fp[3] = b.max.z - 0.01; }
+    else mv.fp.fill(0);
+    mv.bad = !!b && rectHits(mv.fp, obj.position.x, obj.position.z, yaw, WALLS, BOUNDS);   // уже стоит в стене — не мешать
+    last = { x: obj.position.x, z: obj.position.z, yaw };
+    if (part.mount !== 'wall') return;
+    // Стена: шагаем вдоль неё, пока перед ней комната, а за ней стена — не проём (дверь, окно) и не другая комната
+    mv.cx = obj.position.x; mv.cz = obj.position.z;
+    mv.tx = Math.cos(yaw); mv.tz = -Math.sin(yaw); mv.nx = Math.sin(yaw); mv.nz = Math.cos(yaw);
+    const back = (b ? (b.max.z - b.min.z) / 2 : 0) + 0.04;
+    const okAt = s => {
+      const px = mv.cx + mv.tx * s, pz = mv.cz + mv.tz * s, bx = px - mv.nx * back, bz = pz - mv.nz * back;
+      return inRoom(px + mv.nx * 0.03, pz + mv.nz * 0.03) && !inRoom(bx, bz) && !inOpening(bx, bz);
+    };
+    const reach = dir => { let s = 0; while (Math.abs(s) < 8 && okAt(s + dir * 0.01)) s += dir * 0.01; return s; };
+    const lo = reach(-1), hi = reach(1), mnx = b ? b.min.x : 0, mxx = b ? b.max.x : 0;
+    mv.s0 = Math.min(0, lo - mnx); mv.s1 = Math.max(0, hi - mxx);
+    const h = b ? b.max.y : 0;
+    mv.ya = Math.min(0, obj.position.y); mv.yb = Math.max(obj.position.y, H - h);
+  }
+  // Скольжение части вдоль стен из последнего допустимого положения
+  const partOk = (x, z, a) => mv.bad || !rectHits(mv.fp, x, z, a, WALLS, BOUNDS);
+  function constrainPart(x = obj.position.x, z = obj.position.z, y = obj.position.y, yaw = yawOf(obj)) {
+    const d = decorNow();
+    if (!d) return;
+    if (part.mount === 'wall') {
+      let s = (x - mv.cx) * mv.tx + (z - mv.cz) * mv.tz;
+      s = clamp(free ? s : Math.round(s * 100) / 100, mv.s0, mv.s1);
+      y = clamp(free ? y : Math.round(y * 100) / 100, mv.ya, mv.yb);
+      setDecorPose(d, obj, mv.cx + mv.tx * s, y, mv.cz + mv.tz * s, yaw);
+      return;
+    }
+    if (!partOk(x, z, yaw)) {
+      if (Math.abs(yaw - last.yaw) > 1e-6 && !partOk(x, z, yaw)) yaw = last.yaw;
+      if (!partOk(x, z, yaw)) {
+        if (partOk(x, last.z, yaw)) z = last.z;
+        else if (partOk(last.x, z, yaw)) x = last.x;
+        else { x = last.x; z = last.z; }
+      }
+    }
+    last.x = x; last.z = z; last.yaw = yaw;
+    if (part.mount === 'surface') { const s = supportAt(x, mv.refY, z); y = s.y; mv.on = s.on; }
+    setDecorPose(d, obj, x, y, z, yaw);
   }
   function commit() {
     if (!obj) return;
+    if (part) {
+      const d = decorNow();
+      if (!d) return;
+      const moves = commitDecorPart(d, obj, getState().moves ?? '', part.mount === 'surface' ? mv.on : undefined);
+      skip.clear();
+      Promise.resolve(setState({ moves })).then(() => { resync(); updateToolbar(); requestRender(); });
+      return;
+    }
     const S = norm(getState()), p = {};
     if (ROTATABLE.has(selId)) {
       p[selId + 'X'] = r2(obj.position.x); p[selId + 'Z'] = r2(obj.position.z);
@@ -1253,30 +1488,104 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
     }
     Promise.resolve(setState(p)).then(() => { resync(); requestRender(); });
   }
+  function resetSelected() {
+    if (part) { setState({ moves: resetDecorPart(getState().moves ?? '', part.pkey) }); return; }
+    const keys = PLACE_OF[selId] ?? [];
+    setState(Object.fromEntries(keys.filter(k => k in FURN_DEFAULTS).map(k => [k, FURN_DEFAULTS[k]])));
+  }
+  function beginMove() {
+    changed = false;
+    if (part) beginPart();
+    else last = obj ? { x: obj.position.x, z: obj.position.z, yaw: yawOf(obj) } : null;
+  }
 
   tc.addEventListener('change', () => requestRender());
   tc.addEventListener('objectChange', () => { changed = true; constrain(); requestRender(); });
   tc.addEventListener('dragging-changed', e => {
     if (controls) controls.enabled = !e.value;
-    if (e.value) { changed = false; last = obj ? { x: obj.position.x, z: obj.position.z, yaw: yawOf(obj) } : null; }
+    if (e.value) beginMove();
     else if (changed) { changed = false; commit(); }
   });
 
-  // --- клик и клавиши ---
+  // --- клик, перетаскивание самого предмета и клавиши ---
   const raycaster = new THREE.Raycaster(); raycaster.layers.set(0);
-  let down = null, downOnGizmo = false;
+  let down = null, downOnGizmo = false, drag = null;
+  const plane = new THREE.Plane(), grab = new THREE.Vector3(), off = new THREE.Vector3(), _p = new THREE.Vector3();
   function pick(e) {
     const r = canvas.getBoundingClientRect();
     raycaster.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-    const hit = raycaster.intersectObjects(scene.children, true).find(h => h.object.visible && !h.object.userData.glass && !h.object.userData.shadowOnly);
-    return hit?.object.userData.furnId ?? null;
+    const hit = raycaster.intersectObjects(scene.children, true).find(h => !h.object.userData.glass && !h.object.userData.shadowOnly && shown(h.object));
+    if (!hit) return null;
+    const f = hit.object.userData.furnId, h = !f && holderOf(hit.object);
+    const id = f || (h ? `d:${decorPart(h).pkey}` : null);
+    return id ? { id, point: hit.point } : null;
   }
-  const onDown = e => { down = [e.clientX, e.clientY]; downOnGizmo = !!tc.axis || tc.dragging; };
+  // Плоскость, по которой тянем: пол (горизонталь на высоте точки захвата) или стена (ТВ и тумба, настенное)
+  function startDrag(e, point) {
+    beginMove();
+    grab.copy(point); off.copy(obj.position).sub(point);
+    const wallItem = part ? part.mount === 'wall' : (selId === 'tv' || selId === 'console');
+    if (!wallItem) plane.set(_n.set(0, 1, 0), -point.y);
+    else if (part) plane.setFromNormalAndCoplanarPoint(_n.set(mv.nx, 0, mv.nz), point);
+    else plane.setFromNormalAndCoplanarPoint(_n.set(1, 0, 0), point);
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+    if (controls) controls.enabled = false;
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* не критично */ }
+  }
+  function dragTo(e) {
+    const r = cursorRay(e);
+    if (part?.mount === 'surface') {
+      // Под курсором поверхность, обращённая вверх (другая полка, тумба, столешница) — ставим на неё
+      hits.length = 0; r.intersectObjects(targets, true, hits);
+      const h = hits.find(usable);
+      if (h && upward(h)) { mv.refY = h.point.y; constrainPart(h.point.x + off.x, h.point.z + off.z); return; }
+      mv.refY = mv.y0;
+    }
+    if (!r.ray.intersectPlane(plane, _p)) return;
+    _p.add(off);
+    if (part) {
+      if (part.mount !== 'wall' && !free) { _p.x = Math.round(_p.x * 100) / 100; _p.z = Math.round(_p.z * 100) / 100; }
+      constrainPart(_p.x, _p.z, part.mount === 'wall' ? _p.y : obj.position.y);
+      return;
+    }
+    if (ROTATABLE.has(selId)) {
+      obj.position.x = free ? _p.x : Math.round(_p.x * 100) / 100;
+      obj.position.z = free ? _p.z : Math.round(_p.z * 100) / 100;
+    } else {
+      obj.position.z = free ? _p.z : Math.round(_p.z * 100) / 100;
+      if (tc.showY) obj.position.y = free ? _p.y : Math.round(_p.y * 100) / 100;
+    }
+    constrain();
+  }
+  function endDrag(e) {
+    try { canvas.releasePointerCapture(e.pointerId); } catch { /* не критично */ }
+    if (controls) controls.enabled = true;
+    const moved = drag.moved;
+    drag = null;
+    if (moved) commit(); else skip.clear();
+  }
+  // Захват — в фазе перехвата: раньше облёта (nav.js, OrbitControls), они видят controls.enabled = false
+  const onDown = e => {
+    down = [e.clientX, e.clientY]; downOnGizmo = !!tc.axis || tc.dragging;
+    if (downOnGizmo || e.button !== 0 || drag) return;
+    const hit = pick(e);
+    if (!hit) return;
+    if (hit.id !== selId) select(hit.id);
+    if (obj) startDrag(e, hit.point);
+  };
+  const onMove = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3) return;
+    drag.moved = true;
+    dragTo(e);
+    requestRender();
+  };
   const onUp = e => {
+    if (drag && e.pointerId === drag.id) endDrag(e);
     if (!down) return;
     const click = Math.hypot(e.clientX - down[0], e.clientY - down[1]) <= 4 && !downOnGizmo;
     down = null;
-    if (click) select(pick(e));
+    if (click) select(pick(e)?.id ?? null);
   };
   const typing = () => { const a = document.activeElement; return a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); };
   const onKey = e => {
@@ -1310,15 +1619,19 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
     if (!b) return;
     if (b.dataset.act === 'done') select(null);
     else if (b.dataset.act === 'snap') Promise.resolve(setState({ sofaSnap: 'island', sofaRot: 0 })).then(() => { resync(); requestRender(); });
+    else if (b.dataset.act === 'reset') Promise.resolve(resetSelected()).then(() => { resync(); updateToolbar(); requestRender(); });
     else setMode(b.dataset.act);
   });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   function updateToolbar() {
     if (!obj) { bar.innerHTML = ''; return; }
-    const rot = ROTATABLE.has(selId);
-    bar.innerHTML = `<span style="padding:0 6px 0 4px;opacity:.75">${NAMES[selId] || ''}</span>`
+    const moved = part ? isDecorMoved(getState().moves ?? '', part.pkey) : true;
+    const name = part ? part.label : NAMES[selId] || '';
+    bar.innerHTML = `<span style="padding:0 6px 0 4px;opacity:.75;max-width:260px;overflow:hidden;text-overflow:ellipsis">${esc(name)}</span>`
       + `<button data-act="translate" style="${btnStyle(mode === 'translate')}">Двигать</button>`
-      + (rot ? `<button data-act="rotate" style="${btnStyle(mode === 'rotate')}">Повернуть</button>` : '')
+      + (rotatable() ? `<button data-act="rotate" style="${btnStyle(mode === 'rotate')}">Повернуть</button>` : '')
       + (selId === 'sofa' && norm(getState()).sofaSnap !== 'island' ? `<button data-act="snap" style="${btnStyle(false)}">К острову</button>` : '')
+      + (moved ? `<button data-act="reset" style="${btnStyle(false)}">На место</button>` : '')
       + `<span style="padding:0 6px;opacity:.55">${free ? 'без привязки' : 'Shift — без привязки'}</span>`
       + `<button data-act="done" style="${btnStyle(false)}" title="Esc">Готово</button>`;
   }
@@ -1345,7 +1658,12 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
   // Замеры для выделенного предмета: [{ a: [x,y,z], b: [x,y,z], text, warn }]
   function measures() {
     const out = [], it = items(), S = norm(getState());
-    if (selId === 'sofa' && obj.userData.front) {
+    if (part) {
+      const b = part.wbox, yaw = yawOf(obj), nx = Math.sin(yaw) * 0.02, nz = Math.cos(yaw) * 0.02;
+      const cx = (b.min.x + b.max.x) / 2 + nx, cz = (b.min.z + b.max.z) / 2 + nz;
+      if (part.mount === 'wall') out.push({ a: [cx, 0, cz], b: [cx, b.min.y, cz], text: `Низ ${cm(b.min.y)} от пола` });
+      else if (b.min.y > 0.02) out.push({ at: [cx, b.max.y + 0.04, cz], text: `${cm(b.min.y)} от пола` });
+    } else if (selId === 'sofa' && obj.userData.front) {
       const polys = worldPolys(obj), isl = islandRect(), y = 0.02;
       if (isl) {
         const box = [[isl.x0, isl.z0], [isl.x1, isl.z0], [isl.x1, isl.z1], [isl.x0, isl.z1]];
@@ -1383,8 +1701,18 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
     }
     return out;
   }
+  // Контур выделения: мебель — след на полу; часть обстановки — след на её высоте, настенная — лицевая рамка
+  function outlines() {
+    if (!part) return worldPolys(obj).map(poly => poly.map(([x, z]) => [x, 0.01, z]));
+    const b = part.box;
+    if (!b) return [];
+    const pts = part.mount === 'wall'
+      ? [[b.min.x, b.min.y, b.max.z], [b.max.x, b.min.y, b.max.z], [b.max.x, b.max.y, b.max.z], [b.min.x, b.max.y, b.max.z]]
+      : [[b.min.x, b.min.y + 0.005, b.min.z], [b.max.x, b.min.y + 0.005, b.min.z], [b.max.x, b.min.y + 0.005, b.max.z], [b.min.x, b.min.y + 0.005, b.max.z]];
+    return [pts.map(p => obj.localToWorld(_o.set(p[0], p[1], p[2])).toArray())];
+  }
 
-  const proj = new THREE.Vector3();
+  const proj = new THREE.Vector3(), barBox = new THREE.Box3();
   function toScreen(p, r) {
     proj.set(p[0], p[1], p[2]).project(camera);
     if (proj.z < -1 || proj.z > 1) return null;
@@ -1395,9 +1723,9 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
     const r = canvas.getBoundingClientRect();
     Object.assign(root.style, { display: 'block', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
     let s = '', l = '';
-    // След выделенного предмета на полу
-    for (const poly of worldPolys(obj)) {
-      const pts = poly.map(([x, z]) => toScreen([x, 0.01, z], r));
+    // След (контур) выделенного предмета
+    for (const poly of outlines()) {
+      const pts = poly.map(p => toScreen(p, r));
       if (pts.every(Boolean)) s += `<polygon points="${pts.map(p => p.join(',')).join(' ')}" fill="rgba(37,99,235,0.08)" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 4"/>`;
     }
     const tag = (p, text, col) => `<div style="position:absolute;left:${p[0]}px;top:${p[1]}px;transform:translate(-50%,-50%);`
@@ -1417,7 +1745,7 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
     }
     svg.innerHTML = s; labels.innerHTML = l;
     // Панелька над предметом
-    const box = new THREE.Box3().setFromObject(obj), top = toScreen([(box.min.x + box.max.x) / 2, box.max.y + 0.1, (box.min.z + box.max.z) / 2], r);
+    const box = part ? part.wbox : barBox.setFromObject(obj), top = toScreen([(box.min.x + box.max.x) / 2, box.max.y + 0.1, (box.min.z + box.max.z) / 2], r);
     if (top) Object.assign(bar.style, { display: 'flex', left: `${clamp(top[0], 140, r.width - 140)}px`, top: `${clamp(top[1] - 12, 48, r.height - 8)}px` });
     else bar.style.display = 'none';
   }
@@ -1440,8 +1768,10 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
   function enable() {
     if (enabled) return;
     enabled = true; tc.enabled = true;
-    canvas.addEventListener('pointerdown', onDown);
-    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointerdown', onDown, true);
+    canvas.addEventListener('pointermove', onMove, true);
+    canvas.addEventListener('pointerup', onUp, true);
+    canvas.addEventListener('pointercancel', onUp, true);
     window.addEventListener('keydown', onKey);
     window.addEventListener('keyup', onKey);
     window.addEventListener('blur', onBlur);
@@ -1449,10 +1779,13 @@ export function createFurnitureEditor({ camera, renderer, scene, controls, getSt
   }
   function disable() {
     if (!enabled) return;
+    if (drag) { drag = null; skip.clear(); }
     select(null);
     enabled = false; tc.enabled = false;
-    canvas.removeEventListener('pointerdown', onDown);
-    canvas.removeEventListener('pointerup', onUp);
+    canvas.removeEventListener('pointerdown', onDown, true);
+    canvas.removeEventListener('pointermove', onMove, true);
+    canvas.removeEventListener('pointerup', onUp, true);
+    canvas.removeEventListener('pointercancel', onUp, true);
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('keyup', onKey);
     window.removeEventListener('blur', onBlur);

@@ -1,0 +1,893 @@
+{
+ "_about": "Источники кухонной обстановки (зона kitchen). ikea — товары IKEA PL (имя, тип, размер, цена, отделка, ссылка сняты с ikea.com/pl 2026-11-15; 3D — rotera), fix — поворот сырой модели в осях glTF до центровки, maxTris/maxTex — потолок треугольников и текстур. polyhaven — CC0-модели (фрукты). art — картины общественного достояния с Wikimedia Commons, caption — подпись на паспарту. Читают fetch.py, build.py, compose.py. pack — штук в упаковке (цена за упаковку).",
+ "ikea": [
+  {
+   "key": "tranhult-sandshult-120",
+   "article": "993.260.90",
+   "name": "TRANHULT / SANDSHULT",
+   "type": "Półka ścienna",
+   "measure": "120x30 cm",
+   "price_pln": 180.0,
+   "finish": "osika",
+   "url": "https://www.ikea.com/pl/pl/p/tranhult-sandshult-polka-scienna-osika-s99326090/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 4000,
+   "maxTex": 1024
+  },
+  {
+   "key": "bergshult-sandshult-120",
+   "article": "593.260.25",
+   "name": "BERGSHULT / SANDSHULT",
+   "type": "Półka ścienna",
+   "measure": "120x30 cm",
+   "price_pln": 120.99,
+   "finish": "biały/osika",
+   "url": "https://www.ikea.com/pl/pl/p/bergshult-sandshult-polka-scienna-bialy-osika-s59326025/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 4000,
+   "maxTex": 1024
+  },
+  {
+   "key": "lack-110",
+   "article": "902.821.80",
+   "name": "LACK",
+   "type": "Półka ścienna",
+   "measure": "110x26 cm",
+   "price_pln": 69.99,
+   "finish": "biały",
+   "url": "https://www.ikea.com/pl/pl/p/lack-polka-scienna-bialy-90282180/",
+   "fix": [
+    90,
+    0,
+    0
+   ],
+   "maxTris": 2000,
+   "maxTex": 1024
+  },
+  {
+   "key": "kungsfors-shelves-60",
+   "article": "593.083.47",
+   "name": "KUNGSFORS",
+   "type": "Szyna do zawieszania z półkami",
+   "measure": "60 cm",
+   "price_pln": 369.98,
+   "finish": "stal nierdz/jesion",
+   "url": "https://www.ikea.com/pl/pl/p/kungsfors-szyna-do-zawieszania-z-polkami-stal-nierdz-jesion-s59308347/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 12000,
+   "maxTex": 1024
+  },
+  {
+   "key": "kungsfors-rail-56",
+   "article": "403.349.16",
+   "name": "KUNGSFORS",
+   "type": "Szyna",
+   "measure": "56 cm",
+   "price_pln": 29.99,
+   "finish": "stal nierdz",
+   "url": "https://www.ikea.com/pl/pl/p/kungsfors-szyna-stal-nierdz-40334916/",
+   "fix": [
+    90,
+    0,
+    0
+   ],
+   "maxTris": 2000,
+   "maxTex": 512
+  },
+  {
+   "key": "kungsfors-s-hook",
+   "article": "203.349.22",
+   "name": "KUNGSFORS",
+   "type": "Haczyk \"s\"",
+   "measure": "",
+   "price_pln": 9.99,
+   "finish": "stal nierdz",
+   "url": "https://www.ikea.com/pl/pl/p/kungsfors-haczyk-s-stal-nierdz-20334922/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 600,
+   "maxTex": 256,
+   "pack": 5
+  },
+  {
+   "key": "hultarp-rail-60",
+   "article": "004.487.69",
+   "name": "HULTARP",
+   "type": "Szyna",
+   "measure": "60 cm",
+   "price_pln": 24.99,
+   "finish": "czarny",
+   "url": "https://www.ikea.com/pl/pl/p/hultarp-szyna-czarny-00448769/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2000,
+   "maxTex": 512
+  },
+  {
+   "key": "hultarp-hook",
+   "article": "104.444.45",
+   "name": "HULTARP",
+   "type": "Hak",
+   "measure": "7 cm",
+   "price_pln": 14.99,
+   "finish": "czarny",
+   "url": "https://www.ikea.com/pl/pl/p/hultarp-hak-czarny-10444445/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 600,
+   "maxTex": 256,
+   "pack": 5
+  },
+  {
+   "key": "knorrhane-turner",
+   "article": "705.974.83",
+   "name": "KNORRHANE",
+   "type": "Łopatka",
+   "measure": "32 cm",
+   "price_pln": 12.99,
+   "finish": "jasnobeżowy/antracyt",
+   "url": "https://www.ikea.com/pl/pl/p/knorrhane-lopatka-jasnobezowy-antracyt-70597483/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "knorrhane-spoon",
+   "article": "105.996.68",
+   "name": "KNORRHANE",
+   "type": "Głęboka łyżka do gotowania",
+   "measure": "31 cm",
+   "price_pln": 12.99,
+   "finish": "ciemnoszarobrązowy/czerwonobrązowy",
+   "url": "https://www.ikea.com/pl/pl/p/knorrhane-gleboka-lyzka-do-gotowania-ciemnoszarobrazowy-czerwonobrazowy-10599668/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "knorrhane-slotted",
+   "article": "505.996.71",
+   "name": "KNORRHANE",
+   "type": "Łyżka cedzakowa",
+   "measure": "34 cm",
+   "price_pln": 12.99,
+   "finish": "ciemnozielony/antracyt",
+   "url": "https://www.ikea.com/pl/pl/p/knorrhane-lyzka-cedzakowa-ciemnozielony-antracyt-50599671/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2000,
+   "maxTex": 512
+  },
+  {
+   "key": "hjalte-ladle",
+   "article": "701.494.65",
+   "name": "IKEA 365+ HJÄLTE",
+   "type": "Chochla do zupy",
+   "measure": "",
+   "price_pln": 19.99,
+   "finish": "stal nierdz/czarny",
+   "url": "https://www.ikea.com/pl/pl/p/ikea-365-hjaelte-chochla-do-zupy-stal-nierdz-czarny-70149465/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "grunka-4",
+   "article": "300.833.34",
+   "name": "GRUNKA",
+   "type": "Przybory kuchenne, 4 szt.",
+   "measure": "",
+   "price_pln": 49.99,
+   "finish": "stal nierdz",
+   "url": "https://www.ikea.com/pl/pl/p/grunka-przybory-kuchenne-4-szt-stal-nierdz-30083334/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 5000,
+   "maxTex": 512
+  },
+  {
+   "key": "brugdhaj-crock",
+   "article": "905.961.71",
+   "name": "BRUGDHAJ",
+   "type": "Pojemnik na przybory",
+   "measure": "15 cm",
+   "price_pln": 59.99,
+   "finish": "beżowy",
+   "url": "https://www.ikea.com/pl/pl/p/brugdhaj-pojemnik-na-przybory-bezowy-90596171/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 3000,
+   "maxTex": 512
+  },
+  {
+   "key": "norrsjon-board",
+   "article": "403.397.11",
+   "name": "NORRSJÖN",
+   "type": "Deska do krojenia",
+   "measure": "44x42 cm",
+   "price_pln": 99.99,
+   "finish": "dąb",
+   "url": "https://www.ikea.com/pl/pl/p/norrsjoen-deska-do-krojenia-dab-40339711/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1000,
+   "maxTex": 512
+  },
+  {
+   "key": "smaata-board",
+   "article": "205.571.68",
+   "name": "SMÅÄTA",
+   "type": "Deska do krojenia",
+   "measure": "28x22 cm",
+   "price_pln": 29.99,
+   "finish": "akacja",
+   "url": "https://www.ikea.com/pl/pl/p/smaaeta-deska-do-krojenia-akacja-20557168/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1000,
+   "maxTex": 512
+  },
+  {
+   "key": "artistisk-board",
+   "article": "805.110.83",
+   "name": "ARTISTISK",
+   "type": "Deska do krojenia",
+   "measure": "59x25 cm",
+   "price_pln": 199.0,
+   "finish": "dąb",
+   "url": "https://www.ikea.com/pl/pl/p/artistisk-deska-do-krojenia-dab-80511083/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "vattentat-kettle",
+   "article": "202.395.95",
+   "name": "VATTENTÄT",
+   "type": "Czajnik",
+   "measure": "2 l",
+   "price_pln": 79.99,
+   "finish": "stal nierdz/czarny",
+   "url": "https://www.ikea.com/pl/pl/p/vattentaet-czajnik-stal-nierdz-czarny-20239595/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 5000,
+   "maxTex": 512
+  },
+  {
+   "key": "press-365",
+   "article": "205.327.24",
+   "name": "IKEA 365+",
+   "type": "Zaparzacz do kawy/herbaty",
+   "measure": "1 l",
+   "price_pln": 49.99,
+   "finish": "szkło bezbarwne/stal nierdz",
+   "url": "https://www.ikea.com/pl/pl/p/ikea-365-zaparzacz-do-kawy-herbaty-szklo-bezbarwne-stal-nierdz-20532724/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 6000,
+   "maxTex": 512
+  },
+  {
+   "key": "korken-bottle-1l",
+   "article": "105.413.66",
+   "name": "KORKEN",
+   "type": "Słoik w kształcie butelki z pokr",
+   "measure": "1 l",
+   "price_pln": 9.99,
+   "finish": "szkło bezbarwne",
+   "url": "https://www.ikea.com/pl/pl/p/korken-sloik-w-ksztalcie-butelki-z-pokr-szklo-bezbarwne-10541366/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 4000,
+   "maxTex": 512
+  },
+  {
+   "key": "korken-bottle-04l",
+   "article": "905.413.67",
+   "name": "KORKEN",
+   "type": "Słoik w kształcie butelki z pokr",
+   "measure": "0.4 l",
+   "price_pln": 7.99,
+   "finish": "szkło bezbarwne",
+   "url": "https://www.ikea.com/pl/pl/p/korken-sloik-w-ksztalcie-butelki-z-pokr-szklo-bezbarwne-90541367/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 4000,
+   "maxTex": 512
+  },
+  {
+   "key": "daggaster-mug",
+   "article": "106.078.09",
+   "name": "DAGGASTER",
+   "type": "Kubek",
+   "measure": "40 cl",
+   "price_pln": 12.99,
+   "finish": "w kropki/jasnobeżowy",
+   "url": "https://www.ikea.com/pl/pl/p/daggaster-kubek-w-kropki-jasnobezowy-10607809/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2500,
+   "maxTex": 512
+  },
+  {
+   "key": "fargklar-mug",
+   "article": "404.781.89",
+   "name": "FÄRGKLAR",
+   "type": "Kubek",
+   "measure": "37 cl",
+   "price_pln": 7.99,
+   "finish": "Matowy zielony",
+   "url": "https://www.ikea.com/pl/pl/p/faergklar-kubek-matowy-zielony-40478189/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2500,
+   "maxTex": 512
+  },
+  {
+   "key": "godmiddag-plate",
+   "article": "005.850.11",
+   "name": "GODMIDDAG",
+   "type": "Talerz",
+   "measure": "26 cm",
+   "price_pln": 9.99,
+   "finish": "biały",
+   "url": "https://www.ikea.com/pl/pl/p/godmiddag-talerz-bialy-00585011/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 256
+  },
+  {
+   "key": "krustistel-plate",
+   "article": "805.843.24",
+   "name": "KRUSTISTEL",
+   "type": "Talerz",
+   "measure": "25 cm",
+   "price_pln": 12.99,
+   "finish": "wzór/jasnobeżowy",
+   "url": "https://www.ikea.com/pl/pl/p/krustistel-talerz-wzor-jasnobezowy-80584324/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2000,
+   "maxTex": 512
+  },
+  {
+   "key": "silversida-plate",
+   "article": "906.097.34",
+   "name": "SILVERSIDA",
+   "type": "Talerz",
+   "measure": "26 cm",
+   "price_pln": 14.99,
+   "finish": "wzór/niebieski",
+   "url": "https://www.ikea.com/pl/pl/p/silversida-talerz-wzor-niebieski-90609734/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2500,
+   "maxTex": 512
+  },
+  {
+   "key": "daggaster-plate",
+   "article": "506.078.12",
+   "name": "DAGGASTER",
+   "type": "Talerz",
+   "measure": "26 cm",
+   "price_pln": 12.99,
+   "finish": "w kropki/jasnobeżowy",
+   "url": "https://www.ikea.com/pl/pl/p/daggaster-talerz-w-kropki-jasnobezowy-50607812/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2000,
+   "maxTex": 512
+  },
+  {
+   "key": "daggaster-bowl",
+   "article": "806.078.15",
+   "name": "DAGGASTER",
+   "type": "Miska",
+   "measure": "14 cm",
+   "price_pln": 9.99,
+   "finish": "w kropki/jasnobeżowy",
+   "url": "https://www.ikea.com/pl/pl/p/daggaster-miska-w-kropki-jasnobezowy-80607815/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2000,
+   "maxTex": 512
+  },
+  {
+   "key": "fargklar-bowl",
+   "article": "304.781.37",
+   "name": "FÄRGKLAR",
+   "type": "Miska",
+   "measure": "16 cm",
+   "price_pln": 29.99,
+   "finish": "Matowy zielony",
+   "url": "https://www.ikea.com/pl/pl/p/faergklar-miska-matowy-zielony-30478137/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 2000,
+   "maxTex": 512
+  },
+  {
+   "key": "godmiddag-bowl",
+   "article": "005.850.30",
+   "name": "GODMIDDAG",
+   "type": "Miska",
+   "measure": "16 cm",
+   "price_pln": 7.99,
+   "finish": "biały",
+   "url": "https://www.ikea.com/pl/pl/p/godmiddag-miska-bialy-00585030/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 256
+  },
+  {
+   "key": "korken-jar-1l",
+   "article": "502.135.46",
+   "name": "KORKEN",
+   "type": "Słoik z pokrywką",
+   "measure": "1 l",
+   "price_pln": 12.99,
+   "finish": "szkło bezbarwne",
+   "url": "https://www.ikea.com/pl/pl/p/korken-sloik-z-pokrywka-szklo-bezbarwne-50213546/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 4000,
+   "maxTex": 512
+  },
+  {
+   "key": "korken-jar-05l",
+   "article": "702.135.45",
+   "name": "KORKEN",
+   "type": "Słoik z pokrywką",
+   "measure": "0.5 l",
+   "price_pln": 9.99,
+   "finish": "szkło bezbarwne",
+   "url": "https://www.ikea.com/pl/pl/p/korken-sloik-z-pokrywka-szklo-bezbarwne-70213545/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 4000,
+   "maxTex": 512
+  },
+  {
+   "key": "pelarbjork-vase-14",
+   "article": "806.073.11",
+   "name": "PELARBJÖRK",
+   "type": "Wazon",
+   "measure": "14 cm",
+   "price_pln": 39.99,
+   "finish": "biały",
+   "url": "https://www.ikea.com/pl/pl/p/pelarbjoerk-wazon-bialy-80607311/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 3000,
+   "maxTex": 512
+  },
+  {
+   "key": "stockholm-bowl-34",
+   "article": "505.924.29",
+   "name": "STOCKHOLM 2025",
+   "type": "Miska",
+   "measure": "34 cm",
+   "price_pln": 79.99,
+   "finish": "beżowy",
+   "url": "https://www.ikea.com/pl/pl/p/stockholm-2025-miska-bezowy-50592429/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 3000,
+   "maxTex": 512
+  },
+  {
+   "key": "parlhagg-vase-22",
+   "article": "806.234.05",
+   "name": "PÄRLHÄGG",
+   "type": "Wazon",
+   "measure": "22 cm",
+   "price_pln": 49.99,
+   "finish": "beżowy",
+   "url": "https://www.ikea.com/pl/pl/p/paerlhaegg-wazon-bezowy-80623405/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 3000,
+   "maxTex": 512
+  },
+  {
+   "key": "smycka-eucalyptus",
+   "article": "803.357.73",
+   "name": "SMYCKA",
+   "type": "Sztuczny liść",
+   "measure": "65 cm",
+   "price_pln": 14.99,
+   "finish": "eukaliptus/zielony",
+   "url": "https://www.ikea.com/pl/pl/p/smycka-sztuczny-lisc-eukaliptus-zielony-80335773/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 7000,
+   "maxTex": 512
+  },
+  {
+   "key": "kallarhals-vase-26",
+   "article": "505.837.12",
+   "name": "KÄLLARHALS",
+   "type": "Wazon",
+   "measure": "26 cm",
+   "price_pln": 39.99,
+   "finish": "pomarańczowy",
+   "url": "https://www.ikea.com/pl/pl/p/kaellarhals-wazon-pomaranczowy-50583712/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 5000,
+   "maxTex": 512
+  },
+  {
+   "key": "ravsten-stool",
+   "article": "305.970.55",
+   "name": "RÄVSTEN",
+   "type": "Stołek barowy",
+   "measure": "62 cm",
+   "price_pln": 179.0,
+   "finish": "wysokość blatu drewno kauczukowe",
+   "url": "https://www.ikea.com/pl/pl/p/raevsten-stolek-barowy-wysokosc-blatu-drewno-kauczukowe-30597055/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 6000,
+   "maxTex": 1024
+  },
+  {
+   "key": "rosentorp-stool",
+   "article": "506.181.94",
+   "name": "ROSENTORP",
+   "type": "Stołek barowy z oparciem",
+   "measure": "63 cm",
+   "price_pln": 279.0,
+   "finish": "wysokość blatu/biały",
+   "url": "https://www.ikea.com/pl/pl/p/rosentorp-stolek-barowy-z-oparciem-wysokosc-blatu-bialy-50618194/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 9000,
+   "maxTex": 1024
+  },
+  {
+   "key": "bergmund-stool",
+   "article": "193.847.05",
+   "name": "BERGMUND",
+   "type": "Stołek barowy z oparciem",
+   "measure": "62 cm",
+   "price_pln": 399.0,
+   "finish": "wysokość blatu imit. dębu/Gunnared średni szary",
+   "url": "https://www.ikea.com/pl/pl/p/bergmund-stolek-barowy-z-oparciem-wysokosc-blatu-imit-debu-gunnared-sredni-szary-s19384705/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 6000,
+   "maxTex": 1024
+  },
+  {
+   "key": "skogsta-stool",
+   "article": "006.210.09",
+   "name": "SKOGSTA",
+   "type": "Stołek barowy z oparciem",
+   "measure": "62 cm",
+   "price_pln": 299.0,
+   "finish": "wysokość blatu czarny",
+   "url": "https://www.ikea.com/pl/pl/p/skogsta-stolek-barowy-z-oparciem-wysokosc-blatu-czarny-00621009/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 9000,
+   "maxTex": 1024
+  },
+  {
+   "key": "rodalm-21x30-oak",
+   "article": "505.663.93",
+   "name": "RÖDALM",
+   "type": "Ramka",
+   "measure": "21x30 cm",
+   "price_pln": 14.99,
+   "finish": "imit. dębu",
+   "url": "https://www.ikea.com/pl/pl/p/roedalm-ramka-imit-debu-50566393/",
+   "fix": [
+    90,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "rodalm-21x30-white",
+   "article": "105.488.86",
+   "name": "RÖDALM",
+   "type": "Ramka",
+   "measure": "21x30 cm",
+   "price_pln": 14.99,
+   "finish": "biały",
+   "url": "https://www.ikea.com/pl/pl/p/roedalm-ramka-bialy-10548886/",
+   "fix": [
+    90,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "lomviken-21x30-black",
+   "article": "903.143.03",
+   "name": "LOMVIKEN",
+   "type": "Ramka",
+   "measure": "21x30 cm",
+   "price_pln": 19.99,
+   "finish": "czarny",
+   "url": "https://www.ikea.com/pl/pl/p/lomviken-ramka-czarny-90314303/",
+   "fix": [
+    0,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "rodalm-30x40-walnut",
+   "article": "605.489.21",
+   "name": "RÖDALM",
+   "type": "Ramka",
+   "measure": "30x40 cm",
+   "price_pln": 29.99,
+   "finish": "orzech",
+   "url": "https://www.ikea.com/pl/pl/p/roedalm-ramka-orzech-60548921/",
+   "fix": [
+    90,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "rodalm-30x40-black",
+   "article": "205.489.18",
+   "name": "RÖDALM",
+   "type": "Ramka",
+   "measure": "30x40 cm",
+   "price_pln": 29.99,
+   "finish": "czarny",
+   "url": "https://www.ikea.com/pl/pl/p/roedalm-ramka-czarny-20548918/",
+   "fix": [
+    90,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "hackhagtorn-30x40-pine",
+   "article": "006.141.17",
+   "name": "HÄCKHAGTORN",
+   "type": "Ramka",
+   "measure": "30x40 cm",
+   "price_pln": 14.99,
+   "finish": "sosna",
+   "url": "https://www.ikea.com/pl/pl/p/haeckhagtorn-ramka-sosna-00614117/",
+   "fix": [
+    90,
+    0,
+    0
+   ],
+   "maxTris": 1500,
+   "maxTex": 512
+  },
+  {
+   "key": "mosslanda-55-oak",
+   "article": "805.898.35",
+   "name": "MOSSLANDA",
+   "type": "Półka na zdjęcia",
+   "measure": "55 cm",
+   "price_pln": 19.99,
+   "finish": "imit. dębu",
+   "url": "https://www.ikea.com/pl/pl/p/mosslanda-polka-na-zdjecia-imit-debu-80589835/",
+   "fix": [
+    90,
+    0,
+    0
+   ],
+   "maxTris": 1000,
+   "maxTex": 512
+  }
+ ],
+ "polyhaven": [
+  {
+   "key": "apple",
+   "id": "food_apple_01",
+   "author": "Oliver Harries",
+   "maxTris": 1200
+  },
+  {
+   "key": "lemon",
+   "id": "lemon",
+   "author": "Kuutti Siitonen",
+   "maxTris": 1200
+  },
+  {
+   "key": "lime",
+   "id": "food_lime_01",
+   "author": "Oliver Harries",
+   "maxTris": 1000
+  },
+  {
+   "key": "pear",
+   "id": "food_pears_asian_01",
+   "author": "Amal Kumar",
+   "maxTris": 1500
+  },
+  {
+   "key": "pomegranate",
+   "id": "food_pomegranate_01",
+   "author": "Oliver Harries",
+   "maxTris": 1500
+  }
+ ],
+ "art": [
+  {
+   "key": "lear-minspysia",
+   "title": "More Nonsense, Pictures, Rhymes, Botany, etc. (1872), Minspysia Deliciosa.jpg",
+   "page": "https://commons.wikimedia.org/wiki/File:More_Nonsense,_Pictures,_Rhymes,_Botany,_etc._(1872),_Minspysia_Deliciosa.jpg",
+   "author": "Edward Lear (1812–1888)",
+   "date": "1872",
+   "licence": "Public domain",
+   "caption": "Minspysia Deliciosa."
+  },
+  {
+   "key": "lear-dinnerbell",
+   "title": "More Nonsense, Pictures, Rhymes, Botany, etc. (1872), Stunnia Dinnerbellia.jpg",
+   "page": "https://commons.wikimedia.org/wiki/File:More_Nonsense,_Pictures,_Rhymes,_Botany,_etc._(1872),_Stunnia_Dinnerbellia.jpg",
+   "author": "Edward Lear (1812–1888)",
+   "date": "1872",
+   "licence": "Public domain",
+   "caption": "Stunnia Dinnerbellia."
+  },
+  {
+   "key": "lear-lobster",
+   "title": "More Nonsense, Pictures, Rhymes, Botany, etc. (1872), The Lively Learned Lobster.jpg",
+   "page": "https://commons.wikimedia.org/wiki/File:More_Nonsense,_Pictures,_Rhymes,_Botany,_etc._(1872),_The_Lively_Learned_Lobster.jpg",
+   "author": "Edward Lear (1812–1888)",
+   "date": "1872",
+   "licence": "Public domain",
+   "caption": "The Lively Learned Lobster."
+  },
+  {
+   "key": "pomological-lemon",
+   "title": "Pomological Watercolor POM00006821.jpg",
+   "page": "https://commons.wikimedia.org/wiki/File:Pomological_Watercolor_POM00006821.jpg",
+   "author": "Ellen Isham Schutt (1873–1955), USDA Pomological Watercolor Collection",
+   "date": "27 July 1911",
+   "licence": "Public domain",
+   "caption": ""
+  }
+ ]
+}

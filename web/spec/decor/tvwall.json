@@ -1,0 +1,463 @@
+{
+ "zone": "tvwall",
+ "title": "Стена с ТВ",
+ "room": "kitchen_living",
+ "_about": "Генерирует tools/decor/tvwall/compose.py — руками не править. Слоты и опции только дописывать в конец.",
+ "slots": [
+  {
+   "id": "console",
+   "label": "На тумбе",
+   "default": "curios",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "curios",
+     "name": "Диковины: моаи, утка на книгах, плёночная камера, гном, свеча, хавортия",
+     "note": "Каменный истукан-моаи, резиновая утка на стопке книг, старая плёночная камера, садовый гном размером с ладонь, свеча на латунном блюдце, хавортия в белом горшке. Фигурки: Poly Haven (CC0) и свои процедурные модели; источники — SOURCE.md в папках реквизита.",
+     "size": [
+      0.4,
+      0.15,
+      1.8
+     ],
+     "thumb": "models/decor/tvwall/thumbs/curios.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/fig-moai/model.glb",
+       "pos": [
+        6.085,
+        0.45,
+        0.36
+       ],
+       "rot": -75,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/books-stack-s/model.glb",
+       "pos": [
+        6.044,
+        0.45,
+        0.72
+       ],
+       "rot": -90,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/fig-rubber-duck/model.glb",
+       "pos": [
+        6.042,
+        0.518,
+        0.72
+       ],
+       "rot": -65,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/camera-vintage/model.glb",
+       "pos": [
+        5.946,
+        0.45,
+        1.12
+       ],
+       "rot": -110,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/candle-pillar/model.glb",
+       "pos": [
+        6.058,
+        0.45,
+        1.6
+       ],
+       "rot": -90,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/fig-garden-gnome/model.glb",
+       "pos": [
+        6.095,
+        0.45,
+        1.74
+       ],
+       "rot": -105,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/plant-haworthia-mini/model.glb",
+       "pos": [
+        6.074,
+        0.45,
+        1.93
+       ],
+       "rot": -90,
+       "anchor": "console"
+      }
+     ]
+    },
+    {
+     "id": "zoo",
+     "name": "Зверинец: кот, слон, ракушка, кит, утка, конь",
+     "note": "Бетонный кот, резной деревянный слон, раковина-лямбис, бронзовый кит на подставке, резиновая утка, фарфоровый вздыбленный конь. Фигурки: Poly Haven (CC0) и свои процедурные модели; источники — SOURCE.md в папках реквизита.",
+     "size": [
+      0.4,
+      0.15,
+      1.8
+     ],
+     "thumb": "models/decor/tvwall/thumbs/zoo.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/fig-concrete-cat/model.glb",
+       "pos": [
+        6.06,
+        0.45,
+        0.36
+       ],
+       "rot": -70,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/fig-wooden-elephant/model.glb",
+       "pos": [
+        6.077,
+        0.45,
+        0.72
+       ],
+       "rot": -90,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/shell-lambis/model.glb",
+       "pos": [
+        5.949,
+        0.45,
+        1.02
+       ],
+       "rot": -120,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/fig-bronze-whale/model.glb",
+       "pos": [
+        6.074,
+        0.45,
+        1.22
+       ],
+       "rot": -90,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/fig-rubber-duck/model.glb",
+       "pos": [
+        6.001,
+        0.45,
+        1.7
+       ],
+       "rot": -125,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/fig-porcelain-horse/model.glb",
+       "pos": [
+        6.09,
+        0.45,
+        1.92
+       ],
+       "rot": -90,
+       "anchor": "console"
+      }
+     ]
+    },
+    {
+     "id": "retro",
+     "name": "Ретро: бюст, альбомы, будильник, жестяной робот, камера, хавортия",
+     "note": "Мраморный бюст размером с ладонь, стопка альбомов, будильник с колокольчиками, заводной жестяной робот, плёночная камера, хавортия. Фигурки: Poly Haven (CC0) и свои процедурные модели; источники — SOURCE.md в папках реквизита.",
+     "size": [
+      0.4,
+      0.15,
+      1.8
+     ],
+     "thumb": "models/decor/tvwall/thumbs/retro.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/bust-marble-mini/model.glb",
+       "pos": [
+        6.074,
+        0.45,
+        0.36
+       ],
+       "rot": -75,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/books-stack-l/model.glb",
+       "pos": [
+        6.007,
+        0.45,
+        0.78
+       ],
+       "rot": -90,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/clock-alarm-retro/model.glb",
+       "pos": [
+        6.077,
+        0.45,
+        1.08
+       ],
+       "rot": -100,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/fig-tin-robot/model.glb",
+       "pos": [
+        6.051,
+        0.45,
+        1.22
+       ],
+       "rot": -80,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/camera-vintage/model.glb",
+       "pos": [
+        5.932,
+        0.45,
+        1.7
+       ],
+       "rot": -65,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/plant-haworthia-mini/model.glb",
+       "pos": [
+        6.074,
+        0.45,
+        1.93
+       ],
+       "rot": -90,
+       "anchor": "console"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "joke",
+   "label": "Фигурка с юмором",
+   "default": "cactus",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "cactus",
+     "name": "Кактус «с намёком», глазурь, h 13 см",
+     "note": "Сувенир-шутка: керамический кактус в терракотовом горшке, столбик и два круглых отростка. Своя процедурная модель (tools/decor/tvwall/build.py).",
+     "size": [
+      0.07,
+      0.136,
+      0.07
+     ],
+     "thumb": "models/decor/props/fig-cheeky-cactus/thumb.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/props/fig-cheeky-cactus/model.glb",
+       "pos": [
+        5.986,
+        0.45,
+        0.53
+       ],
+       "rot": -80,
+       "anchor": "console"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "art",
+   "label": "Картины у ТВ",
+   "default": "trio",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "trio",
+     "name": "Три картины: Арчимбольдо, «Собаки играют в покер», «Заяц» Дюрера",
+     "brand": "IKEA",
+     "article": "205.489.18 + 105.489.14 + 204.193.89",
+     "url": "https://www.ikea.com/pl/pl/p/roedalm-ramka-czarny-20548918/",
+     "price_pln": 89.97,
+     "finish": "RÖDALM Ramka, 30x40 cm, czarny + RÖDALM Ramka, 40x50 cm, orzech + LOMVIKEN Ramka, 21x30 cm, złoty kolor",
+     "note": "Развеска справа от ТВ: «Вертумн» Арчимбольдо (1591) в чёрной RÖDALM 30×40, «A Friend in Need» К. М. Кулиджа (1903) в ореховой RÖDALM 40×50, «Молодой заяц» Дюрера (1502) в золотой LOMVIKEN 21×30. Картины — общественное достояние (Wikimedia Commons), печать на бумаге; источники — SOURCE.md рамок. Ссылки: https://www.ikea.com/pl/pl/p/roedalm-ramka-orzech-10548914/; https://www.ikea.com/pl/pl/p/lomviken-ramka-zloty-kolor-20419389/",
+     "size": [
+      0.906,
+      0.792,
+      0.032
+     ],
+     "thumb": "models/decor/tvwall/thumbs/trio.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/tvwall/rodalm-30x40-vertumnus/model.glb",
+       "pos": [
+        6.154,
+        1.121,
+        2.356
+       ],
+       "rot": -90,
+       "anchor": "tv"
+      },
+      {
+       "model": "models/decor/tvwall/rodalm-40x50-poker/model.glb",
+       "pos": [
+        6.154,
+        1.308,
+        2.844
+       ],
+       "rot": -90,
+       "anchor": "tv"
+      },
+      {
+       "model": "models/decor/tvwall/lomviken-21x30-hare/model.glb",
+       "pos": [
+        6.161,
+        0.934,
+        2.844
+       ],
+       "rot": -90,
+       "anchor": "tv"
+      }
+     ]
+    },
+    {
+     "id": "tiger",
+     "name": "Большая картина: Руссо «Тигр в тропической грозе»",
+     "brand": "IKEA",
+     "article": "702.867.73",
+     "url": "https://www.ikea.com/pl/pl/p/lomviken-ramka-czarny-70286773/",
+     "price_pln": 69.99,
+     "finish": "LOMVIKEN Ramka, 50x70 cm, czarny",
+     "note": "«Surprised!» Анри Руссо (1891) в чёрной LOMVIKEN 50×70, горизонтально справа от ТВ. Картины — общественное достояние (Wikimedia Commons), печать на бумаге; источники — SOURCE.md рамок.",
+     "size": [
+      0.714,
+      0.514,
+      0.018
+     ],
+     "thumb": "models/decor/tvwall/thumbs/tiger.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/tvwall/lomviken-50x70-tiger/model.glb",
+       "pos": [
+        6.161,
+        1.073,
+        2.554
+       ],
+       "rot": -90,
+       "anchor": "tv"
+      }
+     ]
+    },
+    {
+     "id": "ledge",
+     "name": "Полка MOSSLANDA 55: коты Куниёси, заяц Дюрера и слон",
+     "brand": "IKEA",
+     "article": "805.898.35 + 505.663.93 + 204.193.89",
+     "url": "https://www.ikea.com/pl/pl/p/mosslanda-polka-na-zdjecia-imit-debu-80589835/",
+     "price_pln": 54.97,
+     "finish": "MOSSLANDA Półka na zdjęcia, 55 cm, imit. dębu + RÖDALM Ramka, 21x30 cm, imit. dębu + LOMVIKEN Ramka, 21x30 cm, złoty kolor",
+     "note": "Полка для картин справа от ТВ, на ней прислонены «Коты, складывающиеся в иероглифы» Утагавы Куниёси (ок. 1842) в RÖDALM 21×30 и «Молодой заяц» Дюрера в LOMVIKEN 21×30; резной слон (Poly Haven, CC0). Картины — общественное достояние (Wikimedia Commons), печать на бумаге; источники — SOURCE.md рамок. Ссылки: https://www.ikea.com/pl/pl/p/roedalm-ramka-imit-debu-50566393/; https://www.ikea.com/pl/pl/p/lomviken-ramka-zloty-kolor-20419389/",
+     "size": [
+      0.55,
+      0.332,
+      0.12
+     ],
+     "thumb": "models/decor/tvwall/thumbs/ledge.jpg",
+     "collide": false,
+     "parts": [
+      {
+       "model": "models/decor/tvwall/mosslanda-55-gallery/model.glb",
+       "pos": [
+        6.11,
+        1.1,
+        2.472
+       ],
+       "rot": -90,
+       "anchor": "tv"
+      },
+      {
+       "model": "models/decor/props/fig-wooden-elephant/model.glb",
+       "pos": [
+        6.091,
+        1.112,
+        2.682
+       ],
+       "rot": -90,
+       "anchor": "tv"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "plant",
+   "label": "Растение у тумбы",
+   "default": "strelitzia",
+   "options": [
+    {
+     "id": "none",
+     "name": "Нет"
+    },
+    {
+     "id": "strelitzia",
+     "name": "STRELITZIA roślina doniczkowa, 19 cm + HASSELBUKETT osłonka 19 cm",
+     "brand": "IKEA",
+     "article": "104.267.19 + 406.218.23",
+     "url": "https://www.ikea.com/pl/pl/p/strelitzia-roslina-doniczkowa-rajski-ptak-10426719/",
+     "price_pln": 139.98,
+     "finish": "Rajski ptak; osłonka beżowa",
+     "note": "Справа от тумбы, вдоль стены ТВ. Модели — общий реквизит props/strelitzia-19 и props/hasselbukett-19.",
+     "size": [
+      0.578,
+      0.918,
+      0.649
+     ],
+     "thumb": "models/decor/props/strelitzia-19/thumb.jpg",
+     "parts": [
+      {
+       "model": "models/decor/props/hasselbukett-19/model.glb",
+       "pos": [
+        5.842,
+        0,
+        2.369
+       ],
+       "rot": -90,
+       "anchor": "console"
+      },
+      {
+       "model": "models/decor/props/strelitzia-19/model.glb",
+       "pos": [
+        5.842,
+        0.025,
+        2.369
+       ],
+       "rot": -90,
+       "anchor": "console"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
