@@ -165,7 +165,7 @@ export function createFieldEventView({ THREE: T, parent, camera, ground, rules }
     cargoBar.setAttribute('aria-label', 'Прочность груза');
     plate.append(name, amount, bar, cargoAmount, cargoBar); document.body.append(plate);
     const model = { base, body, wheels, rotors, lights, cargo, banner, trailer, smoke, smokeMat, bits, burst, flash, shadow,
-      plate, name, amount, bar, cargoAmount, cargoBar, ricochets, hits: e.hits, dead: e.dead, exploded: e.impactAge !== null, born: e.age };
+      plate, name, amount, bar, cargoAmount, cargoBar, ricochets };
     models.set(e.id, model); return model;
   }
 
@@ -265,7 +265,7 @@ export function createFieldEventView({ THREE: T, parent, camera, ground, rules }
     const target = aimed || announcements[0]; cue.hidden = !visible || !walking || !target;
     if (target && !cue.hidden) {
       const r = rules.types[target.kind]; title.textContent = r.name;
-      subtitle.textContent = target.hp < target.maxHp ? r.damaged : r.line;
+      subtitle.textContent = target.kind === 'tractor' && target.cargoDead ? 'Груз сбит. Осталась броня!' : target.hp < target.maxHp ? r.damaged : r.line;
       health.hidden = !aimed; health.max = target.maxHp; health.value = target.hp;
     }
     return visible && live.size > 0;

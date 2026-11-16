@@ -1135,7 +1135,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
           hit(weapon) {
             if (used || network) return null; used = true;
             const result = encounters.hit({ origin, direction, weapon, range: raycaster.far });
-            if (result?.killed) api.award(result.points, new THREE.Vector3(...result.point), S.events.types[result.species].name);
+            if (result?.killed) api.award(result.points, new THREE.Vector3(...result.point), result.cargo ? 'Пирог сбит!' : S.events.types[result.species].name);
             else if (result) popup(new THREE.Vector3(...result.point), `${result.hp} / ${result.maxHp}`, 'прочность');
             return result;
           } };
@@ -1381,7 +1381,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     applyNetworkHit(hit, { local = false } = {}) {
       if (!network || !local || !hit?.point) return;
       const p = new THREE.Vector3(...hit.point);
-      if (hit.points > 0) popup(p, `+${fmt(hit.points)}`, S?.events?.types?.[hit.species]?.name ?? S?.species?.[hit.species]?.name ?? 'Попадание');
+      if (hit.points > 0) popup(p, `+${fmt(hit.points)}`, hit.cargo ? 'Пирог сбит!' : S?.events?.types?.[hit.species]?.name ?? S?.species?.[hit.species]?.name ?? 'Попадание');
       else popup(p, hit.event ? `${hit.hp} / ${hit.maxHp}` : 'Попадание', hit.event ? 'прочность' : hit.zone === 'head' ? 'в голову' : '');
     },
     award(points, point, title, sub = '') {
