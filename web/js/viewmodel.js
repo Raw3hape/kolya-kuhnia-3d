@@ -1,7 +1,8 @@
 // Руки с оружием в прогулке «по приколу» (вид от первого лица, как в шутерах). Настройка браузера, в код варианта не входит.
 // Модели: web/models/viewmodel/ (SOURCE.md, сборка tools/viewmodel/build.py): руки и оружие одним скелетом с клипами
 // idle (кадр 0 — поза держания), shoot, reload; грузятся при первом выборе. Клипы ведёт время действия, а не часы:
-// в покое скелет не считается. Прицел — по пустышкам sight_rear/sight_front модели, вспышка — у пустышки muzzle.
+// в покое скелет не считается. Ствол наводится в общий с выстрелом центр через muzzle (+X),
+// sight_rear/sight_front задают положение у глаза. Наведение — weapon-aim.js, после расчёта камеры рук.
 // Рисуется поверх растра своей камерой со своим углом обзора (render.js setOverlay): в стены не проваливается,
 // в фото-режим, снимок и GLB не попадает. Свет вспышки живёт только в сцене рук: свет и тени квартиры не трогает.
 // Попадания (impacts.js): лучи из центра экрана с текущим разбросом, дырка на поверхности и всплеск; зверь (hunt.js) ближе
@@ -31,6 +32,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { createImpacts } from './impacts.js';
 import { WEAPON_RULES, refillMagazine } from './multiplayer/rules.js';
 import { addHelp } from './help.js';
+import { createWeaponAim } from './weapon-aim.js';
 
 addHelp(
   { mode: 'walk', topic: 'weapon', keys: ['2', '3', '4', '5'], text: 'пистолет, автомат, винтовка, двустволка; 1 — убрать', touch: 'оружие — во вкладке «Прогулка» → «Оружие»', order: 100 },
@@ -40,7 +42,6 @@ addHelp(
 );
 
 // pos — место спускового крючка (начало координат модели) в пространстве камеры рук (м): вправо, вверх, вперёд = −z;
-// yaw — доворот к центру экрана, pitch — подъём ствола, рад.
 // action: semi | auto | bolt (затвор после каждого выстрела — клип shoot за cycle с) | break (переломка).
 // rate — выстрелов в секунду; mag/reserve — патронов в магазине и в запасе; reload — перезарядка (клип reload), с;
 // shot — клип shoot на выстрел, с (если у модели он есть и это не затвор); reloadEv/cycleEv — звуки по ходу клипа:
@@ -49,34 +50,33 @@ addHelp(
 // spread, рад: hip — от бедра, ads — в прицеле, move/run — добавка на ходу/бегом, bloom — рост за выстрел (в прицеле
 //   × VM.adsBloom), max — потолок роста, recover — спад роста, рад/с. Отдача уводит взгляд (walk.kick), а не луч:
 //   recoil up/side, рад (в прицеле × VM.adsRecoil), keep — доля, что остаётся (игрок возвращает прицел сам).
-// kick — руки: back, м; pitch, рад. ads: zoom — во сколько раз уже обзор, time — подъём к глазу, с; eye — от глаза до целика, м;
-//   lift — глаз выше целика, м (мушка в центре экрана, целик чуть ниже — мушку видно над ним).
+// kick — откат рук назад, м. ads: zoom — увеличение, time — подъём к глазу, с; eye — от глаза до целика, м.
 export const WEAPONS = [
   { id: 'none', name: 'Нет' },
-  { id: 'pistol', name: 'Пистолет', file: 'pistol.glb', pos: [0.1, -0.1, -0.36], yaw: 0.1, action: 'semi', shot: 0.25, loud: 0.6,
+  { id: 'pistol', name: 'Пистолет', file: 'pistol.glb', pos: [0.1, -0.1, -0.36], action: 'semi', shot: 0.25, loud: 0.6,
     reloadEv: [[0.21, 'magOut'], [0.5, 'magIn', 1], [0.82, 'rack']],
     spread: { hip: 0.008, ads: 0.0012, move: 0.008, run: 0.025, bloom: 0.004, max: 0.012, recover: 0.06 },
-    recoil: { up: 0.022, side: 0.006, keep: 0.2 }, kick: { back: 0.03, pitch: 0.12 },
-    ads: { zoom: 1.25, time: 0.16, eye: 0.36, lift: 0 },
+    recoil: { up: 0.022, side: 0.006, keep: 0.2 }, kick: { back: 0.03 },
+    ads: { zoom: 1.25, time: 0.16, eye: 0.36 },
     flash: 0.13, sound: { gain: 1, cutoff: 3200, decay: 0.16, thump: 150 } },
-  { id: 'rifle', name: 'Автомат', file: 'rifle.glb', pos: [0.14, -0.17, -0.48], yaw: 0.05, pitch: -0.06, action: 'auto', shot: 0.1, loud: 0.8,
+  { id: 'rifle', name: 'Автомат', file: 'rifle.glb', pos: [0.14, -0.17, -0.48], action: 'auto', shot: 0.1, loud: 0.8,
     reloadEv: [[0.25, 'magOut'], [0.46, 'magIn', 1], [0.75, 'rack']],
     spread: { hip: 0.01, ads: 0.0012, move: 0.012, run: 0.035, bloom: 0.0015, max: 0.006, recover: 0.03 },
-    recoil: { up: 0.007, side: 0.004, keep: 0.25 }, kick: { back: 0.018, pitch: 0.04 },
-    ads: { zoom: 1.6, time: 0.22, eye: 0.34, lift: 0.006 },
+    recoil: { up: 0.007, side: 0.004, keep: 0.25 }, kick: { back: 0.018 },
+    ads: { zoom: 1.6, time: 0.22, eye: 0.34 },
     flash: 0.2, sound: { gain: 0.8, cutoff: 2400, decay: 0.12, thump: 110 } },
-  { id: 'bolt', name: 'Винтовка', file: 'bolt.glb', pos: [0.14, -0.17, -0.46], yaw: 0.05, pitch: -0.06, action: 'bolt', loud: 1,
+  { id: 'bolt', name: 'Винтовка', file: 'bolt.glb', pos: [0.14, -0.17, -0.46], action: 'bolt', loud: 1,
     reloadEv: [[0.15, 'boltUp'], [0.21, 'boltBack'], [0.35, 'clip'], [0.6, 'shell', 1], [0.76, 'boltFwd'], [0.81, 'boltDown']],
     cycleEv: [[0.35, 'boltUp'], [0.5, 'boltBack'], [0.7, 'boltFwd'], [0.8, 'boltDown']],
     spread: { hip: 0.012, ads: 0.0003, move: 0.02, run: 0.05, bloom: 0, max: 0, recover: 1 },
-    recoil: { up: 0.05, side: 0.012, keep: 0.15 }, kick: { back: 0.05, pitch: 0.1 },
-    ads: { zoom: 2.4, time: 0.3, eye: 0.45, lift: 0.008 },
+    recoil: { up: 0.05, side: 0.012, keep: 0.15 }, kick: { back: 0.05 },
+    ads: { zoom: 2.4, time: 0.3, eye: 0.45 },
     flash: 0.24, sound: { gain: 1.2, cutoff: 2600, decay: 0.3, thump: 85 } },
-  { id: 'shotgun', name: 'Двустволка', file: 'shotgun.glb', pos: [0.14, -0.17, -0.44], yaw: 0.05, pitch: -0.04, action: 'break', loud: 0.9,
+  { id: 'shotgun', name: 'Двустволка', file: 'shotgun.glb', pos: [0.14, -0.17, -0.44], action: 'break', loud: 0.9,
     reloadEv: [[0.12, 'open'], [0.21, 'shell'], [0.6, 'shell', 1], [0.79, 'close']],
     spread: { hip: 0.03, ads: 0.022, move: 0.01, run: 0.02, bloom: 0, max: 0, recover: 1 },
-    recoil: { up: 0.045, side: 0.015, keep: 0.2 }, kick: { back: 0.05, pitch: 0.12 },
-    ads: { zoom: 1.3, time: 0.22, eye: 0.5, lift: 0.05 },
+    recoil: { up: 0.045, side: 0.015, keep: 0.2 }, kick: { back: 0.05 },
+    ads: { zoom: 1.3, time: 0.22, eye: 0.5 },
     flash: 0.28, sound: { gain: 1.25, cutoff: 2000, decay: 0.28, thump: 75 } },
 ].map(w => ({ ...w, ...WEAPON_RULES[w.id] }));
 const VM = {
@@ -101,14 +101,6 @@ const PREF = 'kitchen-viewmodel-v1';   // { weapon, sound }
 const MODELS = new URL('../models/viewmodel/', import.meta.url);
 const byId = id => WEAPONS.find(w => w.id === id) || WEAPONS[0];
 
-// Поза в прицеле: точка над целиком (r, поднята на lift) и мушка (в осях модели, поза держания) на оси камеры рук,
-// целик — в eye метрах перед глазом
-function adsPose({ eye, lift }, r, f) {
-  r.y += lift;
-  const rx = Math.atan((f.y - r.y) / (f.z - r.z)), c = Math.cos(rx), s = Math.sin(rx);
-  return { x: -r.x, y: -(r.y * c - r.z * s), z: -eye - (r.y * s + r.z * c), rx };
-}
-
 function readPref() {
   try { return { weapon: 'none', sound: true, ...JSON.parse(localStorage.getItem(PREF) || '{}') }; } catch { return { weapon: 'none', sound: true }; }
 }
@@ -127,6 +119,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   // ---------- сцена рук ----------
   const vmScene = new THREE.Scene();
   const vmCam = new THREE.PerspectiveCamera(VM.fovV, 1, 0.01, 5);
+  const aim = createWeaponAim(THREE), restRotation = new THREE.Quaternion();
   const hemi = new THREE.HemisphereLight('#f4f1ea', '#4e4a45', 1.7);
   const key = new THREE.DirectionalLight('#fff4e6', 2.2); key.position.set(-0.6, 1, 0.5);
   const rim = new THREE.DirectionalLight('#dfe8ff', 0.8); rim.position.set(1, 0.3, -1);
@@ -171,7 +164,9 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
       m.flash = new THREE.Group();
       m.flash.scale.setScalar(1 / muzzle.getWorldScale(pa).x);
       muzzle.add(m.flash);
-      m.ads = adsPose(w.ads, root.getObjectByName('sight_rear').getWorldPosition(pa), root.getObjectByName('sight_front').getWorldPosition(pb));
+      m.muzzle = muzzle;
+      m.ads = aim.eyePose(w.ads.eye, root.getObjectByName('sight_rear').getWorldPosition(pa),
+        root.getObjectByName('sight_front').getWorldPosition(pb), new THREE.Vector3(1, 0, 0).transformDirection(muzzle.matrixWorld));
       models[id] = m;
       if (id === weapon) mount();
       return m;
@@ -207,7 +202,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
 
   // ---------- состояние анимации ----------
   let shown = false, wasActive = false, raise = 1, quiet = 0, bobAmp = 0, phase = 0, lagX = 0, lagY = 0;
-  let rec = 0, recV = 0, recYaw = 0, flash = 0, lastShot = -1e9, lastDry = -1e9, holding = false, spd = 0, shots = 0;
+  let rec = 0, recV = 0, flash = 0, lastShot = -1e9, lastDry = -1e9, holding = false, spd = 0, shots = 0;
   let aimHeld = false, adsK = 0, adsE = 0, zoomSet = 1, bloom = 0, mvNow = false, runNow = false;
   let act = null;        // { kind: reload | cycle, t, dur, ev: [[доля, звук, патроны?]], i, fill } — перезарядка или затвор
   let clipName = null, clipT = 0, clipDur = 0;   // клип, который сейчас идёт (null — поза держания)
@@ -329,9 +324,10 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
       L(w.pos[1], A.y, a) + (by + lagY + br) * h - (1 - e) * 0.22,
       L(w.pos[2], A.z, a) + rec * w.kick.back * (1 - 0.4 * a));
     rig.rotation.set(
-      L(w.pitch || 0, A.rx, a) + rec * w.kick.pitch * (1 - 0.6 * a) - (1 - e) * 0.7 + lagY * 2 * h,
-      L(w.yaw, 0, a) + (lagX * 2.5 + recYaw * rec) * h,
+      -(1 - e) * 0.7,
+      0,
       (Math.sin(phase) * 0.025 * bobAmp - lagX * 1.5) * h, 'YXZ');
+    restRotation.copy(rig.quaternion);
     flashSprite.visible = flash > 0;
     flashLight.intensity = flash > 0 ? 3 * (flash / VM.flashTime) : 0;
     crosshair();
@@ -364,7 +360,6 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     const r = w.recoil, k = 1 - (1 - VM.adsRecoil) * adsE;
     getWalk?.()?.kick?.(r.up * k * rand(0.85, 1.15), r.side * k * rand(-1, 1), r.keep);
     recV += 26 * (0.85 + Math.random() * 0.3);
-    recYaw = (Math.random() - 0.5) * 0.25;
     flash = VM.flashTime;
     const s = w.flash * (0.8 + Math.random() * 0.4);
     flashSprite.scale.set(s, s, s);
@@ -577,6 +572,11 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
         if (shift) vmCam.setViewOffset(size.x, size.y, shift, 0, size.x, size.y); else vmCam.clearViewOffset();
         vmCam.updateProjectionMatrix();
       }
+      // Restore presentation first: repeated idle renders must not accumulate
+      // rotations. Reload/cycle keep their authored handling animation; drawing
+      // and recoil translate the hands while the ready barrel stays on target.
+      rig.quaternion.copy(restRotation);
+      if (!act) aim.align(rig, models[weapon].muzzle, vmCam, W().range);
       // руки освещены «как глаз видит»: свет делится на экспозицию сцены, днём и вечером одинаково
       const k = VM.light / Math.max(1e-3, renderer.toneMappingExposure);
       hemi.intensity = BASE.hemi * k; key.intensity = BASE.key * k; rim.intensity = BASE.rim * k;

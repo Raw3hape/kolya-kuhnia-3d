@@ -33,6 +33,7 @@
 import { createBreakables, shotHandlers, networkDamageResetters } from './breakables.js';
 import { stableObjectId, indexNetworkObjects, collectNetworkObjects, isTransient, seededRandom } from './network-objects.js';
 import { createNetworkRaycastAcceleration } from './network-raycast.js';
+import { AIM_NDC } from './weapon-aim.js';
 
 const IMP = {
   max: 200,               // следов всего
@@ -328,7 +329,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
 
   // ---------- выстрел ----------
   // списки переиспользуются: на выстрел — ни одного нового массива, кроме того, что создаёт сам three.js на попадание
-  const centre = new THREE.Vector2(0, 0), nrm = V3(), list = [], hits = [], ax = V3(), ay = V3();
+  const centre = AIM_NDC, nrm = V3(), list = [], hits = [], ax = V3(), ay = V3();
   const FLESH = { albedo: new THREE.Color(0.32, 0.04, 0.03), metal: false, solid: true, flesh: true };
   // мишень сама говорит, из чего она (hit.surface: мышь — пыль, монстр — без крови): те же крошки и облачко её цвета,
   // без искр и вспышки; без подсказки — красные брызги зверя. Кэш — без новых объектов на выстрел
