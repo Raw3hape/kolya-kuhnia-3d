@@ -7,10 +7,13 @@ if (box) {
   const quote = box.querySelector('.ld-quote'), label = box.querySelector('.ld-now'), number = box.querySelector('.ld-pct');
   const bar = box.querySelector('[role="progressbar"]'), error = box.querySelector('.ld-error'), note = box.querySelector('.ld-note');
   const originalInert = new Map(); let closed = false, bag = [], previous = '', hideTimer = 0;
+  // UI shuffling must not consume the simulation's random sequence.
+  let randomState = (Date.now() ^ Math.floor(performance.now() * 1000)) >>> 0;
+  const random = () => { randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0; return randomState / 4294967296; };
   function nextLine() {
     if (!bag.length) {
       bag = [...LOADING_LINES];
-      for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+      for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
       if (bag.at(-1) === previous) [bag[0], bag[bag.length - 1]] = [bag.at(-1), bag[0]];
     }
     quote.textContent = previous = bag.pop();

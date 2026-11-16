@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE||'/Users/nikita/.npm/_npx/9833c18b2d85bc59/node_modules/playwright/index.mjs').href);
+const moduleName=process.env.PLAYWRIGHT_MODULE||'playwright';
+const {chromium}=await import(path.isAbsolute(moduleName)?pathToFileURL(moduleName).href:moduleName);
 const url=process.env.QA_URL||'http://127.0.0.1:8779/';
 const out=path.resolve(process.env.QA_OUTPUT||'output/playwright/loading-2026-11-16/e2e');fs.mkdirSync(out,{recursive:true});
 const report={url,checks:[],errors:[],timings:[],cleanup:false};let browser;
