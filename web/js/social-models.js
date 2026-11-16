@@ -64,9 +64,9 @@ export function createSocialModels({ THREE: T, scene, spec, locations }) {
   // without adding another light/shader variant to the apartment renderer.
   const courierMaterial = own(new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
   courier.root.traverse(object => { if (object.isMesh && object.material?.vertexColors) object.material = courierMaterial; });
-  courier.root.name = 'social_courier'; root.add(courier.root); label(courier.root, 'żabka', 0.28, 0.13, [0, 1.15, -0.143]);
+  courier.root.name = 'social_courier'; root.add(courier.root); label(courier.root, 'żabka', 0.28, 0.13, [0, 1.15, -0.143]).rotation.y = Math.PI;
   const bag = box(courier.root, green, [0, 1.05, -0.26], [0.45, 0.48, 0.22]); bag.name = 'delivery_bag';
-  label(courier.root, 'żabka', 0.30, 0.16, [0, 1.07, -0.373]);
+  label(courier.root, 'żabka', 0.30, 0.16, [0, 1.07, -0.373]).rotation.y = Math.PI;
   const showerGeometry = own(new T.BufferGeometry()), rain = new Float32Array(96 * 3);
   showerGeometry.setAttribute('position', new T.BufferAttribute(rain, 3));
   const dropCanvas = document.createElement('canvas'); dropCanvas.width = dropCanvas.height = 64;
