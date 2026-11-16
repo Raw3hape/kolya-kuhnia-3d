@@ -77,5 +77,13 @@ try{
   await mobile.getByRole('button',{name:'Затяжка',exact:true}).tap();await mobile.waitForTimeout(1000);
   check('native mobile tap emits smoke',await mobile.evaluate(()=>__kitchen.party.debug.effects.smoke>0));await screenshot(mobile,'mobile-smoke');
   check('no application errors',report.errors.length===0,report.errors);
-}catch(error){report.failure=error.message;process.exitCode=1;}
+}catch(error){
+  report.failure=error.message;process.exitCode=1;report.failureState=[];
+  for(const c of contexts)for(const p of c.pages())if(!p.isClosed()){
+    const state=await p.evaluate(()=>({origin:location.origin,status:window.__kitchen?.multiplayer?.client?.status,
+      role:window.__kitchen?.multiplayer?.client?.role,lobby:document.querySelector('#kmp-lobby')?.innerText,
+      players:window.__kitchen?.multiplayer?.client?.state?.players?.length})).catch(()=>null);
+    report.failureState.push(state);await screenshot(p,'failure-'+report.failureState.length).catch(()=>{});
+  }
+}
 finally{clearTimeout(watchdog);for(const c of contexts)await c.close().catch(()=>{});await browser?.close();report.cleanup=true;fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({complete:!report.failure,failure:report.failure,cleanup:true}));}

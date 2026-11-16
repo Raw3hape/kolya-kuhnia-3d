@@ -94,6 +94,20 @@ test('Signed host/guest handshake, snapshot convergence, request result and imme
   assert.equal(peers.size, 0);
 });
 
+test('Owner party homes reach room creation after an apartment was rearranged', async () => {
+  const spec = { items: [{ id: 'vape-island', kind: 'vape', position: [2.8, 0.915, 1.4] }] };
+  let received;
+  const factory = authorityFactory();
+  const host = createMultiplayerClient({ createAuthority: async options => {
+    const authority = await factory(options), connect = authority.connect;
+    authority.connect = function(peer, hello) { if (peer === 'local') received = structuredClone(hello.partySpec); return connect.call(this, peer, hello); };
+    return authority;
+  } });
+  try { await host.create({ name: 'Хозяин', apartment: { aisle: 1.8 }, partySpec: spec }); assert.deepEqual(received, spec); }
+  finally { host.dispose(); }
+  assert.equal(peers.size, 0);
+});
+
 test('Wrong invite key fails before authority admits an impostor', async () => {
   const log = {}, host = createMultiplayerClient({ createAuthority: authorityFactory(log) });
   await host.create({ name: 'Хозяин' });

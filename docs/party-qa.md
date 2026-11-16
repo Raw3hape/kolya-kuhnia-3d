@@ -2,7 +2,7 @@
 
 Feature contract: [party.md](party.md).
 
-`npm test`: 116/116. `npm run build`: vendor integrity and static build pass.
+`npm test`: 117/117. `npm run build`: vendor integrity and static build pass.
 Pure tests include exclusive ownership, spam rejection, five sips, throw collision,
 late state restoration, disconnect, hookah range and actual ground below the balcony.
 
@@ -22,6 +22,13 @@ shader renders, a late WebRTC guest receives current ownership, remote props
 follow the animated wrist, and native mobile buttons emit smoke without overlap.
 All ten pass locally with no application errors; every context closes in `finally`.
 Set `QA_URL`, `PLAYWRIGHT_MODULE`, and `QA_OUTPUT` to repeat against a release.
+
+Production `e1fcc5a`, `dpl_DoYwTraAPAxkQKeF1s9QbMLxXuSe`: all ten checks pass
+at the public URL, including actual late guest and mobile tap. The first run
+timed out waiting for the guest connection; a fresh full run passed. Its cause
+was not isolated, so this is not evidence of universal network connectivity.
+The subsequent room-creation fix preserves already-rearranged item homes;
+its transport contract is covered by the client handshake test.
 
 Smoke has one draw, at most 180 pooled particles; bottle shards one instanced
 draw, at most 72 fragments. The 24 target meshes share eight geometries and
