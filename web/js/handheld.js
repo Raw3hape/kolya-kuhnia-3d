@@ -48,6 +48,7 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
   const state = { on: false, held: false, aimed: false };
   let network = null, ownerId = null, pending = false, generation = 0;
   const selfId = () => typeof network?.selfId === 'function' ? network.selfId() : network?.selfId;
+  const ownedLocally = () => ownerId != null && ownerId === selfId();
   const unavailable = () => !!network && ownerId != null && ownerId !== selfId();
   let held = false, aimed = false, touchSeen = false, lastStep = 0, wheel = 0, wheelAt = 0, press = null, swipe = null;
   injectStyle('khh-style', CSS);
@@ -96,7 +97,10 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
   }
 
   function pickLocal() {
-    if (held || !walking()) return false;
+    // A validated claim can arrive after the walk->seat transition or while
+    // reconnect is entering walk. Ownership presentation follows carrying;
+    // initiating a new pickup remains restricted to walking in pick().
+    if (held || !carrying()) return false;
     if (!network) for (const it of ALL) if (it !== api && it.held) it.drop(); // In rooms the authority releases the previous item atomically.
     const vm = getVM?.();
     if (vm && vm.weapon && vm.weapon !== 'none') vm.setWeapon('none');
@@ -138,7 +142,7 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
   }
   function applyNetwork(owner) {
     ownerId = owner && typeof owner === 'object' ? owner.owner ?? owner.ownerId ?? null : owner ?? null;
-    if (network && ownerId === selfId()) pickLocal();
+    if (network && ownedLocally()) pickLocal();
     else if (held) dropLocal();
     if (unavailable()) aimed = false;
     lastTarget = null; hintKey = -1; render();
@@ -154,6 +158,9 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
   const lastCam = new Float64Array(16);
   let lastTarget = null;
   function sync() {
+    // The first authoritative state can precede camera/seat activation. Do not
+    // wait for a changed ownership field to restore the local item later.
+    if (network && ownedLocally() && !held && carrying()) pickLocal();
     if (held && !carrying()) drop();
     if (!held) {
       // пересчёт — когда сдвинулась камера или вещь появилась/пропала (положили обратно, сменили опцию)

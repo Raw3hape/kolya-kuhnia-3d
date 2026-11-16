@@ -127,7 +127,8 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
         apartmentQueue = apartmentQueue.catch(() => {}).then(async () => {
           if (!active || lifecycle !== version) return;
           await applyState(apartment);
-          await Promise.all([getModules().decor?.ready, getModules().furniture?.ready].filter(Boolean));
+          const local=getModules();
+          await Promise.all([local.decor?.ready, local.furniture?.ready, local.paper?.ready, local.partyPropsReady, getParty()?.ready].filter(Boolean));
           if (active && lifecycle === version && lastSnapshot?.revision === snapshot.revision) {
             const latest = lastSnapshot, vm = getModules().viewmodel;
             vm.clearHoles({ remote: true });

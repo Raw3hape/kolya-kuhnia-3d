@@ -8,16 +8,19 @@ const {chromium}=await import(path.isAbsolute(moduleName)?pathToFileURL(moduleNa
 const url=process.env.QA_URL||'http://127.0.0.1:8765/';
 const output=path.resolve(process.env.QA_OUTPUT||'output/playwright/party-release');
 fs.mkdirSync(output,{recursive:true});
-const report={url,checks:[],errors:[],cleanup:false},contexts=[];
+const report={url,checks:[],errors:[],cleanup:false},contexts=[],assetGates=new Map();
 let browser;
 const watchdog=setTimeout(()=>{browser?.close().finally(()=>process.exit(2));},360000);
 function check(name,pass,details){report.checks.push({name,pass,details});console.log(JSON.stringify({name,pass}));if(!pass)throw Error(name);}
-async function page(target=url,mobile=false){
+async function page(target=url,mobile=false,delayProps=false){
   const c=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1280,height:800},isMobile:mobile,hasTouch:mobile,deviceScaleFactor:1});contexts.push(c);
+  let release;
+  if(delayProps){const gate=new Promise(resolve=>release=resolve);await c.route('**/models/party/props/library.glb*',async route=>{await gate;await route.continue().catch(()=>{});});}
   await c.addInitScript(()=>localStorage.setItem('kitchen-ui-v1',JSON.stringify({quality:'eco',seen:{intro:true}})));
   const p=await c.newPage();p.setDefaultTimeout(10000);p.on('pageerror',e=>report.errors.push(e.message));
+  if(release)assetGates.set(p,release);
   await p.goto(target,{waitUntil:'domcontentloaded'});
-  await p.waitForFunction(()=>window.__kitchen?.party?.debug.ready&&window.__kitchen?.hunt?.stats?.ready,null,{timeout:90000});
+  await p.waitForFunction(delayed=>window.__kitchen?.party?.debug.ready&&(delayed||window.__kitchen?.partyProps?.debug.count>0)&&window.__kitchen?.hunt?.stats?.ready,delayProps,{timeout:90000});
   await p.getByRole('button',{name:'Понятно',exact:true}).click({timeout:500}).catch(()=>{});
   return p;
 }
@@ -100,8 +103,12 @@ try{
   await host.keyboard.down('w');await host.waitForTimeout(1770);await host.keyboard.up('w');await host.waitForTimeout(300);
   await aim(host,await host.evaluate(()=>__kitchen.party.interactionPoint('vape-island')));await host.keyboard.press('e');await idleItem(host);
   check('host takes vape through room authority',await host.evaluate(()=>__kitchen.party.held?.id==='vape-island'));
-  const guest=await page(await host.evaluate(()=>__kitchen.multiplayer.client.inviteUrl));
+  const guest=await page(await host.evaluate(()=>__kitchen.multiplayer.client.inviteUrl),false,true);
   await guest.locator('#kmp-name').fill('Party release guest');await guest.locator('.kmp-form button[type=submit]').click();await connected(guest);await guest.waitForTimeout(600);
+  await guest.waitForFunction(()=>__kitchen.multiplayer.applying&&!__kitchen.partyProps);
+  assetGates.get(guest)();
+  await guest.waitForFunction(()=>!__kitchen.multiplayer.applying&&__kitchen.partyProps?.debug.count>0,null,{timeout:60000});
+  check('joining waits for slow domestic assets before damage reconciliation',true);
   const ids=await Promise.all([host,guest].map(p=>p.evaluate(()=>__kitchen.party.debug.state.items.find(i=>i.kind==='vape').owner)));
   check('late WebRTC guest receives existing ownership',ids[0]&&ids[0]===ids[1],ids);
   await host.mouse.click(650,400);await host.waitForFunction(()=>__kitchen.party.debug.effects.smoke>0);await host.waitForTimeout(100);
@@ -142,4 +149,4 @@ try{
     report.failureState.push(state);await screenshot(p,'failure-'+report.failureState.length).catch(()=>{});
   }
 }
-finally{clearTimeout(watchdog);for(const c of contexts)await c.close().catch(()=>{});await browser?.close();report.cleanup=true;fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({complete:!report.failure,failure:report.failure,cleanup:true}));}
+finally{clearTimeout(watchdog);for(const release of assetGates.values())release();for(const c of contexts)await c.close().catch(()=>{});await browser?.close();report.cleanup=true;fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({complete:!report.failure,failure:report.failure,cleanup:true}));}

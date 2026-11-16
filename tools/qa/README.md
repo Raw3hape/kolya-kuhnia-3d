@@ -7,6 +7,13 @@ seated look, soft smoke, late ownership and wrist attachment. Multiplayer moveme
 uses native walking; fixture placement is confined to solo mode. Defaults to local port8765; use `QA_URL` for production.
 See [party QA](../../docs/party-qa.md). The browser closes in `finally`.
 
+Phone: `phone-ui-qa.mjs` checks native E/ArrowDown/Q, touch pickup/swipe/return,
+visible CSS3D shell bounds and actual YouTube playing state, shared selection and
+late ownership. It rebinds the real network adapter while seated to reproduce
+the previously invisible held phone. `tools/tests/handheld-ownership.test.mjs`
+covers approval during seating, camera activation and missing identity.
+Same `PLAYWRIGHT_MODULE`, `QA_URL`, `QA_OUTPUT`; six-minute deadline, cleanup in `finally`.
+
 Performance comparison: [../../docs/performance.md](../../docs/performance.md).
 `performance-qa.mjs` runs a muted, bounded browser and records frame/CPU/GPU/draw measurements for solo, host and guest. `performance-server.py` shares assets between current code and an archived baseline. Keep reports under `output/playwright/`; inspect and remove screenshots after review.
 
