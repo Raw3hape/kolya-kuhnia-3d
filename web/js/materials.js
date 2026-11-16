@@ -20,6 +20,7 @@
 // Заливка на видеокарту — бюджетом кадра в render.js (материал помечается needsUpdate, render.js льёт его карты).
 import * as THREE from 'three';
 import { assetUrl, assetIndex, track, whenRoom, isRoomReady, retry } from './loading.js';
+import { startup } from './startup-state.js';
 
 const IMAGE_CACHE = 36;   // ≈ 12 наборов цвет/нормаль/шероховатость (маленькие и полные)
 // Переворот — при декодировании (flipY у ImageBitmap в WebGL не работает); цвет без пересчёта профилей,
@@ -113,7 +114,10 @@ async function cached(it, t) {
 
 // Применяет запись каталога к существующему материалу (материал слота один и тот же,
 // меши не пересоздаются, меняются только карты и параметры). Повтор той же записи ничего не делает.
-export async function applyItem(mat, item, extra = {}, opts = {}) {
+export function applyItem(mat, item, extra = {}, opts = {}) {
+  return startup.track(applyItemInner(mat, item, extra, opts), { label: opts.label || 'Материалы квартиры' });
+}
+async function applyItemInner(mat, item, extra = {}, opts = {}) {
   const it = { ...item, ...extra };
   const key = JSON.stringify(it);
   const want = tier;
@@ -125,7 +129,7 @@ export async function applyItem(mat, item, extra = {}, opts = {}) {
   live.set(mat, request);
   const later = !!opts.later;
   if (later && !isRoomReady()) {   // не ждать: вызывающий (setState) не должен зависеть от фоновых материалов
-    whenRoom.then(() => { if (mat.userData.itemKey === key) { mat.userData.itemKey = ''; applyItem(mat, item, extra, opts); } });
+    startup.track(whenRoom.then(() => { if (mat.userData.itemKey === key) { mat.userData.itemKey = ''; return applyItem(mat, item, extra, opts); } }), { label: opts.label || 'Материалы квартиры' });
     return mat;
   }
   let roughMul = 1;
@@ -167,7 +171,7 @@ export async function applyItem(mat, item, extra = {}, opts = {}) {
   // Сначала маленькие (видно сразу), полные — следом, и не раньше первого вида
   if (!same && want !== '512' && !(await cached(it, want))) {
     await stage('512');
-    if (current()) (isRoomReady() ? Promise.resolve() : whenRoom).then(() => { if (current() && mat.userData.tier !== tier) stage(tier); });
+    if (current()) startup.track((isRoomReady() ? Promise.resolve() : whenRoom).then(() => { if (current() && mat.userData.tier !== tier) return stage(tier); }), { label: opts.label || 'Материалы квартиры' });
     return mat;
   }
   await stage(want);

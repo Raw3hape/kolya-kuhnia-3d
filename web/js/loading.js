@@ -7,7 +7,7 @@
 //        weight — вес явно (КБ), если адреса нет. Без подписи — «Материалы и вещи».
 //   whenRoom                   — Promise: первый вид готов (main.js зовёт roomReady()); фоновые загрузки ждут его
 //   afterRoom(fn)              — запустить fn после первого вида (отложенные загрузки: дальние комнаты, ванная)
-//   roomReady(), isRoomReady() — main.js: первый кадр нарисован, можно убирать заставку
+//   roomReady(), isRoomReady() — первый кадр готов: открыть deferred-ресурсы, НЕ убирать заставку
 //   assetUrl(path)             — адрес файла с версией сборки (?v=<хеш папки>), см. ниже
 //   assetIndex(key)            — данные, вложенные сборкой в страницу (id="asset-index"): 'sizes' — textures/sizes.json,
 //                                'meta' — { id: meta.json } всех текстур. Локально — undefined: модуль читает файл сам.
@@ -18,7 +18,7 @@
 //
 // Событие для экрана загрузки (ловит index.html и ui.js), на window:
 //   kitchen:progress  detail { phase, loaded, total, done, weight, labels }
-//   phase 'start'   — грузится первый вид; 'room' — первый вид нарисован: заставку убрать;
+//   phase 'start'   — грузится первый вид; 'room' — открыть отложенную работу;
 //         'details' — догружается остальное фоном; 'done' — всё (дальше событий нет; загрузки по действиям
 //         пользователя показывает ui.setBusy)
 //   loaded/total — файлов этого этапа; done/weight — КБ этого этапа (total и weight растут, пока узнаём, что нужно:
@@ -30,6 +30,7 @@
 // с кешем на год (vercel.json): после обновления файла меняется хеш его папки, а значит и адрес — старый кеш не мешает.
 // Локально (tools/serve.py) карты нет: адреса без версии, вес — по типу файла.
 
+import { startup } from './startup-state.js';
 export const PROGRESS = 'kitchen:progress';
 
 const inline = id => { try { return JSON.parse(document.getElementById(id)?.textContent || 'null'); } catch { return null; } };
@@ -77,6 +78,7 @@ function checkDone() {
 }
 
 export function track(promise, { later = false, label = DEFAULT_LABEL, url = null, weight: w = null } = {}) {
+  startup.track(promise, { label, weight: w ?? (url ? weightOf(url) : TYPICAL.jpg) });
   if (phase === 'done') return promise;
   if (later && phase === 'start') {   // фоновая: в счёт идёт с этапа details
     whenRoom.then(() => track(promise, { label, url, weight: w }));
@@ -110,7 +112,7 @@ export async function retry(load, tries = 3) {
   }
 }
 
-export function afterRoom(fn) { return whenRoom.then(fn); }
+export function afterRoom(fn) { return startup.track(whenRoom.then(fn)); }
 export const isRoomReady = () => phase !== 'start';
 
 export function roomReady() {

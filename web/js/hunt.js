@@ -37,6 +37,7 @@ import { collectFieldOccluders, fieldRayBlocked } from './field-events-visibilit
 // Оси квартиры: X вдоль окон, Z от окон вглубь, Y вверх; земля y = −site.floorY; поле и луг — site.areas (spec.region).
 
 import { addHelp } from './help.js';
+import { startup } from './startup-state.js';
 
 const SPEC_URL = new URL('../spec/hunt.json', import.meta.url);
 const SITE_URL = new URL('../spec/site.json', import.meta.url);
@@ -384,7 +385,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   const offLive = pipe?.onLive?.(live => { capturing = !live; syncVisible(); });
 
   // --- загрузка: спецификация, план, окружение; затем геометрия и стада
-  Promise.all([loadSpec(), site || fetch(SITE_URL).then(r => r.json()), plan || fetch(PLAN_URL).then(r => r.json())]).then(([spec, st, pl]) => {
+  startup.track(Promise.all([loadSpec(), site || fetch(SITE_URL).then(r => r.json()), plan || fetch(PLAN_URL).then(r => r.json())]).then(([spec, st, pl]) => {
     if (disposed) return;
     S = spec; ground = -st.floorY;
     const bal = pl.balcony;
@@ -402,7 +403,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     if (network && networkSnapshot) applyNetworkSnapshot(networkSnapshot);
     syncVisible();
     requestRender?.();
-  }).catch(err => console.warn('hunt: не загрузилось', err));
+  }), { label: 'Тусовка во дворе' }).catch(err => console.warn('hunt: не загрузилось', err));
 
   function build() {
     const B = S.boars, nB = B.count + 8;

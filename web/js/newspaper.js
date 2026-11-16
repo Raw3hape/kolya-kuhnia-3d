@@ -14,7 +14,7 @@
 import { createHandheld } from './handheld.js';
 import { injectStyle } from './minimap.js';
 import { addHelp } from './help.js';
-import { afterRoom, retry } from './loading.js';
+import { afterRoom, retry, track } from './loading.js';
 
 // подвал полосы на языке газеты (newspaper.json → lang: be | ru)
 const FOOT = {
@@ -38,7 +38,7 @@ export function createNewspaper({ THREE, scene, camera, canvas, requestRender, g
   let papers = null, issue = 0, page = 0, held = false, leaving = null, remoteHeld = false;
   let pendingInteraction = null, resolveReady;
   const ready = new Promise(resolve => { resolveReady = resolve; });
-  afterRoom(() => retry(() => fetch('spec/newspaper.json').then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status)))))
+  afterRoom(() => track(retry(() => fetch('spec/newspaper.json').then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status))))), { label: 'Газета для гостей' })
     .then(j => { papers = (j?.papers ?? []).filter(p => p?.pages?.length); if (pendingInteraction) applyInteractionState(pendingInteraction); drawCover(); requestRender?.(); resolveReady(); })
     .catch(() => { papers = null; resolveReady(); }));
 

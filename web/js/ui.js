@@ -37,7 +37,7 @@
 // Сообщения: handle.toast(msg, action, ms) или событие NOTICE на window (render.js — сброс WebGL, мало кадров);
 //   QUALITY_REQUEST (render.js) ставит качество как выбор пользователя.
 // Загрузка: событие PROGRESS из loading.js ('kitchen:progress') { phase, loaded, total, done, weight, labels } — экран загрузки (index.html)
-//   до 'room' (дальше можно работать, внизу «догружаю» до 'done'); handle.ready() main.js зовёт на первом виде —
+//   до полной готовности (startup-state.js); handle.ready() открывает интерфейс после всей подготовки —
 //   заставка уходит и без событий.
 // Раскладка: ui.js пишет в :root --hud-bottom (сколько снизу занимает полоса режима): плавающие кнопки модулей
 //   (джойстик, огонь, патроны, сообщения) ставят bottom от неё и не наезжают на полосу ни на каком экране.
@@ -192,7 +192,6 @@ addEventListener(PROGRESS, e => {
   Object.assign(LOAD, d);
   const f = loadFrac();
   if (f != null) LOAD.shown = Math.max(LOAD.shown, f);
-  if (LOAD.phase && LOAD.phase !== 'start') document.body.classList.add('usable');
   onLoadChange?.();
 });
 

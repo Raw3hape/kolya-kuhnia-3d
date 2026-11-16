@@ -31,6 +31,7 @@
 </script>
 <!-- Core multiplayer runtime is ready before the first interactive view, ahead of background models. -->
 <script src="/vendor/peerjs.min.js" defer fetchpriority="high"></script>
+<script type="module" src="js/startup-screen.js"></script>
 <script type="module" src="js/main.js"></script>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -423,20 +424,25 @@
     background: var(--ink); color: var(--paper); padding: 9px 14px; border-radius: 4px; font-size: 13px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
   #toast { display: flex; align-items: center; gap: 12px; }
   #toast .toast-act { border: 0; background: none; padding: 0; color: inherit; font: 600 13px var(--f-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-  /* загрузка: экран до первого вида (kitchen:progress 'room' -> body.usable, или ui.ready()); его ведёт скрипт ниже.
-     Полоса — доля размера первого вида (не прыгает назад), строка «сейчас» — подписи загрузок (loading.js track label). */
-  #loading { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; pointer-events: none; --p: 0%; }
-  body.usable #loading, body.ready #loading { display: none; }
-  .ld-card { width: min(320px, calc(100vw - 48px)); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
-  .ld-title { display: flex; justify-content: space-between; gap: 12px; font: 500 11.5px/1.3 var(--f-data); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-  .ld-pct { font-variant-numeric: tabular-nums; }
-  .ld-bar { position: relative; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
-  .ld-bar i { position: absolute; inset: 0 auto 0 0; width: 30%; background: var(--accent); animation: busy 1.2s ease-in-out infinite; }
-  #loading.det .ld-bar i { width: var(--p); animation: none; transition: width 0.35s ease-out; }
-  .ld-now { min-height: 1.4em; font-size: 13px; line-height: 1.4; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ld-meta { display: flex; justify-content: space-between; gap: 12px; min-height: 1.3em; font: 11.5px/1.3 var(--f-data); color: var(--muted); font-variant-numeric: tabular-nums; }
-  .ld-msg { margin: 4px 0 0; font-size: 13px; color: var(--ink); }
-  .ld-msg button { margin-top: 8px; }
+  /* One opaque, independent startup screen: the game stays covered until playable. */
+  #loading { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow: auto; padding: max(28px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); background: #f5f0e7; color: #25433c; --p: 0%; outline: none; }
+  .ld-card { width: min(520px, 100%); margin: auto; text-align: center; }
+  .ld-art { display: block; width: 168px; height: 144px; margin: 0 auto 22px; }
+  .ld-eyebrow { font: 600 11px/1.5 var(--f-data); letter-spacing: .19em; text-transform: uppercase; color: #788576; margin: 0 0 10px; }
+  .ld-title { font: 600 clamp(27px, 4vw, 39px)/1.13 var(--f-body); letter-spacing: -.035em; margin: 0 0 20px; }
+  .ld-quote { display: grid; align-items: center; min-height: 3.6em; margin: 0 0 30px; font: 500 clamp(19px, 2.5vw, 24px)/1.38 var(--f-body); text-wrap: balance; color: #627164; }
+  .ld-progress { max-width: 360px; margin: auto; text-align: left; }
+  .ld-progress-label { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px; font: 500 12px/1.4 var(--f-data); }
+  .ld-pct { flex-shrink: 0; font-variant-numeric: tabular-nums; color: #7c897e; }
+  .ld-bar { height: 7px; border-radius: 10px; background: #dfe3d8; overflow: hidden; }
+  .ld-bar i { display: block; height: 100%; width: var(--p); border-radius: inherit; background: #3f6553; transition: width .2s ease-out; }
+  .ld-note { max-width: 330px; min-height: 2.8em; margin: 18px auto 0; font: 13px/1.5 var(--f-body); color: #859080; text-wrap: balance; }
+  .ld-error { margin: 22px auto 0; max-width: 360px; font: 14px/1.5 var(--f-body); }
+  .ld-retry { border: 0; border-radius: 24px; padding: 12px 22px; margin-top: 4px; background: #254d3d; color: #fffdf6; font: 600 14px/1.3 var(--f-body); cursor: pointer; }
+  .ld-retry:focus-visible { outline: 3px solid #c89a54; outline-offset: 4px; }
+  #loading.finished .ld-bar i { background: #517c5c; }
+  #loading.failed .ld-progress { display: none; }
+  @media (max-height: 520px) { .ld-art { display: none; } .ld-title { font-size: 27px; margin-bottom: 14px; } .ld-quote { min-height: 2.6em; font-size: 19px; margin-bottom: 20px; } .ld-note { min-height: 0; margin-top: 12px; } }
   body.busy #scene { cursor: progress; }
 
   /* ---------- шторка снизу ---------- */
@@ -475,13 +481,28 @@
 </style>
 
 <div id="stage"><canvas id="scene" tabindex="0" aria-label="3D-модель кухни-гостиной. Тяните, чтобы вращать, колесо — приближение."></canvas></div>
-<div id="loading" role="status" aria-live="polite">
+<div id="loading" role="dialog" aria-modal="true" aria-labelledby="loading-title" aria-describedby="loading-note" tabindex="-1">
   <div class="ld-card">
-    <div class="ld-title"><span>Загружаю квартиру</span><span class="ld-pct"></span></div>
-    <div class="ld-bar"><i></i></div>
-    <div class="ld-now">Программа 3D</div>
-    <div class="ld-meta"><span class="ld-mb"></span><span class="ld-eta"></span></div>
-    <div class="ld-msg" hidden></div>
+    <svg class="ld-art" viewBox="0 0 168 144" aria-hidden="true" fill="none" stroke="#41634e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="84" cy="128" rx="65" ry="7" fill="#e7e5d9" stroke="none"/>
+      <path d="M30 99h83l-5 19H35z" fill="#dbe0ce"/><path d="M34 100c4 8 70 8 75 0M36 108c18 6 53 6 71 0"/>
+      <ellipse cx="71" cy="99" rx="42" ry="9" fill="#f5f0e7"/>
+      <ellipse cx="71" cy="94" rx="35" ry="7" fill="#f5f0e7"/><ellipse cx="71" cy="88" rx="29" ry="6" fill="#f5f0e7"/>
+      <path d="M104 63h30v32c0 17-30 17-30 0z" fill="#e6b35f"/><path d="M134 70h6c16 0 15 20-6 20M110 66v24"/>
+      <path d="M114 49c-10-12 7-11-1-25M126 49c-8-9 7-11 1-20" stroke="#93a38b"/>
+      <path d="M44 70V39c0-12 15-12 15-1v34M49 39v20M54 39v20M44 53h15"/>
+      <path d="M81 75V28c-10 8-12 27 0 29"/><path d="M20 44l4 4m-4 0 4-4M145 107l5 5m-5 0 5-5" stroke="#c99443"/>
+      <path d="M48 20c4-6 9-5 12-1" stroke="#a3af91"/>
+    </svg>
+    <p class="ld-eyebrow">Квартирник у Коли</p>
+    <h1 class="ld-title" id="loading-title">Сейчас всё подготовим</h1>
+    <p class="ld-quote" aria-live="off">Ждём, пока Коля помоет посуду.</p>
+    <div class="ld-progress">
+      <div class="ld-progress-label"><span class="ld-now" role="status" aria-live="polite">Открываем дверь</span><span class="ld-pct">0 %</span></div>
+      <div class="ld-bar" role="progressbar" aria-label="Подготовка квартиры" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+    </div>
+    <p class="ld-note" id="loading-note">Зайдём, когда квартира будет полностью готова к тусовке.</p>
+    <div class="ld-error" role="alert" hidden><p></p><button class="ld-retry" type="button">Попробовать ещё раз</button></div>
   </div>
 </div>
 
@@ -499,72 +520,21 @@
 <div id="hud-bottom"><nav id="ctxbar" aria-label="Полоса режима"></nav></div>
 <div id="toast" role="status" hidden></div>
 <script>
-  // Экран загрузки до первого вида: что грузится (подписи loading.js), сколько (полоса по размеру), сколько ещё ждать.
-  //  1. «Программа 3D» — модули (их число знает сборка: <link rel="modulepreload">), первые JS_SHARE полосы.
-  //  2. Файлы первого вида — событие kitchen:progress (loading.js): done/weight в КБ, labels — что грузится сейчас.
-  //  3. Всё скачано, но первый кадр ещё собирается (шейдеры, свет) — «Собираю сцену».
-  // Полоса и проценты только растут: total растёт, пока модули узнают, что им нужно. Оценка времени — по скорости
-  // этой загрузки. Долго (30 с) или ошибка — сказать и дать обновить. После первого вида — полоса внизу (ui.js).
+  // This runs even if the module graph cannot load. The healthy path is owned
+  // by startup-screen.js; no timer here is allowed to declare success.
   (function () {
-    var started = Date.now(), JS_SHARE = 0.15, shown = 0, t0 = 0, box = document.getElementById('loading');
-    var q = function (sel) { return box && box.querySelector(sel); };
-    var mods = document.querySelectorAll('link[rel="modulepreload"]').length, jsDone = 0, assetsSeen = false;
-    function show(frac, now, mb, eta) {
-      if (!box) return;
-      if (frac != null) {
-        shown = Math.max(shown, Math.min(0.99, frac));
-        box.classList.add('det');
-        box.style.setProperty('--p', (shown * 100).toFixed(1) + '%');
-        q('.ld-pct').textContent = Math.floor(shown * 100) + ' %';
-      }
-      if (now != null) q('.ld-now').textContent = now;
-      if (mb != null) q('.ld-mb').textContent = mb;
-      if (eta != null) q('.ld-eta').textContent = eta;
+    var box = document.getElementById('loading');
+    function fail(event) {
+      if (box.hidden || document.body.classList.contains('ready')) return;
+      if (event.type === 'error' && !event.message && !(event.target && event.target.tagName === 'SCRIPT' && event.target.src.indexOf(location.origin) === 0)) return;
+      window.__kitchenBootError = 'Не получилось подготовить квартиру. Проверьте соединение и попробуйте ещё раз.';
+      dispatchEvent(new CustomEvent('kitchen:boot-failure', { detail: window.__kitchenBootError }));
+      box.classList.add('failed');
+      box.querySelector('.ld-error').hidden = false;
+      box.querySelector('.ld-error p').textContent = window.__kitchenBootError;
     }
-    var fmt = function (kb) { return (kb / 1024).toFixed(1).replace('.', ','); };
-    // 1. модули: считаем скачанные скрипты из подсказок сборки (локально подсказок нет — полоса «бегает»)
-    if (mods && 'PerformanceObserver' in window) {
-      try {
-        new PerformanceObserver(function (list) {
-          if (assetsSeen) return;
-          list.getEntries().forEach(function (e) { if (/\.js(\?|$)/.test(e.name)) jsDone++; });
-          show(JS_SHARE * Math.min(1, jsDone / mods), 'Программа 3D');
-        }).observe({ type: 'resource', buffered: true });
-      } catch (e) { /* старый браузер — без доли программы */ }
-    }
-    // 2–3. файлы первого вида
-    addEventListener('kitchen:progress', function (e) {
-      var d = e.detail || {};
-      if (d.phase !== 'start') { document.body.classList.add('usable'); return; }
-      if (!d.weight) return;
-      if (!assetsSeen) { assetsSeen = true; t0 = Date.now(); }
-      var frac = d.done / d.weight, left = d.weight - d.done, sec = (Date.now() - t0) / 1000;
-      var labels = d.labels || [], eta = '';
-      if (d.loaded >= d.total) eta = 'почти готово';
-      else if (sec > 0.8 && d.done > 0) {
-        var n = Math.ceil(left / (d.done / sec) + 0.5);
-        eta = n <= 1 ? 'почти готово' : n > 90 ? 'ещё больше минуты' : 'ещё ~' + n + ' с';
-      }
-      show(JS_SHARE + (1 - JS_SHARE) * frac,
-        d.loaded >= d.total ? 'Собираю сцену: свет и тени' : labels.slice(0, 2).join(' · '),
-        '≈ ' + fmt(d.done) + ' из ' + fmt(d.weight) + ' МБ', eta);
-    });
-    function say(text) {
-      var b = document.body.classList, msg = q('.ld-msg');
-      if (!msg || b.contains('usable') || b.contains('ready')) return;
-      msg.hidden = false;
-      msg.innerHTML = '';
-      msg.append(text, document.createElement('br'));
-      var btn = document.createElement('button');
-      btn.type = 'button'; btn.className = 'btn'; btn.textContent = 'Обновить страницу';
-      btn.onclick = function () { location.reload(); };
-      msg.append(btn);
-    }
-    setTimeout(function () { say('Загрузка идёт дольше обычного: медленный интернет или слабый компьютер. Можно подождать.'); }, 30000);
-    // ошибка во время загрузки: если за 4 с первый вид так и не появился — значит, не загрузится
-    function fail() { if (Date.now() - started < 120000) setTimeout(function () { say('Не получилось загрузить квартиру.'); }, 4000); }
-    addEventListener('error', fail);
-    addEventListener('unhandledrejection', fail);
+    addEventListener('error', fail, true); addEventListener('unhandledrejection', fail);
+    box.querySelector('.ld-retry').onclick = function () { location.reload(); };
   })();
 </script>
 

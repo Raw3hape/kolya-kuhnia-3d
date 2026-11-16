@@ -451,7 +451,7 @@ function patchedLightsBegin(THREE) {
 
 // ---------- основное ----------
 
-export function createLighting({ THREE, scene, renderer, plan, M, getState, camera = null, controls = null, requestRender = () => {}, hdriPath = 'textures/hdri/' }) {
+export function createLighting({ THREE, scene, renderer, plan, M, getState, camera = null, controls = null, requestRender = () => {}, hdriPath = 'textures/hdri/', startupHold = false }) {
   const sceneIndex = acquireSceneIndex(scene);
   RectAreaLightUniformsLib.init();
   const H = plan.ceiling;
@@ -510,6 +510,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   const pmrem = new THREE.PMREMGenerator(renderer);
   let hdrTier = HDR_FIRST, wantTier = HDR_TIER.eco;   // до первого вида — маленькая, потом по качеству
   let resolveReady;
+  let preparationError = null, holdBake = startupHold, adapting = true;
   const ready = new Promise(r => { resolveReady = r; });
   whenRoom.then(() => { hdrTier = wantTier; if (current.mode) ensureEnv(current.mode); });
   async function loadHDR(name, tier) {
@@ -528,15 +529,16 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   // Режим нужен сейчас: загрузить в текущем размере, если такого ещё нет
   function ensureEnv(mode) {
     const tier = hdrTier, key = `${mode}@${tier}`;
-    if (env[mode]?.tier === tier || loading[key]) return;
-    loading[key] = loadHDR(mode, tier).then(e => {
+    if (env[mode]?.tier === tier) return Promise.resolve();
+    if (loading[key]) return loading[key];
+    return loading[key] = loadHDR(mode, tier).then(e => {
       if (tier !== hdrTier) { e.bg.dispose(); e.env.dispose(); return; }   // пока грузили, сменили качество
       const old = env[mode];
       env[mode] = e;
       if (current.mode) apply(current.mode, current.state);
       if (old) { old.bg.dispose(); old.env.dispose(); }
       if (mode === current.mode) resolveReady();
-    }).catch(err => { console.warn('lighting: нет панорамы', mode, err); resolveReady(); })
+    }).catch(err => { preparationError = err; console.warn('lighting: нет панорамы', mode, err); resolveReady(); })
       .finally(() => { delete loading[key]; });
   }
 
@@ -925,7 +927,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
         else { target.set(gridBake.image.data); blending = true; }
         requestRender();
       }
-    }).catch(err => { console.warn('lighting: зонды не прочитались', err); bake = null; });
+    }).catch(err => { preparationError = err; console.warn('lighting: зонды не прочитались', err); bake = null; });
   }
 
   function blendStep() {
@@ -1060,8 +1062,8 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     const now = performance.now();
     lightsFor = -1;
     patchScene();
-    let changed = adapt(now);
-    stepBake(now);
+    let changed = adapt(now); adapting = changed;
+    if (!holdBake) stepBake(now);
     if (blendStep()) changed = true;
     return changed;
   }
@@ -1094,8 +1096,14 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   // для проверок из консоли / тестовой страницы
   const debug = {
     zones: Z, probes: P, get hasGI() { return hasGI; }, get baking() { return !!bake || dirty; },
+    get stable() { return hasGI && !dirty && !bake && !blending && !adapting && env[current.mode]?.tier === wantTier && !loading[`${current.mode}@${wantTier}`]; },
+    get preparationError() { return preparationError; },
+    get preparationProgress() { return bake ? Math.min(0.98, (bake.pass + bake.face / (nP * 6)) / (BOUNCES_BY[quality] ?? BOUNCES)) : hasGI && !dirty ? 1 : 0; },
     probeSH, irradianceAt(p, n = [0, 1, 0]) { return shIrradiance(probeSH[p], ...n); }, U,
   };
 
-  return { apply, update, invalidate, setQuality, dispose, ready, sun, lights: [sun, ...windows.map(w => w.light)], windows: windows.map(w => w.light), debug };
+  return { apply, update, invalidate, setQuality, dispose, ready, sun, lights: [sun, ...windows.map(w => w.light)], windows: windows.map(w => w.light), debug,
+    releaseStartup() { if (holdBake) { holdBake = false; invalidate(); requestRender(); } },
+    async whenEnvironmentReady() { await ensureEnv(current.mode); if (preparationError) throw preparationError; },
+  };
 }

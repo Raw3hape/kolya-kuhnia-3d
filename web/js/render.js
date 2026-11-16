@@ -634,6 +634,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     get quality() { return quality; },
     get batches() { return batches.stats; },
     get eco() { return eco.stats; },
+    get preparing() { const b = batches.stats, e = eco.stats; return lost || !!compile || b.ready + b.failed < b.groups ||
+      quality === 'eco' && (e.compiling > 0 || e.ready + e.failed < e.programs); },
     get photo() { return explicit; },
     get samples() { return tracedSamples(); },
   };

@@ -9,7 +9,7 @@ import { sampleAvatarAction, selectAvatarPresentation } from './action-contract.
 
 const angle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
-export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui, getParty = () => getModules().party }) {
+export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui, getParty = () => getModules().party, whenReady = Promise.resolve() }) {
   const avatars = new Map(), samples = [], inputs = [], seenEvents = new Set();
   const shots = createShotRenderer({ THREE, scene, requestRender });
   let active = false, applying = false, revision = -1, epoch = -1, lastSnapshot = null, disposed = false;
@@ -280,7 +280,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
   }
 
   const invite = new URL(location.href).searchParams.get('room');
-  if (invite) lobby.open({ room: invite });
+  if (invite) whenReady.then(() => { if (!disposed) lobby.open({ room: invite }); }).catch(() => {});
   return { client, lobby, update, apartmentChanged, roomState,
     get active() { return active; }, get canEdit() { return !active || (client.role === 'host' && client.connected); },
     get applying() { return applying; },

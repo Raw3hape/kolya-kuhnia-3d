@@ -28,7 +28,6 @@ import { WEAPON_RULES } from './multiplayer/rules.js';
 
 const PREF = 'kitchen-life-v1';
 const DEF = { life: true, sound: 'walk', mute: false, bellSeen: false };
-const START_DELAY = 2500;   // мс после первого вида: модули «Живого дома» не мешают догрузке
 const prefs = (() => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(PREF) || '{}') }; } catch { return { ...DEF }; } })();
 function savePrefs() { try { localStorage.setItem(PREF, JSON.stringify(prefs)); } catch { /* хранилище недоступно */ } }
 const listeners = new Set();   // смена настроек -> живой экземпляр
@@ -239,8 +238,8 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
   const onPref = k => { if (k === 'life') syncLive(); syncButton(); syncAudio(); };
   listeners.add(onPref);
 
-  // Модули — после первого вида и паузы; каждый сам грузит свои модели при первом использовании
-  afterRoom(() => new Promise(r => setTimeout(r, START_DELAY))).then(async () => {
+  // Модули готовятся под заставкой после первого кадра; ready покрывает всю инициализацию.
+  const ready = afterRoom(async () => {
     if (disposed) return;
     const list = [['neighbours', import('./neighbours.js')], ['landing', import('./landing.js')],
       ['water', import('./water.js')], ['mice', import('./mice.js')]];
@@ -249,7 +248,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
         const m = await p; if (disposed) return; mods[id] = m.create(core);
         mods[id].setNetwork?.(network);
         if (networkSnapshot?.modules?.[id]) mods[id].applyNetworkSnapshot?.(networkSnapshot.modules[id]);
-      } catch (e) { console.warn('life:', id, e); }
+      } catch (e) { console.warn('life:', id, e); throw e; }
     }
     started = true;
     syncLive();
@@ -336,6 +335,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
     return results;
   }
   return {
+    ready,
     update, colliders, dispose, setNetwork, snapshot, networkSnapshot: snapshot, applyNetworkSnapshot, traceExternalShot, resolveExternalShot,
     get debug() { return { mods, prefs, core, ring: () => mods.neighbours?.ring(), water: id => mods.water?.start(id), mouse: () => mods.mice?.spawn(true) }; },
   };

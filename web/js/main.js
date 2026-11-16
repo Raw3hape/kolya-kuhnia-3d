@@ -1,18 +1,17 @@
 // Сцена, свет, камеры, состояние и связь с панелью.
 //
-// Загрузка (loading.js): сначала только то, что видно с первого ракурса (холл → кухня-гостиная), в лёгком виде —
-// текстуры 512, панорама текущего режима, обстановка комнат первого вида, мебель гостиной, окружение. Как только это
-// нарисовано (шейдеры собраны, переотражения посчитаны) — заставка уходит; дальше фоном полные текстуры по качеству,
-// спальня, кабинет, ванная. Первое открытие — «Эконом» (render.js DEFAULT_QUALITY), выбор браузера сохраняет ui.js.
-// Событие для экрана загрузки (шлёт loading.js, ловит ui.js):
-//   window 'kitchen:progress'  detail { phase: 'start' | 'room' | 'details' | 'done', loaded, total }
-//   'start' — грузится первый вид (loaded / total файлов, total может расти); 'room' — первый вид нарисован, заставку
-//   убрать; 'details' — догружается остальное; 'done' — всё. Кроме события, на 'room' зовётся ui.ready().
+// Полная начальная готовность: docs/loading.md. loading.js/roomReady открывает
+// deferred-ресурсы после первого кадра, но не управление. prepare-startup.js ждёт
+// всю текущую квартиру, материалы, итоговый свет и стабильные растровые кадры.
+// startup-state.js — отдельный сигнал whenPlayable; startup-screen.js — заставка.
+import './startup-screen.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { createPipeline, DEFAULT_QUALITY } from './render.js';
 import { roomReady, assetUrl, track, afterRoom, setFirstView } from './loading.js';
+import { startup } from './startup-state.js';
+import { prepareStartup } from './prepare-startup.js';
 
 import { MATERIALS, OPTIONS, PRESETS, findMat, resolveItem, slotById } from './catalog.js';
 import { applyItem, makeMat, setAnisotropy, setTextureQuality, onTexturesChanged } from './materials.js';
@@ -264,7 +263,7 @@ function remapHob(mesh) {
 
 // Солнце, небо, свет из окон и отражённый свет по комнатам — lighting.js.
 // Каждый источник светит только в своей комнате (и соседних через проёмы), сквозь стены не протекает.
-const lighting = createLighting({ THREE, scene, renderer, plan, M, camera, controls, requestRender, getState: () => state });
+const lighting = createLighting({ THREE, scene, renderer, plan, M, camera, controls, requestRender, getState: () => state, startupHold: true });
 
 // Мебель гостиной (диван, ТВ, тумба, ковёр, столик) — furniture.js. Положение меняется без пересборки.
 let furn = null;
@@ -451,6 +450,7 @@ new ResizeObserver(resize).observe(canvas);
 let lastFrame = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  if (startup.status === 'error') return;
   const dt = Math.min(0.1, (now - (lastFrame || now)) / 1000); lastFrame = now;
   if (multiplayer?.update(dt)) needs = true;
   if (walk?.update()) needs = true;
@@ -638,23 +638,18 @@ resize();
 requestAnimationFrame(frame);
 onTexturesChanged(requestRender);   // полные текстуры и фоновые материалы доезжают сами
 
-// Первый вид: всё видимое загружено, кадр нарисован, переотражения посчитаны (не дольше ROOM_GI_WAIT) — заставку убрать
-const ROOM_GI_WAIT = 4000;
-// Метки в Performance (DevTools → Timings): kitchen:files — файлы первого вида на месте, kitchen:drawn — первый кадр
-// (шейдеры собраны), kitchen:gi — переотражения посчитаны; дальше заставка уходит
+// Первый кадр запускает deferred-ресурсы. Управление открывается отдельно,
+// когда вся квартира, выбранные материалы, свет и реальные кадры готовы.
 const mark = name => { try { performance.mark(`kitchen:${name}`); } catch { /* старый браузер */ } };
-Promise.all([lighting.ready, furn?.ready, decor?.near, context.ready].map(p => p?.catch(() => {})))
-  .then(() => { mark('files'); return pipe.whenDrawn(); })
-  .then(() => { mark('drawn'); return new Promise(done => {
-    const t0 = performance.now();
-    const wait = () => (!lighting.debug.baking || performance.now() - t0 > ROOM_GI_WAIT ? done() : setTimeout(wait, 50));
-    wait();
-  }); })
-  .then(() => { mark('gi'); return pipe.whenDrawn(); })
-  .then(() => {
+prepareStartup({
+  first: Promise.all([lighting.ready, furn?.ready, decor?.near, context.ready]),
+  releaseDeferred: roomReady,
+  modules: () => [bath.ready, furn?.ready, decor?.ready, context.ready, context.later, paper.ready, party.ready, partyPropsReady, life.ready],
+  enter() {
     if (!walk.active && !seats?.active && !multiplayer?.client?.connected) walk.enter();
-    roomReady(); ui.ready();
-  });
+  },
+  pipe, lighting, decor: () => decor, viewmodel, hunt: () => hunt, mark, ready: () => ui.ready(),
+});
 window.addEventListener('hashchange', () => { const s = decode(location.hash); if (s) setState(s, { push: false }); });
 
 // Для автоматических проверок из консоли
@@ -664,6 +659,8 @@ Object.defineProperty(window.__kitchen, 'life', { get: () => life });   // LIFE
 Object.defineProperties(window.__kitchen, { party: { get: () => party }, partyProps: { get: () => partyProps } });
 window.__kitchen.mirrors = mirrors;   // BREAK
 multiplayer = createMultiplayerSession({ THREE, scene, plan, site, getState: () => state,
+  whenReady: startup.whenPlayable,
   applyState: patch => setState(patch, { push: false, network: true }), requestRender, ui,
   getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, party, partyPropsReady, furnEditor, furniture: furn, decor }) });
 window.__kitchen.multiplayer = multiplayer;
+window.__kitchen.startup = startup;

@@ -409,6 +409,7 @@ export function createRasterBatches({ THREE, scene, renderer }) {
   return {
     update, draw,
     get stats() { return { supported, sources: sources.length, groups: groups.size, ready: [...groups.values()].filter(g => g.ready).length,
+      failed: [...groups.values()].filter(g => g.failed).length,
       vertices, maxVertices: MAX_VERTICES, rebuilds }; },
     dispose() { if (disposed) return; disposed = true; for (const group of groups.values()) release(group); groups.clear(); sources = []; root.removeFromParent(); },
   };
