@@ -45,8 +45,15 @@ import { SLOTS, MATERIALS, OPTIONS, PRESETS, FLOOR_CATS, resolveItem } from './c
 import * as LAMPS from './lamps.js';
 import { formatSun } from './site.js';
 import { NOTICE, QUALITY_REQUEST, DEFAULT_QUALITY } from './render.js';
-import { HELP, HELP_MODES, helpFor, addHelp } from './help.js';
+import { HELP, HELP_MODES, helpFor as allHelpFor, addHelp } from './help.js';
 import { assetUrl, PROGRESS } from './loading.js';
+
+const helpFor = options => {
+  const rows = allHelpFor(options);
+  if (document.body.dataset.multiplayerRole !== 'guest') return rows;
+  return rows.filter(row => !['teleport', 'walk-toggle'].includes(row.action)).map(row => row.action === 'walk-exit'
+    ? { ...row, text: 'комната и участники (или F)', touch: '«Вместе» — участники и выход из комнаты' } : row);
+};
 
 // group — к какому намерению вкладка: между группами в полосе вкладок промежуток. iconOnly — без подписи (есть в title).
 export const TABS = [
@@ -370,9 +377,9 @@ export function initUI(api) {
       { id: 'walk', tab: 'live', title: 'Прогулка', order: 10, open: true, feature: 'walk',
         summary: () => (walkApi()?.active ? 'идёт' : walkApi()?.personHeight ? `рост ${Math.round(walkApi().personHeight)} см` : ''), controls: [
         { type: 'button', key: 'walkGo', primary: true, run: () => setMode(walkApi()?.active ? 'design' : 'walk'),
-          label: () => (walkApi()?.active ? 'Выйти из прогулки' : 'Пройтись по квартире') },
+          label: () => document.body.dataset.multiplayerRole === 'guest' ? 'Комната и участники' : (walkApi()?.active ? 'Выйти из прогулки' : 'Пройтись по квартире') },
         { type: 'slider', key: 'personHeight', label: 'Рост', min: 150, max: 200, step: 1, def: 180,
-          get: () => walkApi()?.personHeight, set: v => walkApi()?.setPersonHeight(v),
+          get: () => walkApi()?.personHeight, set: v => walkApi()?.setPersonHeight(v), visible: () => !document.body.dataset.multiplayerRole,
           format: v => `${Math.round(v)} см · глаза на ${Math.round((walkApi()?.eyeHeight ?? 1.68) * 100)} см` },
         { type: 'help', topic: 'walk' },
       ] },
@@ -896,6 +903,7 @@ export function initUI(api) {
   const modeGroup = m => (m === 'seat' ? 'walk' : m === 'arrange' ? 'design' : m);
   function setInfo(key, v) { info[key] = v; emit(key, v); update(); }
   function setMode(id) {
+    if (document.body.dataset.multiplayerRole === 'guest' && id !== 'walk') { dispatchEvent(new CustomEvent('kitchen:room-request')); return; }
     const cur = currentMode();
     if (cur === 'arrange' && id === 'design') { setInfo('furnEdit', false); return; }
     if (modeGroup(cur) === id) return;
@@ -944,12 +952,13 @@ export function initUI(api) {
   const seatName = h('b', { class: 'cb-title' }, 'Сидите');   // подписи мест — действия («Сесть на диван»), сюда не годятся
   const photoDot = h('i', { class: 'cb-dot' }), photoTxt = h('span', { class: 'cb-text' }), photoFill = h('i');
   const exitBtn = (label, key) => h('button', { type: 'button', class: 'cb-btn primary', onclick: () => setMode('design') }, h('span', {}, label), key ? h('kbd', {}, key) : null);
+  const walkExit = exitBtn('Выйти', 'Esc');
   const qBtn = h('button', { type: 'button', class: 'cb-q', 'data-tip': 'Качество графики', 'data-tip2': 'ниже — плавнее', onclick: () => focusSection('graphics') });
   const loadChip = h('span', { class: 'cb-load', role: 'status', hidden: true });
   ctx.replaceChildren(loadChip,
     part('design', viewsBtn, viewsBox, arrangeBtn),
     part('arrange', icon('move'), keysLine('arrange'), exitBtn('Готово', 'Esc')),
-    part('walk', keysLine('walk'), exitBtn('Выйти', 'Esc')),
+    part('walk', keysLine('walk'), walkExit),
     part('seat', seatName, keysLine('seat'), h('button', { type: 'button', class: 'cb-btn primary', onclick: () => seatsApi()?.stand() }, 'Встать')),
     part('photo', photoDot, h('b', { class: 'cb-title' }, 'Фото'), photoTxt, h('span', { class: 'cb-bar' }, photoFill),
       h('button', { type: 'button', class: 'cb-btn', hidden: !api.canExport, onclick: () => emit('snapshot') }, 'Снимок PNG'), exitBtn('Выключить')),
@@ -958,7 +967,7 @@ export function initUI(api) {
   // Строка клавиш режима — из справки (help.js): то, что модули отметили brief
   let keysSig = '';
   function fillKeys() {
-    const touch = isTouch(), sig = `${touch}|${HELP.length}`;
+    const touch = isTouch(), sig = `${touch}|${HELP.length}|${document.body.dataset.multiplayerRole || ''}`;
     if (sig === keysSig) return;
     keysSig = sig;
     for (const el of ctx.querySelectorAll('[data-keys]')) {
@@ -977,6 +986,7 @@ export function initUI(api) {
   function syncHud() {
     const mode = currentMode();
     document.body.dataset.mode = mode;
+    walkExit.querySelector('span').textContent = document.body.dataset.multiplayerRole === 'guest' ? 'Комната' : 'Выйти';
     for (const m of MODES) {
       const b = modeBtns[m.id];
       b.hidden = !!m.feature && !has(m.feature);
@@ -1057,6 +1067,7 @@ export function initUI(api) {
   const TAB = id => TABS.find(t => t.id === id);
   let tab = null;
   function setTab(id) {
+    if (document.body.dataset.multiplayerRole === 'guest' && TAB(id)?.group === 'design') id = 'live';
     if (!panes[id]) return;
     if (tab) scrolls[tab] = body.scrollTop;
     tab = id; prefs.tab = id; savePrefs();

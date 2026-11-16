@@ -10,7 +10,7 @@
 // 2. Мелкие данные текстур прямо в странице (id="asset-index", loading.js assetIndex): textures/sizes.json и все
 //    textures/**/meta.json — вместо полутора десятков запросов до первого кадра.
 // 3. Подсказки браузеру, что качать сразу, а не по цепочке: <link rel="modulepreload"> на весь граф модулей
-//    (свои js/ и three с CDN — обход import от js/main.js, адреса через import map страницы) и
+//    (свои js/ и локальный three — обход import от js/main.js, адреса через import map страницы) и
 //    <link rel="preload" as="fetch"> на все spec/**/*.json. Без них модули и спеки шли волнами по 5–7 круговых задержек.
 //    Модули с CDN обходятся по сети; нет сети — их зависимости второго уровня просто не попадут в список.
 // 4. js/*.js сжимаются esbuild (каждый файл отдельно, модули и импорты те же; комментарии — в web/, не в dist/):
@@ -115,7 +115,7 @@ const hints = [
 let minified = 0;
 try {
   const { transform } = await import('esbuild');
-  for (const f of readdirSync(join(dist, 'js')).filter(n => n.endsWith('.js'))) {
+  for (const f of readdirSync(join(dist, 'js'), { recursive: true }).filter(n => n.endsWith('.js'))) {
     const p = join(dist, 'js', f);
     const { code } = await transform(readFileSync(p, 'utf8'), { loader: 'js', format: 'esm', minify: true, legalComments: 'none', target: 'es2022' });
     writeFileSync(p, code); minified++;

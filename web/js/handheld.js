@@ -42,9 +42,12 @@ function bodyClasses() {
 }
 
 export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats, getDoors, requestRender, reach = 2, getTarget, getRect,
-  onHold, onStep, name = {} }) {
+  onHold, onStep, name = {}, networkId = 'phone' }) {
   const N = { take: 'взять телефон', btn: 'Взять телефон', scroll: 'листать', heldHint: true, ...name };
   const state = { on: false, held: false, aimed: false };
+  let network = null, ownerId = null, pending = false, generation = 0;
+  const selfId = () => typeof network?.selfId === 'function' ? network.selfId() : network?.selfId;
+  const unavailable = () => !!network && ownerId != null && ownerId !== selfId();
   let held = false, aimed = false, touchSeen = false, lastStep = 0, wheel = 0, wheelAt = 0, press = null, swipe = null;
   injectStyle('khh-style', CSS);
   const hint = document.createElement('div');
@@ -62,6 +65,7 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
   const ray = new THREE.Raycaster(), hits = [], ndc = new THREE.Vector2();
   // попадает ли луч из точки экрана (NDC; по умолчанию центр — прицел) в вещь на месте ближе reach
   function hitAt(x = 0, y = 0) {
+    if (unavailable() || pending) return false;
     const t = walking() ? getTarget() : null;
     if (!t) return false;
     ray.setFromCamera(ndc.set(x, y), camera);
@@ -74,8 +78,8 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
   let hintKey = -1;
   function render() {
     const touch = touchSeen || coarse(), on = held ? carrying() : walking();
-    state.on = on; state.held = held; state.aimed = aimed;
-    const key = (on ? 1 : 0) | (held ? 2 : 0) | (aimed ? 4 : 0) | (touch ? 8 : 0);
+    state.on = on; state.held = held; state.aimed = aimed; state.pending = pending;
+    const key = (on ? 1 : 0) | (held ? 2 : 0) | (aimed ? 4 : 0) | (touch ? 8 : 0) | (pending ? 16 : 0);
     if (key !== hintKey) {
       hintKey = key;
       hint.hidden = !on || (held ? touch || !N.heldHint : !aimed || touch);
@@ -84,23 +88,58 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
       btn.hidden = !on || !touch || !(held || aimed);
       btn.classList.toggle('held', held);
       btn.textContent = held ? 'Положить' : N.btn;
+      btn.disabled = pending;
     }
     bodyClasses();
   }
 
-  function pick() {
-    if (held || !walking()) return;
-    for (const it of ALL) if (it !== api && it.held) it.drop();   // в руке одна вещь
+  function pickLocal() {
+    if (held || !walking()) return false;
+    if (!network) for (const it of ALL) if (it !== api && it.held) it.drop(); // In rooms the authority releases the previous item atomically.
     const vm = getVM?.();
     if (vm && vm.weapon && vm.weapon !== 'none') vm.setWeapon('none');
     held = true; aimed = false; lastTarget = null;
     onHold(true); render();
+    return true;
   }
-  function drop() {
-    if (!held) return;
+  function dropLocal() {
+    if (!held) return false;
     held = false; swipe = null;
     onHold(false); render();
     requestRender?.();
+    return true;
+  }
+  function requestOwnership(kind) {
+    const current = network, token = generation;
+    pending = true; aimed = false; render();
+    return Promise.resolve(current.request?.({ kind, id: networkId })).then(result => {
+      if (current !== network || token !== generation || !result?.ok) return false;
+      if (kind === 'claim') {
+        if (!carrying()) { current.request?.({ kind: 'release', id: networkId }); return false; }
+        ownerId = selfId(); return held || pickLocal();
+      }
+      ownerId = null; return !held || dropLocal();
+    }).catch(() => false).finally(() => { if (token === generation) { pending = false; render(); } });
+  }
+  function pick() {
+    if (held || pending || !walking() || unavailable()) return false;
+    return network ? requestOwnership('claim') : pickLocal();
+  }
+  function drop() {
+    if (!held || pending) return false;
+    return network ? requestOwnership('release') : dropLocal();
+  }
+  function setNetwork(adapter) {
+    generation++; pending = false;
+    if (held) dropLocal();
+    network = adapter || null; ownerId = null; lastTarget = null; hintKey = -1; render();
+  }
+  function applyNetwork(owner) {
+    ownerId = owner && typeof owner === 'object' ? owner.owner ?? owner.ownerId ?? null : owner ?? null;
+    if (network && ownerId === selfId()) pickLocal();
+    else if (held) dropLocal();
+    if (unavailable()) aimed = false;
+    lastTarget = null; hintKey = -1; render();
   }
   function step(d) {
     const now = performance.now();
@@ -196,7 +235,7 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
     bodyClasses();
   }
 
-  const api = { state, sync, pick, drop, dispose, get held() { return held; }, get aimed() { return aimed; } };
+  const api = { state, sync, pick, drop, dispose, setNetwork, applyNetwork, get ownerId() { return ownerId; }, get held() { return held; }, get aimed() { return aimed; } };
   ALL.add(api);
   return api;
 }

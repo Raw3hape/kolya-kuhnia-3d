@@ -28,6 +28,8 @@ const coarse = () => { try { return matchMedia('(hover: none), (pointer: coarse)
 export function initDoors({ THREE, camera, canvas, plan, doorsGroup, shell, walk, requestRender, onChange }) {
   // ---------- двери из сцены ----------
   const doors = [], byMesh = new Map(), blockers = [];
+  let network = null;
+  const pendingDoors = new Set();
   let target = null, aimDirty = true;
   for (const root of [doorsGroup, shell?.group]) root?.traverse(o => {
     const d = o.userData.door;
@@ -76,10 +78,19 @@ export function initDoors({ THREE, camera, canvas, plan, doorsGroup, shell, walk
   }
 
   const animating = new Set(), toggles = new Set();
-  function setOpen(id, open, { instant = false } = {}) {
+  function setOpen(id, open, { instant = false, authoritative = false } = {}) {
     const door = typeof id === 'string' ? doors.find(d => d.id === id) : id;
     if (!door || door.open === !!open) return false;
-    if (blocksSwing(door, open ? 1 : 0)) { flash('Отойдите от двери'); return false; }
+    if (network && !authoritative) {
+      if (pendingDoors.has(door.id)) return false;
+      pendingDoors.add(door.id);
+      Promise.resolve(network.request?.({ kind: 'door', id: door.id, open: !!open }))
+        .then(result => { if (!result?.ok) flash('Дверь сейчас недоступна'); })
+        .catch(() => flash('Нет связи с комнатой'))
+        .finally(() => pendingDoors.delete(door.id));
+      return true;
+    }
+    if (!authoritative && blocksSwing(door, open ? 1 : 0)) { flash('Отойдите от двери'); return false; }
     door.open = !!open;
     for (const f of toggles) f(door.id, door.open);
     if (instant) { door.v = open ? 1 : 0; door.t = 1; pose(door); animating.delete(door); onChange?.(door.id, door.open); }
@@ -183,6 +194,27 @@ export function initDoors({ THREE, camera, canvas, plan, doorsGroup, shell, walk
     return [...blockers, ...doors.map(d => d.seg)];
   }
 
+  function snapshot() {
+    const list = doors.map(door => {
+      const original = door.v;
+      door.v = 0; pose(door); const closed = { ...door.seg };
+      door.v = 1; pose(door); const opened = { ...door.seg };
+      door.v = original; pose(door);
+      return { id: door.id, open: door.open, closed, opened };
+    });
+    return { doors: list, blockers: blockers.map(box => ({ ...box })) };
+  }
+
+  function applyNetwork(state, { instant = false } = {}) {
+    const values = state?.doors ?? state;
+    if (!values) return;
+    const entries = Array.isArray(values) ? values.map(value => [value.id, value.open]) : Object.entries(values);
+    for (const [id, value] of entries) {
+      const open = typeof value === 'object' ? value.open : value;
+      if (typeof open === 'boolean') setOpen(id, open, { instant, authoritative: true });
+    }
+  }
+
   function dispose() {
     removeEventListener('keydown', onKey);
     canvas.removeEventListener('pointerdown', onDown);
@@ -195,7 +227,8 @@ export function initDoors({ THREE, camera, canvas, plan, doorsGroup, shell, walk
 
   const pub = d => (d ? { id: d.id, get open() { return d.open; } } : null);
   return {
-    update, colliders, dispose, toggle, setOpen,
+    update, colliders, dispose, toggle, setOpen, snapshot, applyNetwork,
+    setNetwork(adapter) { network = adapter || null; pendingDoors.clear(); },
     onToggle(fn) { toggles.add(fn); return () => toggles.delete(fn); },
     get target() { return pub(target); },
     get list() { return doors.map(pub); },

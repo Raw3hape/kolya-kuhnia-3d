@@ -33,28 +33,38 @@ export function create(L) {
   const BELL_AT = entry ? [(entry.x0 + entry.x1) / 2, 2.25, entry.z0 - 0.25] : [b.x0 + 0.5, 2.2, b.z1 - 0.5];
 
   let t = 0, nextNeigh = rand(...FIRST), nextBell = rand(...BELL), busyUntil = 0;
+  let network = null, eventSeq = 0;
+  const events = [], seenEvents = new Set();
+  const record = event => {
+    if (!network?.authority) return;
+    events.push({ ...event, id: ++eventSeq, at: t });
+    while (events.length > 16) events.shift();
+  };
   const live = new Set();   // узлы текущих звуков: снять при dispose
 
   function update(dt) {
     t += dt;
+    if (network && !network.authority) return false;
     if (t >= nextNeigh) {
-      if (L.audio.neighOk && t >= busyUntil) { play(); nextNeigh = t + rand(...GAP); } else nextNeigh = t + 5;
+      if ((L.audio.neighOk || network?.authority) && t >= busyUntil) { play(); nextNeigh = t + rand(...GAP); } else nextNeigh = t + 5;
     }
     if (t >= nextBell) {
       nextBell = t + rand(...BELL);
       const open = L.doors?.list?.find(d => d.id === entry?.id)?.open;
-      if (L.audio.neighOk && !open) ring();
+      if ((L.audio.neighOk || network?.authority) && !open) ring();
     }
     return false;
   }
 
   // ---------- соседи ----------
-  function play(kind) {
+  function play(kind, remote = null) {
+    if (network && !network.authority && !remote) return 0;
     const ctx = L.audio.ctx;
-    if (!ctx) return 0;
-    const flat = kind ? FLATS.find(f => f.acts.some(a => a[0] === kind)) ?? FLATS[0] : pickW(FLATS.map(f => [f, f.w]));
+    const flat = remote ? FLATS.find(f => f.id === remote.flat) ?? FLATS[0] : kind ? FLATS.find(f => f.acts.some(a => a[0] === kind)) ?? FLATS[0] : pickW(FLATS.map(f => [f, f.w]));
     const act = kind || pickW(flat.acts);
-    const [x, y, z] = flat.at();
+    const [x, y, z] = remote?.position ?? flat.at();
+    record({ type: 'neighbour', kind: act, flat: flat.id, position: [x, y, z] });
+    if (!ctx || !L.audio.neighOk) return 0;
     const pan = L.audio.panner(x, y, z, { bus: 'neigh', ref: 2.2, rolloff: 1, max: 30 });
     const wall = ctx.createBiquadFilter(); wall.type = 'lowpass'; wall.frequency.value = flat.lp * rand(0.85, 1.15); wall.Q.value = 0.5;
     const out = ctx.createGain(); out.gain.value = LEVEL;
@@ -73,10 +83,12 @@ export function create(L) {
   }
 
   // ---------- звонок ----------
-  function ring(kind) {
+  function ring(kind, remote = null) {
+    if (network && !network.authority && !remote) return;
     const ctx = L.audio.ctx;
-    if (!ctx) return;
     kind ||= pickW([['dingdong', 5], ['buzzer', 3], ['impatient', 2], ['tune', 1]]);
+    record({ type: 'bell', kind });
+    if (!ctx || !L.audio.neighOk) return;
     const pan = L.audio.panner(...BELL_AT, { bus: 'neigh', ref: 1.2, rolloff: 1, max: 30 });
     const out = ctx.createGain(); out.gain.value = 0.55; out.connect(pan);
     const end = BELLS[kind](ctx, out, ctx.currentTime + 0.05);
@@ -92,7 +104,20 @@ export function create(L) {
     live.clear();
   }
 
-  return { update, ring, play, dispose };
+  function applyNetworkSnapshot(value) {
+    if (!value || !network || network.authority) return;
+    t = Number(value.time) || 0;
+    for (const event of value.events ?? []) {
+      if (seenEvents.has(event.id)) continue;
+      seenEvents.add(event.id);
+      if (t - event.at > 2) continue;
+      if (event.type === 'bell') ring(event.kind, event);
+      else if (event.type === 'neighbour') play(event.kind, event);
+    }
+    while (seenEvents.size > 64) seenEvents.delete(seenEvents.values().next().value);
+  }
+  return { update, ring, play, dispose, snapshot: () => ({ time: t, events: events.slice() }), applyNetworkSnapshot,
+    setNetwork(value) { network = value || null; events.length = 0; seenEvents.clear(); } };
 }
 
 function bounds(plan) {

@@ -10,3 +10,4 @@ dist/
 .claude/
 .env*
 node_modules/
+output/playwright/

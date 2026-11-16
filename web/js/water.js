@@ -16,6 +16,7 @@ const LEN = { kitchen: [4, 9], sink: [3, 7], shower: [6, 12] };
 export function create(L) {
   const { THREE, scene, kit } = L;
   let t = 0, next = rand(...FIRST), live = true;
+  let network = null;
   let mat = null, alpha = null;
   const taps = {};          // id -> { top: Vector3, bottom: Vector3, group, stream, splash, built }
   let cur = null;           // { tap, t, len, stopAt, k, sound }
@@ -70,7 +71,7 @@ export function create(L) {
   }
   function build(tap, id) {
     if (tap.group) return;
-    const g = new THREE.Group(); g.name = 'life_water_' + id; g.userData.rasterOnly = true; g.visible = false;
+    const g = new THREE.Group(); g.name = 'life_water_' + id; Object.assign(g.userData, { rasterOnly: true, networkEffect: true }); g.visible = false;
     const len = tap.top.y - tap.bottom.y;
     let geo;
     if (id === 'shower') {
@@ -152,7 +153,8 @@ export function create(L) {
   }
 
   // ---------- включить / выключить ----------
-  function start(id) {
+  function start(id, { remote = false } = {}) {
+    if (network && !network.authority && !remote) return false;
     if (cur || !live) return false;
     const ids = ['kitchen', 'sink', 'shower'].filter(i => locate(i));
     if (!ids.length) return false;
@@ -180,7 +182,7 @@ export function create(L) {
   function update(dt) {
     t += dt;
     if (!cur) {
-      if (t >= next && live) { next = t + rand(...GAP); start(); }
+      if ((!network || network.authority) && t >= next && live) { next = t + rand(...GAP); start(); }
       return false;
     }
     cur.t += dt;
@@ -208,5 +210,20 @@ export function create(L) {
     for (const tap of Object.values(taps)) if (tap.group) { scene.remove(tap.group); tap.stream.geometry.dispose(); tap.splash.geometry.dispose(); }
     mat?.dispose(); alpha?.dispose();
   }
-  return { update, start, stop, setLive, dispose, get debug() { return { taps, cur }; } };
+  function snapshot() {
+    return { time: t, current: cur ? { id: cur.id, t: cur.t, len: cur.len, stopAt: cur.stopAt ?? null, k: cur.k } : null };
+  }
+  function applyNetworkSnapshot(value) {
+    if (!value || !network || network.authority) return;
+    t = Number(value.time) || 0;
+    const next = value.current;
+    if (!next) { stop(true); return; }
+    if (cur && cur.id !== next.id) stop(true);
+    if (!cur && !start(next.id, { remote: true })) return;
+    cur.t = Number(next.t) || 0; cur.len = Number(next.len) || 1; cur.stopAt = next.stopAt; cur.k = next.k;
+    L.requestRender?.();
+  }
+  return { update, start, stop, setLive, dispose, snapshot, applyNetworkSnapshot,
+    setNetwork(value) { network = value || null; if (network && !network.authority) stop(true); },
+    get debug() { return { taps, cur }; } };
 }

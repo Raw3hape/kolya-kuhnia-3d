@@ -124,6 +124,19 @@
 
 ## Команды
 
+Мультиплеер: вход [docs/multiplayer/README.md](docs/multiplayer/README.md),
+архитектура/протокол [ARCHITECTURE.md](docs/multiplayer/ARCHITECTURE.md),
+адаптеры игровых модулей [GAMEPLAY.md](docs/multiplayer/GAMEPLAY.md),
+проверки [VALIDATION.md](docs/multiplayer/VALIDATION.md).
+`web/js/multiplayer/session.js` связывает модули; `authority.js` — единственная игровая истина
+в Worker браузера создателя; `rules.js` и `collision.js` общие с клиентом. PeerJS только сигнализация,
+игра по WebRTC, один владелец, до 10. Не заменять это локальным постоянным сервером или Blob polling.
+`web/js/network-objects.js` задаёт стабильные ID вещей, не использовать UUID/порядок async-загрузки.
+Разрушения всех loose-вещей задаются материальной политикой `web/spec/break.json`; журнал ограничен
+байтами, его удаление реплицируется. В новых модулях сохранять одиночный режим и сбрасывать адаптеры при выходе.
+Проверка: `npm test`, `npm run build`; для UI нужен настоящий браузер. В `output/playwright/` только
+временные QA-артефакты, не коммитить. Runtime/cross-network проверка не заменяется одними unit-тестами.
+
 ```bash
 python3 tools/serve.py                                   # http://127.0.0.1:8765, POST /api/save -> exports/
 uv run --with pymupdf tools/extract_plan.py              # план из PDF

@@ -25,6 +25,7 @@ const coarse = () => { try { return matchMedia('(hover: none), (pointer: coarse)
 export function createHood({ THREE, scene, camera, canvas, renderer, pipe, requestRender, getWalk, getVM }) {
   const HM = hoodMaterials();
   let group = null, meshes = [], level = 0, target = false, capturing = false;
+  let network = null, pending = false, networkGeneration = 0;
   const _v = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3();
 
   function find() {
@@ -51,9 +52,21 @@ export function createHood({ THREE, scene, camera, canvas, renderer, pipe, reque
       if (o.userData.hoodPool) o.visible = level > 0 && !pipe?.photo && !capturing;
     });
   }
-  function setLevel(n) {
-    level = ((n % 4) + 4) % 4;
+  function setLevel(n, { authoritative = false } = {}) {
+    if (!Number.isFinite(n)) return false;
+    const next = ((Math.trunc(n) % 4) + 4) % 4;
+    if (network && !authoritative) {
+      if (pending) return false;
+      const generation = networkGeneration;
+      pending = true; renderHint();
+      return Promise.resolve(network.request?.({ kind: 'interaction', id: 'hood', value: { level: next }, expectedLevel: level }))
+        .then(result => !!result?.ok).catch(() => false)
+        .finally(() => { if (generation === networkGeneration) { pending = false; renderHint(); } });
+    }
+    if (level === next) return true;
+    level = next;
     find(); apply(); sound(); renderHint(); requestRender();
+    return true;
   }
   const toggle = () => setLevel(level + 1);
 
@@ -110,6 +123,7 @@ export function createHood({ THREE, scene, camera, canvas, renderer, pipe, reque
     if (on) document.body.classList.add('kd-aim');   // подсветка прицела, как у двери (снимаем ниже, в aim)
     hint.hidden = !on || touch;
     btn.hidden = !on || !touch;
+    btn.disabled = pending;
     if (on) { hint.innerHTML = `<kbd>E</kbd> — ${LABEL[level]}`; btn.textContent = level === 3 ? 'Выключить' : level ? `Скорость ${level + 1}` : 'Вытяжка'; }
   }
   const ray = new THREE.Raycaster(); ray.layers.enableAll(); ray.far = REACH;
@@ -183,5 +197,10 @@ export function createHood({ THREE, scene, camera, canvas, renderer, pipe, reque
     hint.remove(); btn.remove();
     ctx?.close();
   }
-  return { update, toggle, setLevel, dispose, get level() { return level; }, get target() { return target; } };
+  return { update, toggle, setLevel, dispose,
+    setNetwork(adapter) { network = adapter || null; pending = false; networkGeneration++; renderHint(); },
+    snapshot: () => ({ level }),
+    applyNetwork(value) { if (Number.isInteger(value?.level) && value.level >= 0 && value.level <= 3) setLevel(value.level, { authoritative: true }); },
+    networkPosition() { find(); return group?.userData.hood?.center?.toArray?.() ?? null; },
+    get level() { return level; }, get target() { return target; } };
 }

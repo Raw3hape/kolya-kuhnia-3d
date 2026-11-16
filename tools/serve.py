@@ -18,6 +18,13 @@ WEB = ROOT / "web"
 EXPORTS = ROOT / "exports"
 
 
+class PreviewServer(http.server.ThreadingHTTPServer):
+    # Many small models/modules arrive together. The default backlog of five can
+    # reset cold browser requests before a handler thread accepts them.
+    request_queue_size = 128
+    daemon_threads = True
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
                       ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -66,12 +73,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(f"exports/{name}".encode())
 
     def log_message(self, fmt, *args):
-        if "/api/" in (args[0] if args else ""):
+        if "/api/" in str(args[0] if args else ""):
             super().log_message(fmt, *args)
 
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    srv = PreviewServer(("127.0.0.1", port), Handler)
     print(f"http://127.0.0.1:{port}/", flush=True)
     srv.serve_forever()

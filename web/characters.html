@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Десять соседей — Кухня 3D</title>
+<script type="importmap">{"imports":{"three":"./vendor/three-0.169/build/three.module.js"}}</script>
+<style>
+  :root { color-scheme:light;--paper:#f4f3ef;--ink:#1c2326;--muted:#66706f;--accent:#0f4352;--line:rgba(28,35,38,.15); }
+  * { box-sizing:border-box; }
+  body { margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 Inter,"Helvetica Neue",Arial,sans-serif; }
+  main { max-width:1500px;margin:0 auto;padding:44px 48px 30px; }
+  header { display:flex;align-items:flex-end;justify-content:space-between;gap:32px;padding-bottom:26px;border-bottom:1px solid var(--line); }
+  .eyebrow { margin:0 0 10px;color:var(--accent);font:500 11px/1.2 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase; }
+  h1 { margin:0;font-size:37px;font-weight:600;letter-spacing:-.04em;line-height:1.1; }
+  header p { max-width:360px;margin:0;color:var(--muted);font-size:13px; }
+  #gallery { position:relative;margin-top:20px; }
+  #grid { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));column-gap:20px;row-gap:18px; }
+  article { min-width:0;position:relative;padding-bottom:16px;border-bottom:1px solid var(--line); }
+  .model { height:300px; }
+  .label { position:relative;z-index:1;text-align:center;pointer-events:none; }
+  .number { margin-right:6px;color:var(--accent);font:11px ui-monospace,monospace; }
+  .name { font-size:14px;font-weight:600; }
+  .detail { display:block;margin-top:4px;color:var(--muted);font-size:11px; }
+  canvas { position:absolute;inset:0;width:100%;height:100%;pointer-events:none; }
+  footer a { color:var(--accent);text-decoration-thickness:1px;text-underline-offset:3px; }
+  footer { display:flex;justify-content:space-between;gap:20px;margin-top:22px;color:var(--muted);font:11px/1.5 ui-monospace,monospace; }
+  #status { margin-top:16px;color:var(--muted); }
+  @media(max-width:800px) { main { padding:28px 20px; } header { display:block; } header p { margin-top:16px; } #grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .model { height:270px; } h1 { font-size:30px; } footer { flex-direction:column; } }
+</style>
+<main>
+  <header><div><p class="eyebrow">Кухня 3D · Персонажи</p><h1>Соседи по квартире</h1></div><p>Десять разных персонажей для одной компании.<br>В комнате каждый получает свободный образ автоматически.</p></header>
+  <section id="gallery" aria-label="Десять игровых персонажей"><div id="grid"></div></section>
+  <p id="status" role="status">Собираем персонажей…</p>
+  <footer><span><a href="./">Вернуться в квартиру</a> · Настоящие модели из игры</span><span>Одежда, причёска и аксессуары различаются</span></footer>
+</main>
+<script type="module">
+  try {
+  const THREE = await import('three');
+  const { createAvatar, AVATAR_ROSTER } = await import('./js/multiplayer/avatars.js');
+  const gallery = document.querySelector('#gallery'), grid = document.querySelector('#grid');
+  const nicknames = ['Никита','Лёша','Саша','Аня','Сергей','Макс','Катя','Коля','Маша','Илья'];
+  const details = ['Тельняшка · короткая стрижка','Горчичная куртка · капюшон','Комбинезон · бейсболка','Терракотовый свитер · пучок','Синий жилет · очки','Лиловая футболка · шапка','Ветровка · коса и рюкзак','Белый фартук · колпак','Коралловая куртка · каре','Рабочая рубашка · рыжая шапка'];
+  function initGallery() {
+  grid.replaceChildren();
+  const renderer = new THREE.WebGLRenderer({ antialias:true,alpha:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.outputColorSpace=THREE.SRGBColorSpace; renderer.setClearColor(0,0); gallery.append(renderer.domElement);
+  const models = AVATAR_ROSTER.map((definition,slot) => {
+    const article=document.createElement('article'), holder=document.createElement('div'); holder.className='model'; article.append(holder);
+    const label=document.createElement('div'); label.className='label';
+    const number=document.createElement('span'); number.className='number'; number.textContent=String(slot+1).padStart(2,'0');
+    const name=document.createElement('span'); name.className='name'; name.textContent=definition.label;
+    const detail=document.createElement('span'); detail.className='detail'; detail.textContent=details[slot]; label.append(number,name,detail); article.append(label); grid.append(article);
+    const scene=new THREE.Scene(), avatar=createAvatar({slot,name:nicknames[slot],host:slot===0}); avatar.root.rotation.y=-0.12; avatar.update({dt:0.016}); scene.add(avatar.root);
+    scene.add(new THREE.HemisphereLight('#ffffff','#b4aaa0',2.7));
+    const light=new THREE.DirectionalLight('#fff5e4',2.6); light.position.set(-3,5,-4); scene.add(light);
+    const platform=new THREE.Mesh(new THREE.CylinderGeometry(.31,.31,.018,40),new THREE.MeshStandardMaterial({color:'#dedbd2',roughness:1})); platform.position.y=-.016; scene.add(platform);
+    const camera=new THREE.OrthographicCamera(-1,1,1.2,-1.2,.1,30); camera.position.set(1.3,1.3,-6); camera.lookAt(0,1,0);
+    return {scene,avatar,camera,holder,platform};
+  });
+  function render() {
+    const bounds=gallery.getBoundingClientRect(), width=gallery.clientWidth,height=gallery.clientHeight;
+    renderer.setSize(width,height,false); renderer.setScissorTest(false); renderer.clear(); renderer.setScissorTest(true);
+    for(const model of models) {
+      const rect=model.holder.getBoundingClientRect(), w=rect.width,h=rect.height,x=rect.left-bounds.left,y=height-(rect.bottom-bounds.top);
+      model.camera.left=-1.19*w/h; model.camera.right=1.19*w/h; model.camera.updateProjectionMatrix();
+      renderer.setViewport(x,y,w,h); renderer.setScissor(x,y,w,h); renderer.render(model.scene,model.camera);
+    }
+    document.querySelector('#status').hidden=true;
+  }
+  addEventListener('resize',render); render();
+  let disposed=false;
+  window.__avatarGallery={models,renderer,render,dispose(){if(disposed)return;disposed=true;removeEventListener('resize',render);for(const m of models){m.avatar.dispose();m.platform.geometry.dispose();m.platform.material.dispose();}renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}};
+  }
+  initGallery();
+  addEventListener('pagehide',()=>window.__avatarGallery?.dispose());
+  addEventListener('pageshow',event=>{if(event.persisted)initGallery();});
+  } catch (error) {
+    const status=document.querySelector('#status');status.hidden=false;
+    status.textContent='Не удалось показать персонажей. Обновите страницу или откройте её в современном браузере.';
+    const retry=document.createElement('button');retry.type='button';retry.textContent='Обновить страницу';retry.style.cssText='display:block;margin-top:12px;min-height:44px;padding:8px 16px;border:1px solid var(--accent);border-radius:5px;background:var(--accent);color:#fff;cursor:pointer';retry.onclick=()=>location.reload();status.append(retry);
+  }
+</script>
+</html>

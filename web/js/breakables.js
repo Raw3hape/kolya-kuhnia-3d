@@ -33,9 +33,10 @@
 // Звук синтезируется (WebAudio): стекло — звон, керамика — хруст, фрукт — шлепок; звяк при падении кусков.
 import { afterRoom, retry } from './loading.js';
 import { decorPart } from './decor.js';
+import { loosePropMaterial, stableObjectId, indexNetworkObjects, seededRandom } from './network-objects.js';
 
 const BR = {
-  cells: { glass: 14, ceramic: 10, fruit: 7 },   // кусков на вещь (eco — 2/3)
+  cells: { glass: 14, ceramic: 10, fruit: 7, paper: 12, cloth: 8, wood: 11, plastic: 10, foliage: 14, metal: 7 },
   pane: { seeds: 22, hole: 0.22, extra: 0.25 },  // стекло: точек Вороного, радиус выбитого вокруг пули (м), доля выпавших дальше
   maxTris: 40000,       // вещь тяжелее — просто исчезает с брызгами
   gravity: 9.8,
@@ -45,9 +46,9 @@ const BR = {
   near: 3,              // м: опоры ищутся среди мешей ближе этого к месту поломки
 };
 const LIMIT = { eco: 120, fast: 180, high: 300, ultra: 400 };
-const rand = (a, b) => a + Math.random() * (b - a);
 
 export const shotHandlers = new WeakMap();
+export const networkDamageResetters = new WeakMap();
 const restoreHooks = new Set();
 export const onRestore = fn => { restoreHooks.add(fn); return () => restoreHooks.delete(fn); };
 
@@ -91,18 +92,28 @@ export function voronoiCells(w, h, seeds, clip = null) {
   });
 }
 // Точки гуще у попадания (u, v): трещины от пули мельче, к краям крупнее
-export function impactSeeds(w, h, u, v, n) {
+export function impactSeeds(w, h, u, v, n, random = Math.random) {
   const out = [], R = Math.hypot(w, h) * 0.5;
   for (let i = 0; i < n; i++) {
     let x, y;
-    if (i < n * 0.6) { const a = Math.random() * Math.PI * 2, r = R * Math.random() ** 1.8; x = u + Math.cos(a) * r; y = v + Math.sin(a) * r; }
-    else { x = rand(-w / 2, w / 2); y = rand(-h / 2, h / 2); }
+    if (i < n * 0.6) { const a = random() * Math.PI * 2, r = R * random() ** 1.8; x = u + Math.cos(a) * r; y = v + Math.sin(a) * r; }
+    else { x = (random() - 0.5) * w; y = (random() - 0.5) * h; }
     out.push([Math.min(w / 2, Math.max(-w / 2, x)), Math.min(h / 2, Math.max(-h / 2, y))]);
   }
   return out;
 }
 
 export function createBreakables({ THREE, scene, camera, pipe, requestRender, getSound = () => true, burst = null }) {
+  let random = Math.random, networkSeed = '', silent = false, damageEventId = null;
+  const rand = (a, b) => a + random() * (b - a);
+  const pendingBroken = new Set();
+  const appliedBroken = new Map();
+  let missingLookupAt = 0;
+  function withSeed(seed, fn, { replay = false, eventId = null } = {}) {
+    const previous = random, previousSeed = networkSeed, previousSilent = silent, previousEvent = damageEventId;
+    random = seededRandom(seed); networkSeed = String(seed); silent = replay; damageEventId = eventId;
+    try { return fn(); } finally { random = previous; networkSeed = previousSeed; silent = previousSilent; damageEventId = previousEvent; }
+  }
   breakSpec();
   const V3 = () => new THREE.Vector3();
   const noRaycast = () => {};
@@ -110,7 +121,7 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
   // битое стекло окна видно лучше целого (сколы, грани): у кусков в раме и падающих — свой материал, один на всех
   const crackedGlass = new THREE.MeshStandardMaterial({ color: 0xe4f0f0, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.42,
     depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.6 });
-  const sound = (kind, at) => { if (getSound()) audio.play(kind, at ? at.distanceTo(camera.position) : 0); };
+  const sound = (kind, at) => { if (!silent && getSound()) audio.play(kind, at ? at.distanceTo(camera.position) : 0); };
 
   // ---------- что бьётся ----------
   const typeByName = (map, name) => {
@@ -122,14 +133,18 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
   // { unit, type } для меша или null
   function breakableOf(o) {
     for (let x = o; x && x !== scene; x = x.parent) if (typeof x.userData.breakable === 'string') return { unit: x, type: x.userData.breakable };
-    const d = SPEC && decorHolderOf(o);
-    const rule = d?.model && SPEC.models[d.model]?.break;
-    if (!rule) return null;
+    for (let x = o; x && x !== scene; x = x.parent) if (x.name === 'bath_papers_stack') return { unit: x, type: 'paper' };
+    const d = decorHolderOf(o);
+    if (!d) return null;
+    const rule = d?.model && SPEC?.models?.[d.model]?.break;
     // узел модели: прямой ребёнок корня GLB (корень — ребёнок держателя части)
     let unit = o;
     while (unit.parent && unit.parent.parent && unit.parent.parent !== d.holder) unit = unit.parent;
     if (unit.parent === d.holder) return null;   // заглушка-габарит, модели нет
-    const type = typeof rule === 'string' ? rule : typeByName(rule, unit.name);
+    const material = Array.isArray(o.material) ? o.material[0] : o.material;
+    const fallback = loosePropMaterial(d.model, { slot: d.info.slot.id, nodeName: unit.name, materialName: material?.name,
+      ...(SPEC?.loosePolicy ? { policy: SPEC.loosePolicy } : {}) });
+    const type = (typeof rule === 'string' ? rule : rule ? typeByName(rule, unit.name) : null) ?? fallback;
     return type ? { unit, type } : null;
   }
 
@@ -226,13 +241,13 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
     let tris = 0;
     for (const m of meshes) tris += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
     if (!tris || tris > BR.maxTris) return [];
-    const eco = pipe?.quality === 'eco' ? 2 / 3 : 1;
+    const eco = !networkSeed && pipe?.quality === 'eco' ? 2 / 3 : 1;
     const K = Math.max(3, Math.round((BR.cells[type] ?? 10) * eco));
     // точки — центры случайных треугольников (у пустой коробки габарита были бы ячейки в воздухе)
     const seeds = [];
     for (let k = 0; k < K; k++) {
-      const m = meshes[(Math.random() * meshes.length) | 0], g = m.geometry, pos = g.attributes.position;
-      const n = (g.index ? g.index.count : pos.count) / 3, t = (Math.random() * n) | 0;
+      const m = meshes[(random() * meshes.length) | 0], g = m.geometry, pos = g.attributes.position;
+      const n = (g.index ? g.index.count : pos.count) / 3, t = (random() * n) | 0;
       const ix = i => (g.index ? g.index.getX(t * 3 + i) : t * 3 + i);
       seeds.push(V3().fromBufferAttribute(pos, ix(0)).add(pa.fromBufferAttribute(pos, ix(1))).add(pb.fromBufferAttribute(pos, ix(2))).divideScalar(3).applyMatrix4(m.matrixWorld));
     }
@@ -289,7 +304,7 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
     const away = V3().subVectors(center, point);
     if (away.lengthSq() < 1e-8) away.set(rand(-1, 1), rand(0, 1), rand(-1, 1));
     away.normalize();
-    const k = type === 'fruit' ? 0.6 : 1;
+    const k = type === 'fruit' ? 0.6 : ['paper', 'cloth', 'foliage'].includes(type) ? 0.45 : type === 'metal' ? 0.75 : 1;
     return away.multiplyScalar(rand(0.6, 2.0) * k).addScaledVector(dir, rand(0.4, 1.4) * k).add(tmp.set(rand(-0.3, 0.3), rand(0.6, 1.8) * k, rand(-0.3, 0.3)));
   }
 
@@ -309,6 +324,13 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
     }
     return out;
   }
+  const dependencyCache = new WeakMap();
+  function dependentIdsOf(object) {
+    const unit = breakableOf(object)?.unit;
+    if (!unit) return [];
+    if (!dependencyCache.has(unit)) dependencyCache.set(unit, [...new Set(contentsOf(unit).map(s => stableObjectId(breakableOf(s)?.unit ?? s)).filter(id => id && id !== stableObjectId(unit)))].slice(0, 32));
+    return dependencyCache.get(unit);
+  }
 
   // surf — { albedo } поверхности попадания (impacts.js: цвет материала × средний цвет карты) — для сока фрукта
   function breakAt(hit, dir, surf = null) {
@@ -316,7 +338,7 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
     if (!b || !b.unit.visible) return false;
     const near = nearMeshes(hit.point);
     const smash = (unit, type) => {
-      const pieces = fracture(unit, type, hit.point, dir);
+      const pieces = silent ? [] : fracture(unit, type, hit.point, dir);
       unit.visible = false;
       broken.push({ obj: unit, kind: 'unit', extra: [] });
       // почти прозрачное стекло (банка, ваза) куском не видно — осколки «битым стеклом»
@@ -373,6 +395,7 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
     cells.forEach((poly, i) => {
       if (!poly) return;
       const { geo, cx, cy, zc } = slabGeometry(poly, z0, z1);
+      if (silent && fall[i]) { geo.dispose(); return; }
       mtx.makeTranslation(rect.cx + cx, rect.cy + cy, zc);
       if (fall[i]) {
         mtx2.multiplyMatrices(object.matrixWorld, mtx).decompose(pp, qq, ss);
@@ -382,7 +405,8 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
         const m = new THREE.Mesh(geo, material);
         mtx2.multiplyMatrices(object.matrix, mtx).decompose(m.position, m.quaternion, m.scale);
         m.castShadow = false; m.receiveShadow = false; m.renderOrder = renderOrder;
-        Object.assign(m.userData, { glass: !!object.userData.glass, breakPiece: true, noPick: true });
+        Object.assign(m.userData, { glass: !!object.userData.glass, breakPiece: true, noPick: true,
+          networkId: `${stableObjectId(object)}/fragment:${networkSeed}:${i}`, damageEventId });
         object.parent.add(m);
         kept.push(m);
         // следующая пуля выбивает кусок из рамы
@@ -415,11 +439,11 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
     pane.updateWorldMatrix(true, false);
     lp.copy(hit.point).applyMatrix4(mtx.copy(pane.matrixWorld).invert());
     const sc = pane.getWorldScale(V3()), w = sz.x, h = sz.y;
-    const eco = pipe?.quality === 'eco' ? 0.7 : 1;
-    const seeds = impactSeeds(w, h, lp.x - c.x, lp.y - c.y, Math.round(BR.pane.seeds * eco * Math.min(1.6, Math.max(0.6, w * h * sc.x * sc.y * 1.2))));
+    const eco = !networkSeed && pipe?.quality === 'eco' ? 0.7 : 1;
+    const seeds = impactSeeds(w, h, lp.x - c.x, lp.y - c.y, Math.round(BR.pane.seeds * eco * Math.min(1.6, Math.max(0.6, w * h * sc.x * sc.y * 1.2))), random);
     const cells = voronoiCells(w, h, seeds);
     const rHole = BR.pane.hole / Math.max(1e-3, (sc.x + sc.y) / 2);
-    const fall = seeds.map(s => Math.hypot(s[0] - (lp.x - c.x), s[1] - (lp.y - c.y)) < rHole || Math.random() < BR.pane.extra);
+    const fall = seeds.map(s => Math.hypot(s[0] - (lp.x - c.x), s[1] - (lp.y - c.y)) < rHole || random() < BR.pane.extra);
     const kept = slabShards({ object: pane, rect: { cx: c.x, cy: c.y, w, h }, z0: box.min.z, z1: box.max.z, cells, fall,
       material: crackedGlass, point: hit.point, dir, keep: true, renderOrder: pane.renderOrder, kind: 'glass' });
     pane.visible = false;
@@ -437,7 +461,9 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
     for (const s of shards) {
       if (s.rest) continue;
       const p = s.mesh.position;
-      s.v.y -= BR.gravity * dt;
+      const soft = ['paper', 'cloth', 'foliage'].includes(s.clink);
+      if (soft) s.v.multiplyScalar(Math.exp(-1.8 * dt));
+      s.v.y -= BR.gravity * (soft ? 0.24 : 1) * dt;
       p.addScaledVector(s.v, dt);
       if (Math.hypot(p.x - s.probeX, p.z - s.probeZ) > BR.probe) groundAt(s);
       dq.setFromAxisAngle(s.axis, s.spin * dt);
@@ -458,6 +484,7 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
   }
 
   function restore() {
+    pendingBroken.clear(); appliedBroken.clear(); missingLookupAt = 0;
     for (const s of shards.slice()) dropShard(s);
     for (const b of broken) {
       b.obj.visible = true;
@@ -469,9 +496,59 @@ export function createBreakables({ THREE, scene, camera, pipe, requestRender, ge
     requestRender?.();
   }
 
-  const api = { slabShards, sound, burst: burst ?? (() => {}) };
+  function applyBroken(ids = []) {
+    const newIds = new Set();
+    for (const id of ids) { if (!pendingBroken.has(id)) newIds.add(id); pendingBroken.add(id); }
+    const now = performance.now(), retryMissing = now - missingLookupAt >= 500;
+    if (retryMissing) missingLookupAt = now;
+    let index = null, changed = false;
+    for (const id of pendingBroken) {
+      const applied = appliedBroken.get(id);
+      if (applied) {
+        let root = applied;
+        while (root.parent) root = root.parent;
+        if (root === scene) continue;
+      }
+      if (!newIds.has(id) && !retryMissing) continue;
+      index ??= indexNetworkObjects(scene);
+      const object = index.get(id);
+      if (!object) continue;
+      const d = decorHolderOf(object), mirror = d?.model && SPEC?.models?.[d.model]?.mirror;
+      if (d && !SPEC) continue;
+      if (mirror?.material && (Array.isArray(object.material) ? object.material : [object.material]).some(m => m?.name === mirror.material)) object.userData.networkMirror = true;
+      if (object.userData.networkMirror || object.userData.mirror || object.userData.mirrorGlass) {
+        const handler = shotHandlers.get(object);
+        if (!handler) continue;
+        if (object.userData.networkDamaged) { appliedBroken.set(id, object); continue; }
+        const center = new THREE.Box3().setFromObject(object).getCenter(V3());
+        withSeed(`restore:${id}`, () => handler({ object, point: center }, V3().set(0, 0, -1), api), { replay: true });
+        appliedBroken.set(id, object); changed = true;
+        continue;
+      }
+      if (!broken.some(b => b.obj === object)) broken.push({ obj: object, kind: 'unit', extra: [] });
+      object.visible = false; appliedBroken.set(id, object); changed = true;
+    }
+    if (changed) requestRender?.();
+  }
+  const api = { slabShards, sound, burst: burst ?? (() => {}), random: () => random() };
+  function forgetNetworkEvent(id) {
+    for (const b of broken) b.extra = b.extra.filter(mesh => {
+      if (mesh.userData.damageEventId !== id) return true;
+      mesh.removeFromParent(); mesh.geometry.dispose(); return false;
+    });
+  }
+  function resetNetworkDamage(ids, index) {
+    missingLookupAt = -Infinity;
+    for (const id of ids) {
+      const object = index.get(id);
+      if (object) networkDamageResetters.get(object)?.();
+      appliedBroken.delete(id);
+    }
+  }
   return {
-    breakAt, shatterPane, update, restore, api, breakableOf,
+    breakAt, shatterPane, update, restore, api, breakableOf, dependentIdsOf, withSeed, applyBroken,
+    forgetNetworkEvent, resetNetworkDamage,
+    get brokenIds() { return broken.map(b => stableObjectId(b.obj)).filter(Boolean); },
     handle(hit, dir) { const f = shotHandlers.get(hit.object); return f ? f(hit, dir, api) : null; },
     get broken() { return broken.length; },
     get shards() { return shards.length; },
@@ -531,10 +608,20 @@ function createBreakSound() {
       } else if (kind === 'fruit') {
         noiseHit(c, out, t, { type: 'lowpass', f0: 1400, f1: 180, dur: 0.2, gain: 1.4 });
         noiseHit(c, out, t + 0.015, { type: 'bandpass', f0: 950, f1: 260, q: 6, dur: 0.16, gain: 1.6 });
+      } else if (kind === 'paper' || kind === 'cloth' || kind === 'foliage') {
+        noiseHit(c, out, t, { type: 'highpass', f0: kind === 'paper' ? 1900 : 700, dur: 0.22, gain: 0.45 });
+      } else if (kind === 'wood') {
+        noiseHit(c, out, t, { type: 'bandpass', f0: 650, q: 1.5, dur: 0.12, gain: 0.9 });
+        ping(c, out, t, 140, 0.09, 0.35);
+      } else if (kind === 'metal') {
+        for (const f of [370, 820, 1710]) ping(c, out, t, f, 0.26, 0.12);
+      } else {
+        noiseHit(c, out, t, { type: 'bandpass', f0: 1350, q: 2, dur: 0.09, gain: 0.65 });
       }
     },
     clink(kind, dist, on) {
       if (!on) return;
+      if (['paper', 'cloth', 'foliage'].includes(kind)) return;
       const now = performance.now();
       if (now - lastClink < 35) return;
       lastClink = now;

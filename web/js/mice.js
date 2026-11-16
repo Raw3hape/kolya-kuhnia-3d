@@ -8,6 +8,7 @@
 // мебель — препятствия прогулки (core.obstacles). Кадры — только пока мышь видно (core.seen).
 import { roomOf } from './walk.js';
 import { addTargets } from './hunt.js';
+import { EXTERNAL_TARGET_RULES } from './multiplayer/rules.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const GAP = { walk: [30, 90], orbit: [60, 150] };   // пауза между мышами, с
@@ -15,13 +16,14 @@ const FIRST = [20, 45];
 const LENGTH = 0.17;       // мышь с хвостом, м
 const SPEED = 0.85, PANIC = 1.9, FPS = 30;
 const INSET = 0.045;       // от стены до оси пути, м
-const POINTS = 300;
+const POINTS = EXTERNAL_TARGET_RULES.mouse.points;
 
 export function create(L) {
   const { THREE, scene, camera, plan } = L;
   let t = 0, next = rand(...FIRST), live = true, model = null, loading = null;
   let mouse = null;          // текущая: { obj, mixer, acts, path, ... }
   let acc = 0, wasSeen = false;
+  let network = null, networkSnapshot = null, generation = 0;
   const holes = [];          // норки: [{ mesh, until }]
   const puffs = [];          // облачко после попадания
 
@@ -101,17 +103,18 @@ export function create(L) {
     const m = new THREE.Mesh(holeGeo, holeMat);
     m.position.set(p.x - n.x * (INSET - 0.003), 0.004, p.z - n.z * (INSET - 0.003));
     m.rotation.y = Math.atan2(n.x, n.z);
-    m.userData.rasterOnly = true;
+    Object.assign(m.userData, { rasterOnly: true, networkEffect: true });
     scene.add(m);
     holes.push({ mesh: m, until });
   }
 
   // ---------- мышь ----------
-  function spawn(force = false) {
+  function spawn(force = false, remote = null) {
+    if (network && !network.authority && !remote) return false;
     if (mouse || !live) return false;
-    if (!model) { load().then(() => { if (force) spawn(true); }); if (!force) next = t + 3; return false; }
-    const room = pickRoom();
-    const path = room && plan1(room);
+    if (!model) { load().then(() => { if (!model) return; if (remote) applyNetworkSnapshot(networkSnapshot); else if (force) spawn(true); }); if (!force) next = t + 3; return false; }
+    const room = remote ? null : pickRoom();
+    const path = remote?.path ?? (room && plan1(room));
     if (!path) return false;
     const obj = model.clone(model.scene);
     obj.updateMatrixWorld(true);
@@ -119,12 +122,12 @@ export function create(L) {
     const s = LENGTH / Math.max(size.x, size.z, 1e-6);
     obj.scale.multiplyScalar(s);
     obj.position.set(-(box.min.x + box.max.x) / 2 * s, -box.min.y * s, -(box.min.z + box.max.z) / 2 * s);
-    const holder = new THREE.Group(); holder.name = 'life_mouse'; holder.userData.rasterOnly = true;
+    const holder = new THREE.Group(); holder.name = 'life_mouse'; Object.assign(holder.userData, { rasterOnly: true, networkEntity: true });
     holder.add(obj);
     obj.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false; o.userData.rasterOnly = true; } });
     const mixer = new THREE.AnimationMixer(obj), acts = {};
     for (const c of model.animations) acts[c.name] = mixer.clipAction(c);
-    mouse = { obj: holder, mixer, acts, path, s: 0, stop: 0, state: path.holeStart ? 'emerge' : 'run', timer: 0, cur: null, dead: false,
+    mouse = { id: remote?.id ?? `mouse:${++generation}`, obj: holder, mixer, acts, path, s: 0, stop: 0, state: path.holeStart ? 'emerge' : 'run', timer: 0, cur: null, dead: false,
       speed: SPEED * rand(0.85, 1.15), squeakT: rand(1, 3) };
     if (path.holeStart) hole(path.a, path.n, Infinity);
     const end = { x: path.a.x + path.dir.x * path.len, z: path.a.z + path.dir.z * path.len };
@@ -212,7 +215,7 @@ export function create(L) {
   function puff(at) {
     puffGeo ??= new THREE.IcosahedronGeometry(0.018, 0);
     puffMat ??= new THREE.MeshStandardMaterial({ color: 0xcfc8bd, roughness: 1, transparent: true, opacity: 0.8, depthWrite: false });
-    const g = new THREE.Group(); g.userData.rasterOnly = true; g.position.copy(at);
+    const g = new THREE.Group(); Object.assign(g.userData, { rasterOnly: true, networkEffect: true }); g.position.copy(at);
     const parts = [];
     for (let i = 0; i < 9; i++) {
       const m = new THREE.Mesh(puffGeo, puffMat); m.userData.rasterOnly = true;
@@ -245,17 +248,17 @@ export function create(L) {
       if (dist < (rc.near ?? 0) || dist > (rc.far ?? Infinity)) return null;
       let used = false;
       return {
-        distance: dist, point: hp.clone(), normal: rc.ray.direction.clone().negate(), object: m.obj, animal: 'mouse',
+        distance: dist, point: hp.clone(), normal: rc.ray.direction.clone().negate(), object: m.obj, animal: 'mouse', animalId: m.id, running: m.state === 'run',
         surface: { albedo: new THREE.Color(0.55, 0.52, 0.5), solid: true },
         hit() {
-          if (used || m.dead) return null; used = true;
+          if (used || m.dead || mouse !== m) return null; used = true;
           const running = m.state === 'run';
           m.dead = true; m.timer = 0; clip('Rat_Death', true);
           squeak(1.2);
-          const pts = Math.round(POINTS * (running ? 1.25 : 1) / 5) * 5;
+          const pts = Math.round(POINTS * (running ? EXTERNAL_TARGET_RULES.mouse.runningMultiplier : 1) / 5) * 5;
           L.hunt?.award?.(pts, q.clone().setY(0.1), 'мышь', running ? 'на бегу' : '');
           L.requestRender?.();
-          return { killed: true, points: pts };
+          return { killed: true, points: pts, running };
         },
       };
     },
@@ -266,7 +269,7 @@ export function create(L) {
     t += dt;
     for (let i = holes.length - 1; i >= 0; i--) if (t > holes[i].until) { scene.remove(holes[i].mesh); holes.splice(i, 1); }
     if (!mouse) {
-      if (t >= next && live) {
+      if ((!network || network.authority) && t >= next && live) {
         next = t + rand(...(L.walk?.active ? GAP.walk : GAP.orbit));
         if (!model) load(); else spawn();
       }
@@ -274,7 +277,12 @@ export function create(L) {
     }
     acc += dt;
     const seen = mouse ? L.seen(mouse.obj.position.x, 0.05, mouse.obj.position.z, 0.2, 14) : true;
-    if (mouse) { step(dt); }
+    if (mouse && (!network || network.authority)) { step(dt); }
+    else if (mouse && networkSnapshot?.mouse) {
+      const pose = networkSnapshot.mouse, k = 1 - Math.exp(-22 * dt);
+      mouse.obj.position.lerp(new THREE.Vector3(...pose.position), k);
+      mouse.obj.rotation.set(...pose.rotation);
+    }
     if (!seen && !puffs.length) { wasSeen = false; return false; }
     if (acc < 1 / FPS) return false;
     const s = acc; acc = 0;
@@ -290,5 +298,28 @@ export function create(L) {
   }
   function dispose() { setLive(false); offTargets?.(); holeGeo?.dispose(); holeMat?.dispose(); puffGeo?.dispose(); puffMat?.dispose(); }
 
-  return { update, spawn, setLive, dispose, get debug() { return { mouse, holes, plan1, pickRoom }; } };
+  function snapshot() {
+    const m = mouse;
+    return { time: t, mouse: m ? { id: m.id, path: m.path, s: m.s, stop: m.stop, state: m.state, timer: m.timer,
+      dead: m.dead, speed: m.speed, sniffLen: m.sniffLen, position: m.obj.position.toArray(), rotation: m.obj.rotation.toArray(),
+      clip: m.cur?.getClip()?.name ?? 'Rat_Run', clipTime: m.cur?.time ?? 0 } : null };
+  }
+  function applyNetworkSnapshot(value) {
+    if (!value) return;
+    networkSnapshot = value;
+    if (!network || network.authority) return;
+    t = Number(value.time) || 0;
+    const pose = value.mouse;
+    if (!pose) { if (mouse?.dead) puff(mouse.obj.position); remove(); return; }
+    if (mouse && mouse.id !== pose.id) remove();
+    if (!mouse && !spawn(true, pose)) return;
+    const m = mouse;
+    for (const key of ['s', 'stop', 'state', 'timer', 'dead', 'speed', 'sniffLen']) if (pose[key] !== undefined) m[key] = pose[key];
+    clip(pose.clip ?? 'Rat_Run', !!pose.dead);
+    if (m.cur && Number.isFinite(pose.clipTime)) m.cur.time = pose.clipTime;
+    m.mixer.update(0); L.requestRender?.();
+  }
+  return { update, spawn, setLive, dispose, snapshot, applyNetworkSnapshot,
+    setNetwork(value) { network = value || null; if (network && !network.authority) remove(); },
+    get debug() { return { mouse, holes, plan1, pickRoom }; } };
 }

@@ -54,6 +54,7 @@
 // хвостовые нули и пустое on опускаются. Сдвиг — в «раскладке по умолчанию»: в координатах квартиры, как если бы
 // носитель или опора стояли на своём месте по умолчанию. Неизвестные ключи (опция удалена) безвредно лежат в строке.
 import * as THREE from 'three';
+import { assignNetworkObjectIds } from './network-objects.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { assetUrl, track, retry, afterRoom, isRoomReady, FIRST_ROOMS, inFirstView } from './loading.js';   // сначала комнаты первого вида, остальное фоном
@@ -304,6 +305,7 @@ export function buildDecor(state, plan, M, anchors) {
         m.userData.slot = slot.key;   // клик в 3D открывает этот выбор в панели (ui.focusSlot)
       });
       const attach = obj => {
+        assignNetworkObjectIds(obj, `decor:${pkey}`);
         tag(obj);
         obj.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(obj);   // ещё не в сцене: габарит в координатах части

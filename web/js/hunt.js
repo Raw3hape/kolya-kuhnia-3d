@@ -1,3 +1,5 @@
+import { buildHuntRegions as buildRegions } from './hunt-regions.js';
+import { raySphere, rayAnimalPose } from './hunt-hitboxes.js';
 // Охота «как в тире» за балконом: кабаны (dziki) с поросятами (warchlaki) пасутся на поле и лугу под домом (больше всего —
 // в 40–150 м от балкона) и на газонах справа, у дорог и парковок; над полем низко тянутся клинья больших гусей, гуси
 // пасутся на поле, реже — стайки голубей и грачей, утки. Стреляют из оружия прогулки (viewmodel.js).
@@ -55,6 +57,11 @@ const DEF_PREF = { on: true, name: '', xp: 0, best: 0, last: null, board: [] };
 const shared = { pref: readPref(), spec: null, online: null, status: 'local', hunt: null };
 const targets = new Set();   // addTargets: чужие мишени (life.js)
 export function addTargets(t) { targets.add(t); return () => targets.delete(t); }
+export function raycastExternalTargets(raycaster) {
+  let best = null;
+  for (const t of targets) { const hit = t.raycast(raycaster); if (hit && (!best || hit.distance < best.distance)) best = hit; }
+  return best;
+}
 function readPref() {
   try { return { ...DEF_PREF, ...JSON.parse(localStorage.getItem(PREF) || '{}') }; } catch { return { ...DEF_PREF }; }
 }
@@ -365,127 +372,7 @@ function writeMatrix(e, o, x, y, z, yaw, pitch, roll, s) {
 }
 
 // Луч (o + t·d, |d| = 1) против сферы и капсулы -> t или −1
-function raySphere(ox, oy, oz, dx, dy, dz, cx, cy, cz, r) {
-  const px = ox - cx, py = oy - cy, pz = oz - cz, b = px * dx + py * dy + pz * dz, c = px * px + py * py + pz * pz - r * r, h = b * b - c;
-  if (h < 0) return -1;
-  const t = -b - Math.sqrt(h);
-  return t >= 0 ? t : (c < 0 ? 0 : -1);
-}
-function rayCapsule(ox, oy, oz, dx, dy, dz, ax, ay, az, bx, by, bz, r) {
-  const bax = bx - ax, bay = by - ay, baz = bz - az, oax = ox - ax, oay = oy - ay, oaz = oz - az;
-  const baba = bax * bax + bay * bay + baz * baz, bard = bax * dx + bay * dy + baz * dz, baoa = bax * oax + bay * oay + baz * oaz;
-  const rdoa = dx * oax + dy * oay + dz * oaz, oaoa = oax * oax + oay * oay + oaz * oaz;
-  const a = baba - bard * bard, b = baba * rdoa - baoa * bard, c = baba * oaoa - baoa * baoa - r * r * baba;
-  const h = b * b - a * c;
-  if (h < 0 || a < 1e-9) return -1;
-  const t = (-b - Math.sqrt(h)) / a, y = baoa + t * bard;
-  if (y > 0 && y < baba) return t >= 0 ? t : -1;
-  return y <= 0 ? raySphere(ox, oy, oz, dx, dy, dz, ax, ay, az, r) : raySphere(ox, oy, oz, dx, dy, dz, bx, by, bz, r);
-}
-
 // ---------- угодья: поле и луг под балконом, газоны справа (site.json) ----------
-
-const FOOT = new Set(['footway', 'cycleway', 'path', 'pedestrian']);   // дорожки кабанам не помеха, дороги — да
-function inPoly(p, x, z) {
-  let c = false;
-  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
-    const a = p[i], b = p[j];
-    if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
-  }
-  return c;
-}
-function segDist(ax, az, bx, bz, x, z) {
-  const dx = bx - ax, dz = bz - az, t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1), 0, 1);
-  return Math.hypot(x - ax - t * dx, z - az - t * dz);
-}
-function ringDist(p, x, z) {
-  let d = Infinity;
-  for (let i = 0, j = p.length - 1; i < p.length; j = i++) d = Math.min(d, segDist(p[j][0], p[j][1], p[i][0], p[i][1], x, z));
-  return d;
-}
-function bboxOf(pts) {
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  for (const [x, z] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
-  return { x0, x1, z0, z1 };
-}
-const centroid = p => [p.reduce((s, v) => s + v[0], 0) / p.length, p.reduce((s, v) => s + v[1], 0) / p.length];
-
-// Угодье: объединение многоугольников минус запреты (blocked). home — середина балкона: точки выбираются с весом
-// по расстоянию от него (spec.region.near — основная полоса, ближе и дальше — реже).
-//   inside(x, z), safe(x, z, m), clear(x0, z0, x1, z1) — путь по прямой без запретов,
-//   point({ near: [x, z], r, far }) -> [x, z] (рядом с near — только куда дойти по прямой), dist(x, z)
-function makeRegion(kind, polys, R, blocked, home, margin) {
-  const box = bboxOf(polys.flat());
-  const inside = (x, z) => {
-    if (x < box.x0 || x > box.x1 || z < box.z0 || z > box.z1) return false;
-    let ok = false;
-    for (let i = 0; i < polys.length && !ok; i++) ok = inPoly(polys[i], x, z);
-    return ok && !blocked(x, z);
-  };
-  // внутри с запасом m: точка и четыре соседние
-  const safe = (x, z, m = margin) => inside(x, z) && inside(x + m, z) && inside(x - m, z) && inside(x, z + m) && inside(x, z - m);
-  const clear = (x0, z0, x1, z1) => {
-    const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 1.5);
-    for (let i = 1; i < n; i++) if (!inside(x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n)) return false;
-    return true;
-  };
-  const dist = (x, z) => Math.hypot(x - home[0], z - home[1]);
-  const weight = d => (d > R.maxDist ? 0.02 : d < R.near[0] ? R.closeWeight : d > R.near[1] ? R.farWeight : 1);
-  // far — пополнение: за основной полосой (приходят издалека)
-  const point = ({ near = null, r = Infinity, far = false } = {}) => {
-    const local = near && r < Infinity;
-    let any = null;
-    for (let i = 0; i < 400; i++) {
-      const x = local ? near[0] + rand(-r, r) : rand(box.x0, box.x1), z = local ? near[1] + rand(-r, r) : rand(box.z0, box.z1);
-      if (!safe(x, z) || local && !clear(near[0], near[1], x, z)) continue;
-      any ??= [x, z];
-      const d = dist(x, z);
-      if (Math.random() < (far ? (d > R.near[1] ? 1 : 0.03) : weight(d))) return [x, z];
-    }
-    return any ?? (local ? [near[0], near[1]] : [(box.x0 + box.x1) / 2, (box.z0 + box.z1) / 2]);
-  };
-  // площадь свободной части (оценка по выборке)
-  let free = 0;
-  for (let i = 0; i < 400; i++) if (safe(rand(box.x0, box.x1), rand(box.z0, box.z1))) free++;
-  const area = free / 400 * (box.x1 - box.x0) * (box.z1 - box.z0);
-  return { kind, polys, inside, safe, clear, point, dist, box, area, ok: polys.length > 0 && free > 0 };
-}
-
-// Все угодья: поле с лугами перед домом и «город» справа — открытая земля и газоны между дорогами, парковками,
-// домами и заборами (spec.region.city.box). Запреты города заранее растрированы сеткой 1 м: проверка — один взгляд в массив.
-function buildRegions(site, R, home) {
-  const own = site.own?.footprint ?? [];
-  const ownOff = (x, z) => inPoly(own, x, z) || ringDist(own, x, z) < R.keepOut;
-  const front = p => { const [cx, cz] = centroid(p); return cz < 0 && Math.hypot(cx - home[0], cz - home[1]) < R.radius; };   // перед домом
-  const fieldPolys = (site.areas ?? []).filter(a => R.kinds.includes(a.kind) && front(a.poly)).map(a => a.poly);
-  const out = [];
-  const field = makeRegion('field', fieldPolys, R, ownOff, home, R.margin);
-  if (field.ok) out.push(field);
-  const C = R.city;
-  if (!C) return out;
-  const [x0, x1, z0, z1] = C.box, pad = 12;
-  const touches = pts => { const o = bboxOf(pts); return o.x1 > x0 - pad && o.x0 < x1 + pad && o.z1 > z0 - pad && o.z0 < z1 + pad; };
-  const segs = [];   // [ax, az, bx, bz, запас]
-  const addLine = (line, r) => { for (let i = 0; i < line.length - 1; i++) if (touches([line[i], line[i + 1]])) segs.push([line[i][0], line[i][1], line[i + 1][0], line[i + 1][1], r]); };
-  for (const r of site.roads ?? []) if (!FOOT.has(r.kind)) addLine(r.line, r.w / 2 + C.roadPad);
-  for (const f of site.fences ?? []) addLine(f.line, 0.8);
-  const lots = (site.areas ?? []).filter(a => !C.kinds.includes(a.kind) && !R.kinds.includes(a.kind) && touches(a.poly)).map(a => a.poly);   // парковки, площадки
-  const blds = (site.neighbours ?? []).map(n => n.poly).filter(touches);
-  const W = Math.ceil(x1 - x0), H = Math.ceil(z1 - z0), mask = new Uint8Array(W * H);
-  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-    const x = x0 + i + 0.5, z = z0 + j + 0.5;
-    if (Math.hypot(x - home[0], z - home[1]) > C.maxDist || ownOff(x, z) || fieldPolys.some(p => inPoly(p, x, z))) continue;
-    let ok = true;
-    for (let k = 0; k < segs.length && ok; k++) { const s = segs[k]; if (segDist(s[0], s[1], s[2], s[3], x, z) < s[4]) ok = false; }
-    for (let k = 0; k < lots.length && ok; k++) if (inPoly(lots[k], x, z)) ok = false;
-    for (let k = 0; k < blds.length && ok; k++) if (inPoly(blds[k], x, z) || ringDist(blds[k], x, z) < C.buildingPad) ok = false;
-    if (ok) mask[j * W + i] = 1;
-  }
-  const blocked = (x, z) => !mask[Math.floor(z - z0) * W + Math.floor(x - x0)];
-  const city = makeRegion('city', [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]], R, blocked, home, C.margin);
-  if (city.ok && city.area >= C.minArea) out.push(city);
-  return out;
-}
 
 // ---------- охота ----------
 
@@ -502,6 +389,8 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
   // --- состояние зверей (пулы, без выделений в кадре)
   const boars = [], groups = [], birds = [], flocks = [];
+  let network = false, networkSnapshot = null, previousEnabled = enabled;
+  const networkTargets = new Map(), networkFlock = { kind: 'local' };
   let boarMesh = null, blobMesh = null, birdMesh = null;
   let boarMot, boarSt, birdMot, birdSt;
   const owned = [];   // что освобождать в dispose
@@ -557,6 +446,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     exterior = pl.openings.filter(o => o.type === 'window' || /balcony/.test(o.id));
     build();
     ready = true;
+    if (network && networkSnapshot) applyNetworkSnapshot(networkSnapshot);
     syncVisible();
     requestRender?.();
   }).catch(err => console.warn('hunt: не загрузилось', err));
@@ -1075,6 +965,21 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
   function update(dt = 1 / 60) {
     if (!ready || disposed) return false;
+    if (network) {
+      hud.hidden = card.hidden = true;
+      if (!networkSnapshot) return false;
+      const k = 1 - Math.exp(-18 * Math.min(0.1, dt));
+      for (const [a, target] of networkTargets) {
+        a.x += (target.x - a.x) * k; a.y += (target.y - a.y) * k; a.z += (target.z - a.z) * k;
+        a.yaw += Math.atan2(Math.sin(target.yaw - a.yaw), Math.cos(target.yaw - a.yaw)) * k;
+        for (const key of ['phase', 'gait', 'graze', 'alert', 'fall', 'fade', 'amp', 'fold', 'peck', 'pitch', 'roll'])
+          if (Number.isFinite(target[key])) a[key] += (target[key] - a[key]) * k;
+        a.flash = Math.max(0, a.flash - dt * 4);
+      }
+      time += dt;
+      syncVisible(); seen(getWalk?.()); writeBuffers(); wasSeen = true;
+      return true;
+    }
     const walk = getWalk?.();
     let need = syncVisible();
     updateRound(walk);
@@ -1128,6 +1033,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   // ---------- выстрел: слух ----------
 
   function noise(point, loudness = 1) {
+    if (network) return;
     if (!ready || !enabled) return;
     if (getWalk?.()?.active && !round.on) startRound();
     if (round.on) round.shots++;
@@ -1154,46 +1060,6 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   const tmpP = new THREE.Vector3();
   let hitZone = null;   // зона последнего попадания в boarPose/birdPose (без выделений на выстрел)
   // Луч (o, d — мир) против кабана в положении (x, z, yaw) -> расстояние или −1; зону пишет в hitZone
-  function boarPose(b, x, z, yaw, ox, oy, oz, dx, dy, dz, pad) {
-    const s = b.scale, P = S.boars.hitPad, e = pad / s;
-    const c = Math.cos(yaw), sn = Math.sin(yaw);
-    const rx = ox - x, ry = oy - ground, rz = oz - z;
-    const lx = (c * rx - sn * rz) / s, ly = ry / s, lz = (sn * rx + c * rz) / s;
-    const ldx = c * dx - sn * dz, ldy = dy, ldz = sn * dx + c * dz;
-    // голова поворачивается у шеи (0, 0.62, 0.36) на тот же угол, что в BOAR_VERT: пасётся — вниз, тревога и галоп — вверх
-    const a = b.graze * 0.72 - b.alert * 0.32 + clamp(b.gait - 2, 0, 1) * 0.12, ca = Math.cos(a), sa = Math.sin(a);
-    const hy = 0.62 + ca * -0.09 - sa * 0.24, hz = 0.36 + sa * -0.09 + ca * 0.24;
-    const tHead = raySphere(lx, ly, lz, ldx, ldy, ldz, 0, hy, hz, 0.19 * P + e);
-    const tBody = rayCapsule(lx, ly, lz, ldx, ldy, ldz, 0, 0.62, -0.58, 0, 0.62, 0.34, 0.28 * P + e);
-    const tHeart = raySphere(lx, ly, lz, ldx, ldy, ldz, 0, 0.5, 0.2, 0.14 * P + e * 0.5);
-    const tLegF = rayCapsule(lx, ly, lz, ldx, ldy, ldz, -0.12, 0.2, 0.2, 0.12, 0.2, 0.2, 0.17 * P + e);
-    const tLegR = rayCapsule(lx, ly, lz, ldx, ldy, ldz, -0.12, 0.2, -0.5, 0.12, 0.2, -0.5, 0.18 * P + e);
-    hitZone = null;
-    let t = -1;
-    if (tHead >= 0 && (tBody < 0 || tHead <= tBody + 0.05)) { hitZone = 'head'; t = tHead; }
-    else if (tBody >= 0) { hitZone = tHeart >= 0 ? 'heart' : 'body'; t = tBody; }
-    else {
-      const tl = tLegF >= 0 && (tLegR < 0 || tLegF < tLegR) ? tLegF : tLegR;
-      if (tl >= 0) { hitZone = 'legs'; t = tl; }
-    }
-    return t < 0 ? -1 : t * s;
-  }
-  // Птица в (x, y, z, yaw): эллипсоид по размаху крыльев, длине и взмаху (× hitPad), голова — шар впереди
-  function birdPose(b, x, y, z, yaw, ox, oy, oz, dx, dy, dz, pad) {
-    const sp = b.scale, P = S.birds.hitPad, c = Math.cos(yaw), sn = Math.sin(yaw);
-    const rx = ox - x, ry = oy - y, rz = oz - z;
-    const ax = 0.5 * sp * P + pad, ay = 0.22 * sp * P + pad, az = 0.3 * sp * P * Math.max(1, b.fat * 0.85) + pad;
-    const px = (c * rx - sn * rz) / ax, py = ry / ay, pz = (sn * rx + c * rz) / az;
-    const qx = (c * dx - sn * dz) / ax, qy = dy / ay, qz = (sn * dx + c * dz) / az;
-    const A = qx * qx + qy * qy + qz * qz, B2 = px * qx + py * qy + pz * qz, C = px * px + py * py + pz * pz - 1, h = B2 * B2 - A * C;
-    hitZone = null;
-    if (h < 0) return -1;
-    let t = (-B2 - Math.sqrt(h)) / A;
-    if (t < 0) { if (C >= 0) return -1; t = 0; }
-    const f = (0.2 + (b.fat - 1) * 0.12) * sp;
-    hitZone = raySphere(ox, oy, oz, dx, dy, dz, x + sn * f, y + 0.035 * sp, z + c * f, 0.09 * sp * P + pad) >= 0 ? 'head' : 'body';
-    return t;
-  }
   // снимок положения раз в HIST_DT: [x, y, z, yaw, время] × HIST, новый — первым
   function record(a, y) {
     if (time - a.histT < HIST_DT) return;
@@ -1209,14 +1075,15 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   }
   // нынешняя поза, затем снимки не старше lag -> расстояние или −1 (зона — в hitZone)
   function poseHit(a, bird, ox, oy, oz, dx, dy, dz, pad) {
-    let t = bird ? birdPose(a, a.x, a.y, a.z, a.yaw, ox, oy, oz, dx, dy, dz, pad) : boarPose(a, a.x, a.z, a.yaw, ox, oy, oz, dx, dy, dz, pad);
+    const test = pose => { const h = rayAnimalPose(a, bird, [ox, oy, oz], [dx, dy, dz], S, ground, pad, pose); hitZone = h?.zone ?? null; return h?.distance ?? -1; };
+    let t = test(a);
     if (t >= 0) return t;
     const h = a.hist, lag = S.hit.lag;
     for (let k = 0; k < a.histN; k++) {
       const o = k * 5, age = time - h[o + 4];
       if (age > lag) break;
       if (age < HIST_DT * 0.5) continue;
-      t = bird ? birdPose(a, h[o], h[o + 1], h[o + 2], h[o + 3], ox, oy, oz, dx, dy, dz, pad) : boarPose(a, h[o], h[o + 2], h[o + 3], ox, oy, oz, dx, dy, dz, pad);
+      t = test({ x: h[o], y: h[o + 1], z: h[o + 2], yaw: h[o + 3] });
       if (t >= 0) return t;
     }
     return -1;
@@ -1224,6 +1091,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   // ближайшее на луче: звери охоты и чужие мишени (addTargets)
   function raycast(raycaster) {
     let best = raycastAnimals(raycaster);
+    if (network) return best;
     for (const t of targets) { const h = t.raycast(raycaster); if (h && (!best || h.distance < best.distance)) best = h; }
     return best;
   }
@@ -1262,8 +1130,9 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     const normal = new THREE.Vector3(-dx, -dy, -dz);
     let used = false;
     return {
-      distance: bt, point, normal, object: bird ? birdMesh : boarMesh, instanceId: a.i, zone, animal: bird ? a.sp : a.pig ? 'piglet' : 'boar',
+      distance: bt, point, normal, object: bird ? birdMesh : boarMesh, instanceId: a.i, animalId: a.id, zone, animal: bird ? a.sp : a.pig ? 'piglet' : 'boar',
       hit(weaponId, damage) {
+        if (network) return null;
         if (used) return null;
         used = true;
         return applyHit(a, bird, zone, weaponId, damage, point, bt);
@@ -1395,7 +1264,43 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     clearTimeout(p._t); p._t = setTimeout(() => { p.hidden = true; }, 1600);
   }
 
+  function setNetwork(on) {
+    const next = !!on;
+    if (network === next) return;
+    if (next) { previousEnabled = enabled; enabled = true; round.on = false; hud.hidden = card.hidden = true; }
+    else { enabled = previousEnabled; networkSnapshot = null; networkTargets.clear(); }
+    network = next;
+    syncVisible(); requestRender?.();
+  }
+
+  function applyNetworkSnapshot(snapshot) {
+    if (!snapshot || !Array.isArray(snapshot.animals)) return;
+    networkSnapshot = snapshot;
+    if (!network || !ready) return;
+    time = Number(snapshot.time) || 0;
+    networkTargets.clear();
+    for (const a of [...boars, ...birds]) a.active = false;
+    for (const pose of snapshot.animals) {
+      const pool = pose.kind === 'boar' ? boars : pose.kind === 'bird' ? birds : null;
+      const a = pool?.[pose.i];
+      if (!a || ![pose.x, pose.y, pose.z, pose.yaw, pose.scale].every(Number.isFinite)) continue;
+      const fresh = a.id !== pose.id;
+      if (fresh) Object.assign(a, pose);
+      a.active = pose.active !== false; a.dead = !!pose.dead; a.id = pose.id; a.generation = pose.generation;
+      a.hp = pose.hp; a.scale = pose.scale; a.pig = !!pose.pig; a.flash = Math.max(a.flash ?? 0, pose.flash ?? 0);
+      a.histN = 0; a.histT = -1;
+      if (pose.kind === 'bird') {
+        a.f = networkFlock; a.sp = pose.sp; a.kind = pose.birdKind; a.fat = pose.fat ?? 1;
+        a.mode = pose.dead ? 'fall' : (pose.fold ?? 0) > 0.5 ? 'perch' : 'fly';
+        a.vx = a.vy = a.vz = 0;
+      }
+      networkTargets.set(a, pose);
+    }
+    syncVisible(); seen(getWalk?.()); writeBuffers(); requestRender?.();
+  }
+
   function setEnabled(on) {
+    if (network) return;
     enabled = !!on; shared.pref.on = enabled; writePref();
     if (!enabled) { round.on = false; card.hidden = true; }
     syncVisible(); requestRender?.();
@@ -1412,8 +1317,15 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   }
 
   const api = {
-    update, raycast, noise, dispose, setEnabled,
+    update, raycast, noise, dispose, setEnabled, setNetwork, applyNetworkSnapshot,
+    applyNetworkHit(hit, { local = false } = {}) {
+      if (!network || !local || !hit?.point) return;
+      const p = new THREE.Vector3(...hit.point);
+      if (hit.points > 0) popup(p, `+${fmt(hit.points)}`, S?.species?.[hit.species]?.name ?? 'Попадание');
+      else popup(p, 'Попадание', hit.zone === 'head' ? 'в голову' : '');
+    },
     award(points, point, title, sub = '') {
+      if (network) return;
       if (points > 0 && S) {
         if (!round.on) startRound();
         round.score += points; round.kills++;

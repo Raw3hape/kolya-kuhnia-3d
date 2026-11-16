@@ -39,6 +39,7 @@ import { createHood } from './hood.js';       // KITCHEN: вытяжка над 
 import { createTicker } from './ticker.js';   // KITCHEN: крипто-биржа на мониторе комнаты 3
 import { createLife, registerLifeUI } from './life.js';   // LIFE: соседи, звонок, монстры за дверью, вода, мыши
 import { createMirrors } from './mirrors.js';   // BREAK: честные зеркала (плоское отражение), бьются от выстрела
+import { createMultiplayerSession } from './multiplayer/session.js';
 
 const [plan, kit, viewSpec, site, bathSpec] = await Promise.all([
   fetch('spec/plan.generated.json').then(r => r.json()),
@@ -96,6 +97,7 @@ const DEFAULT = {
 };
 const clampSplit = v => Math.min(SPLIT.max, Math.max(SPLIT.min, Number(v) || DEFAULT.split));
 export const state = { ...DEFAULT };
+let multiplayer = null;
 
 function encode(s) {
   return 'v3-' + SCHEMA_V3.map(([k, t]) => {
@@ -357,7 +359,8 @@ async function applyMaterials() {
 }
 
 let lastKitchenKey = '', lastFloorsKey = '', lastLampsKey = '', lastFurnKey = '', lastDecorKey = null;
-export async function setState(patch, { push = true } = {}) {
+export async function setState(patch, { push = true, network = false } = {}) {
+  if (!network && multiplayer && !multiplayer.canEdit) return false;
   Object.assign(state, patch);
   Object.assign(state, lightTimePatch(patch, state, site));   // «Вечер» = после заката этой даты, ночь в «День» не попадает
   state.split = clampSplit(state.split);
@@ -386,6 +389,7 @@ export async function setState(patch, { push = true } = {}) {
   ui?.sync(state);
   if (push) writeHash();
   await applyMaterials();
+  if (!network) multiplayer?.apartmentChanged();
 }
 
 // Быстрый путь для ползунка границы: только пол заново, без кухни, материалов и ссылки.
@@ -396,12 +400,14 @@ function writeHash() {
   try { history.replaceState(null, '', '#' + encode(state)); } catch { /* в песочнице может быть запрещено */ }
 }
 export function setSplit(v, { commit = false } = {}) {
+  if (multiplayer && !multiplayer.canEdit) return;
   state.split = clampSplit(v);
   const floorsKey = [state.split, state.threshold].join('|');
   if (floorsKey !== lastFloorsKey) { lastFloorsKey = floorsKey; rebuildFloors(); lighting.invalidate(); }
   ui?.syncSplit(state);
   if (commit) { writeHash(); ui?.sync(state); }
   else { clearTimeout(hashTimer); hashTimer = setTimeout(writeHash, 400); }
+  multiplayer?.apartmentChanged();
 }
 
 // ---------- камеры ----------
@@ -444,6 +450,7 @@ let lastFrame = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - (lastFrame || now)) / 1000); lastFrame = now;
+  if (multiplayer?.update(dt)) needs = true;
   if (walk?.update()) needs = true;
   if (doors?.update(dt)) needs = true;
   if (seats?.update(dt)) needs = true;
@@ -591,7 +598,7 @@ pipe.onProgress((n, { phase, target }) => ui.info({ photo: { passes: n, target, 
 // Свободная камера как в 3D-редакторах: колесо к курсору, WASD/Q/E, вращение вокруг точки под курсором
 nav = createNav({ THREE, camera, controls, canvas, scene, plan, requestRender,
   isWalking: () => !!walk?.active || !!seats?.active, raycastTargets: () => scene.children });
-ui.on('furnEdit', on => { if (on) furnEditor.enable(); else furnEditor.disable(); ui.info({ furnEdit: on }); requestRender(); });
+ui.on('furnEdit', on => { if (on && multiplayer && !multiplayer.canEdit) return; if (on) furnEditor.enable(); else furnEditor.disable(); ui.info({ furnEdit: on }); requestRender(); });
 ui.on('furnReset', () => setState(furnitureResetPatch()));
 const flyTo = (x, z) => {
   const t = new THREE.Vector3(x, controls.target.y, z);
@@ -639,3 +646,7 @@ window.__kitchen = { state, setState, setSplit, goView, snapshot, exportGLB, enc
 Object.defineProperties(window.__kitchen, { hood: { get: () => hood }, ticker: { get: () => ticker } });   // KITCHEN (геттеры живые, Object.assign скопировал бы значение)
 Object.defineProperty(window.__kitchen, 'life', { get: () => life });   // LIFE
 window.__kitchen.mirrors = mirrors;   // BREAK
+multiplayer = createMultiplayerSession({ THREE, scene, plan, site, getState: () => state,
+  applyState: patch => setState(patch, { push: false, network: true }), requestRender, ui,
+  getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, furnEditor, furniture: furn, decor }) });
+window.__kitchen.multiplayer = multiplayer;

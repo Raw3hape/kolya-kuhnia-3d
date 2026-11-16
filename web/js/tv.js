@@ -61,7 +61,7 @@ function parseScreen(s) {
     // дальше — состояние в сеансе: что нашли в сцене, где экран, какое видео и с какого места
     HOLE: { value: 0 }, mesh: null, holder: null, group: null, none: false,
     world: new THREE.Matrix4(), center: new THREE.Vector3(), normal: new THREE.Vector3(), radius: 0, dist: Infinity, score: 0,
-    idx: 0, t: Number(videos[0].start) || 0, failed: 0, audio: false,
+    idx: 0, t: Number(videos[0].start) || 0, failed: 0, audio: false, sharedPlaying: true,
   };
 }
 const SCREENS = (SPEC?.screens ?? []).map(parseScreen).filter(Boolean);
@@ -171,11 +171,11 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
         playerVars: { ...(s.t ? { start: Math.floor(s.t) } : {}), autoplay: 1, mute: 1, loop: 1, playlist: id, controls: 0, playsinline: 1, modestbranding: 1, rel: 0,
           iv_load_policy: 3, disablekb: 1, fs: 0, cc_load_policy: 0, enablejsapi: 1, origin: location.origin },
         events: {
-          onReady() { ready = true; player.mute(); sound = null; applyAudio(); if (active && active !== cur) load(active); player.playVideo(); },
+          onReady() { ready = true; player.mute(); sound = null; applyAudio(); if (active && active !== cur) load(active); if (itemNetwork && cur?.sharedPlaying === false) player.pauseVideo(); else player.playVideo(); },
           onStateChange(e) {
             playerState = e.data;
-            if (e.data === YT_PLAYING) { stalled = 0; if (cur) cur.failed = 0; if (!everPlayed) { everPlayed = true; styleIframe(); } }
-            if (e.data === YT_ENDED && cur) {
+            if (e.data === YT_PLAYING) { stalled = 0; if (cur) cur.failed = 0; if (!everPlayed) { everPlayed = true; styleIframe(); } if (itemNetwork && cur?.sharedPlaying === false) player.pauseVideo(); }
+            if (e.data === YT_ENDED && cur && (!itemNetwork || cur.sharedPlaying !== false)) {
               if (isLive() || cur.onEnd === 'next') advance(cur, 1, false);
               else { player.seekTo(0, true); player.playVideo(); }
             }
@@ -197,12 +197,24 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
     if (cur && cur !== s && !isLive()) cur.t = player.getCurrentTime?.() || 0;
     cur = s; stalled = 0;
     player.loadVideoById({ videoId: s.videos[s.idx].id, startSeconds: s.t });
+    if (itemNetwork && s.sharedPlaying === false) player.pauseVideo();
     sound = null; applyAudio();
   }
   // следующее (d = 1) или предыдущее видео экрана; failed — после ошибки или зависания (круг без единого запуска — стоп)
-  function advance(s, d, failed) {
+  function advance(s, d, failed, { manual = false } = {}) {
     const n = s.videos.length;
     if (failed) { if (++s.failed > n) return; }
+    if (itemNetwork) {
+      if (!manual && s.sharedPlaying === false) return false;
+      const self = typeof itemNetwork.selfId === 'function' ? itemNetwork.selfId() : itemNetwork.selfId;
+      const allowed = s === phone ? hand?.ownerId === self : manual || itemNetwork.isHost?.();
+      if (!allowed || pendingMedia.has(s.id)) return false;
+      const index = (s.idx + d + n) % n, generation = mediaGeneration;
+      pendingMedia.add(s.id);
+      Promise.resolve(itemNetwork.request?.({ kind: 'interaction', id: `media:${s.id}`, value: { index, playing: true }, expectedIndex: s.idx, automatic: !manual }))
+        .catch(() => false).finally(() => { if (generation === mediaGeneration) pendingMedia.delete(s.id); });
+      return true;
+    }
     if (n < 2) { if (ready && cur === s) { player.seekTo(0, true); player.playVideo(); } return; }
     s.idx = (s.idx + d + n) % n; s.t = Number(s.videos[s.idx].start) || 0; stalled = 0;
     if (ready && cur === s) player.loadVideoById({ videoId: s.videos[s.idx].id, startSeconds: s.t });
@@ -257,13 +269,13 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
     if (!ready) return;
     const now = performance.now(), pauseAfter = (SPEC?.pauseAfterSec ?? 30) * 1e3;
     if (!shown && !paused && now - lastSeen > pauseAfter && playerState === YT_PLAYING) { paused = true; player.pauseVideo(); return; }
-    if (!shown || paused || playerState === YT_PLAYING || playerState === YT_BUFFERING) { stalled = 0; return; }
+    if (!shown || paused || itemNetwork && cur?.sharedPlaying === false || playerState === YT_PLAYING || playerState === YT_BUFFERING) { stalled = 0; return; }
     stalled += 5;
     const limit = SPEC?.stallSec ?? 25;
     if (stalled >= limit && cur) advance(cur, 1, true);
     else if (stalled >= limit / 2) player.playVideo();
   }, 5000);
-  const onGesture = () => { if (ready && shown && playerState !== YT_PLAYING) { if (cur) cur.failed = 0; player.playVideo(); } };
+  const onGesture = () => { if (ready && shown && playerState !== YT_PLAYING && (!itemNetwork || cur?.sharedPlaying !== false)) { if (cur) cur.failed = 0; player.playVideo(); } };
   window.addEventListener('pointerdown', onGesture, { capture: true, passive: true });
   window.addEventListener('keydown', onGesture, { capture: true, passive: true });
 
@@ -344,7 +356,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
 
   // телефон в руке: перед камерой, внизу по центру (сдвиг влево от открытой панели — как у рук с оружием)
   const phone = SCREENS.find(s => s.hold) ?? null;
-  let held = false, dropping = null;
+  let held = false, dropping = null, remoteHeld = false;
   function placeHeld(s) {
     const H = s.hold, t = Math.tan(rad(camera.fov) / 2), len = s.h + 2 * H.bezel;
     const d = len * Math.cos(rad(H.tilt)) / (H.height * 2 * t);
@@ -378,7 +390,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
       { duration: 180, easing: 'ease-in' });
     dropping.onfinish = () => {
       dropping = null; held = false; layer.style.zIndex = '-1';
-      hideIsland(false);
+      hideIsland(remoteHeld);
       requestRender();
     };
   }
@@ -386,8 +398,8 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
   function step(id, d) {
     const s = byId(id);
     if (!s) return;
-    advance(s, d, false);
-    if (s === phone && held) scr.animate([{ transform: `translateY(${d > 0 ? 22 : -22}%)`, opacity: 0.15 }, { transform: 'none', opacity: 1 }],
+    advance(s, d, false, { manual: true });
+    if (!itemNetwork && s === phone && held) scr.animate([{ transform: `translateY(${d > 0 ? 22 : -22}%)`, opacity: 0.15 }, { transform: 'none', opacity: 1 }],
       { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
   }
 
@@ -395,7 +407,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
   const hand = phone && createHandheld({ THREE, camera, canvas, requestRender, reach: phone.hold.reach,
     getWalk: () => links.getWalk?.(), getVM: () => links.getVM?.(), getSeats: () => links.getSeats?.(), getDoors: () => links.getDoors?.(),
     // на столе он спрятан, пока в руке (и пока доигрывает «положить»): видимость проверяем у держателя, не у модели
-    getTarget: () => (phone.mesh && phone.holder && (!held || dropping) && visibleChain(phone.holder) ? phone.holder : null),
+    getTarget: () => (!remoteHeld && phone.mesh && phone.holder && (!held || dropping) && visibleChain(phone.holder) ? phone.holder : null),
     getRect: () => scr.getBoundingClientRect(),
     onHold: hold, onStep: d => step(phone.id, d) });
 
@@ -412,7 +424,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
         if (m.material.emissiveMap) m.material.emissiveIntensity = (s.posterBrightness ?? 0.8) / renderer.toneMappingExposure;
       }
     }
-    if (phone && held && !dropping) hideIsland(true);   // обстановку пересобрали, пока телефон в руке
+    if (phone && ((held && !dropping) || remoteHeld)) hideIsland(true);   // обстановку пересобрали, пока телефон в руке
     hand?.sync();
     if (!isRoomReady()) return;   // LOAD: плеер и его рамка (с постером ≈0,2 МБ) — после первого вида
 
@@ -439,7 +451,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
       lastSeen = now;
       if (!player) createPlayer(active);
       else if (ready && cur !== active) load(active);
-      if (paused && ready) { paused = false; player.playVideo(); }
+      if (paused && ready) { paused = false; if (!itemNetwork || active?.sharedPlaying !== false) player.playVideo(); }
       if (held) placeHeld(active);
       layout(active, held);
       obj.matrix.multiplyMatrices(active.world, M.makeScale(k, k, 1));
@@ -479,7 +491,55 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
   // экраны в сцене (для эффектов поверх: трещины и т. п.); mesh — тот, что сейчас найден, у ТВ holder нет
   const screens = () => SCREENS.map(s => ({ id: s.id, mesh: s.mesh, holder: s.decorModel ? s.holder : null, playing: s === active }));
 
-  return { sync, setAudio, step, hold: on => (on ? hand?.pick() : hand?.drop()), link, dispose, screens,
+  let itemNetwork = null, mediaGeneration = 0;
+  const pendingMedia = new Set();
+  function setNetwork(adapter) {
+    itemNetwork = adapter || null; remoteHeld = false; mediaGeneration++; pendingMedia.clear();
+    if (!itemNetwork) for (const s of SCREENS) s.sharedPlaying = true;
+    hand?.setNetwork(adapter);
+    hideIsland(held);
+  }
+  function applyNetwork(owner) {
+    const id = owner && typeof owner === 'object' ? owner.owner ?? owner.ownerId ?? null : owner;
+    const self = typeof itemNetwork?.selfId === 'function' ? itemNetwork.selfId() : itemNetwork?.selfId;
+    remoteHeld = id != null && id !== self;
+    hand?.applyNetwork(id);
+    hideIsland(remoteHeld || held);
+    requestRender?.();
+  }
+  function snapshot() {
+    return Object.fromEntries(SCREENS.map(s => [s.id, { index: s.idx, videoId: s.videos[s.idx].id, playing: s.sharedPlaying !== false }]));
+  }
+  function applyInteractionState(values) {
+    if (!values || typeof values !== 'object') return;
+    for (const s of SCREENS) {
+      const value = values[`media:${s.id}`] ?? values[s.id];
+      if (!value || !Number.isInteger(value.index) || value.index < 0 || value.index >= s.videos.length) continue;
+      const changed = s.idx !== value.index, playing = value.playing !== false, playChanged = s.sharedPlaying !== playing;
+      if (!changed && !playChanged) continue;
+      s.sharedPlaying = playing;
+      if (changed) {
+        const previous = s.idx; s.idx = value.index; s.t = Number(s.videos[s.idx].start) || 0; stalled = 0;
+        if (s === phone && held) scr.animate([{ transform: `translateY(${s.idx > previous ? 22 : -22}%)`, opacity: 0.15 }, { transform: 'none', opacity: 1 }],
+          { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+      }
+      if (ready && cur === s) {
+        if (changed) player.loadVideoById({ videoId: s.videos[s.idx].id, startSeconds: s.t });
+        if (playing) player.playVideo(); else player.pauseVideo();
+      }
+    }
+    requestRender?.();
+  }
+  const interactionMeta = () => Object.fromEntries(SCREENS.map(s => [s.id, s.videos.map(video => video.id)]));
+  const networkPosition = () => {
+    if (!phone?.holder) return null;
+    // The island model remains the item's home even while the separate held
+    // screen presentation follows the camera. Measure geometry, not its pivot.
+    phone.holder.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(phone.holder, true);
+    return box.isEmpty() ? null : box.getCenter(new THREE.Vector3()).toArray();
+  };
+  return { sync, setAudio, step, hold: on => (on ? hand?.pick() : hand?.drop()), link, dispose, screens, setNetwork, applyNetwork, networkPosition, snapshot, applyInteractionState, interactionMeta,
     // для проверки из консоли: __kitchen.tv.status
     get status() {
       return { screen: active?.id ?? null, loaded: cur?.id ?? null, video: cur?.videos[cur.idx]?.id, state: playerState, shown, held,

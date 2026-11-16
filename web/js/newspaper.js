@@ -35,10 +35,12 @@ const LOWER_AFTER = 120, RAISE_AFTER = 380;   // мс: опустить на х�
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 export function createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk, getVM, getSeats, getDoors }) {
-  let papers = null, issue = 0, page = 0, held = false, leaving = null;
+  let papers = null, issue = 0, page = 0, held = false, leaving = null, remoteHeld = false;
+  let pendingInteraction = null, resolveReady;
+  const ready = new Promise(resolve => { resolveReady = resolve; });
   afterRoom(() => retry(() => fetch('spec/newspaper.json').then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status)))))
-    .then(j => { papers = (j?.papers ?? []).filter(p => p?.pages?.length); drawCover(); requestRender?.(); })
-    .catch(() => { papers = null; }));
+    .then(j => { papers = (j?.papers ?? []).filter(p => p?.pages?.length); if (pendingInteraction) applyInteractionState(pendingInteraction); drawCover(); requestRender?.(); resolveReady(); })
+    .catch(() => { papers = null; resolveReady(); }));
 
   // ---------- полка в сцене (bath.js) ----------
   let stack = null, top = null, cover = null;
@@ -190,7 +192,7 @@ export function createNewspaper({ THREE, scene, camera, canvas, requestRender, g
     find();
     leaving?.cancel(); leaving = null;
     if (on) {
-      held = true; page = 0;
+      held = true; if (!itemNetwork) page = 0;
       if (top) top.visible = false;
       root.hidden = false; layout(); renderPage(); setLow(false, true);
       holdEl.animate([{ transform: 'translate(-50%, 70%) rotate(-4deg)', opacity: 0 }, { transform: 'translate(-50%, 0) rotate(0)', opacity: 1 }],
@@ -203,21 +205,38 @@ export function createNewspaper({ THREE, scene, camera, canvas, requestRender, g
     leaving = holdEl.animate([{ opacity: 1 }, { transform: 'translate(-50%, 80%) rotate(5deg)', opacity: 0 }], { duration: 220, easing: 'ease-in' });
     leaving.onfinish = () => {
       leaving = null; held = false; root.hidden = true;
-      if (top) top.visible = true;
-      if (papers?.length) { issue = (issue + 1) % papers.length; drawCover(); }   // наверх стопки — следующий выпуск
+      if (top) top.visible = !remoteHeld;
+      if (!itemNetwork && papers?.length) { issue = (issue + 1) % papers.length; drawCover(); } // In a room the authority advances the returned stack.
       requestRender?.();
     };
   }
   let turning = null;
   function onStep(d) {
     if (!papers) return;
-    turning?.finish();
+    const count = papers[issue]?.pages.length; if (!count) return;
+    const next = (page + d + count) % count;
+    if (itemNetwork) return itemNetwork.request?.({ kind: 'interaction', id: 'newspaper', value: { issue, page: next } });
+    applyInteractionState({ issue, page: next });
+  }
+  function applyInteractionState(value) {
+    if (!value || !Number.isInteger(value.issue) || !Number.isInteger(value.page) || value.issue < 0 || value.page < 0) return;
+    if (!papers) { pendingInteraction = { issue: value.issue, page: value.page }; return; }
+    const count = papers[value.issue]?.pages.length;
+    if (!count || value.page >= count) return;
+    pendingInteraction = null;
+    if (issue === value.issue && page === value.page) return;
+    const previous = page, issueChanged = issue !== value.issue;
+    issue = value.issue; page = value.page;
+    if (issueChanged) drawCover();
+    turning?.cancel(); turning = null;
+    if (!held || itemNetwork && !hand.held) { renderPage(); requestRender?.(); return; }
+    const d = page >= previous ? 1 : -1;
     rustle();
     const out = pageEl.animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${d > 0 ? -8 : 8}%) rotateY(${d > 0 ? 28 : -28}deg)`, opacity: 0 }],
       { duration: 130, easing: 'ease-in' });
     turning = out;
     out.onfinish = () => {
-      page += d; renderPage();
+      renderPage();
       turning = pageEl.animate([{ transform: `translateX(${d > 0 ? 8 : -8}%) rotateY(${d > 0 ? -28 : 28}deg)`, opacity: 0 }, { transform: 'none', opacity: 1 }],
         { duration: 190, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
     };
@@ -240,8 +259,8 @@ export function createNewspaper({ THREE, scene, camera, canvas, requestRender, g
     }
   }
 
-  const hand = createHandheld({ THREE, camera, canvas, requestRender, reach: 1.9, getWalk, getVM, getSeats, getDoors,
-    getTarget: () => { find(); return papers?.length && stack && top?.visible && !held ? stack : null; },
+  const hand = createHandheld({ THREE, camera, canvas, requestRender, reach: 1.9, getWalk, getVM, getSeats, getDoors, networkId: 'newspaper',
+    getTarget: () => { find(); return !remoteHeld && papers?.length && stack && top?.visible && !held ? stack : null; },
     getRect: () => sheet.getBoundingClientRect(),
     onHold, onStep, name: { take: 'взять газету', btn: 'Взять газету', scroll: 'листать', heldHint: false } });   // клавиши — в подвале газеты
 
@@ -252,6 +271,7 @@ export function createNewspaper({ THREE, scene, camera, canvas, requestRender, g
 
   function sync() {
     hand.sync();
+    if (remoteHeld && top) top.visible = false;
     syncLow();
     if (cover && !coverTex && papers) drawCover();
   }
@@ -264,7 +284,32 @@ export function createNewspaper({ THREE, scene, camera, canvas, requestRender, g
     ac?.close?.();
   }
 
-  return { sync, dispose, pick: () => hand.pick(), drop: () => hand.drop(), get held() { return held; },
+  let itemNetwork = null;
+  function setNetwork(adapter) {
+    itemNetwork = adapter || null; remoteHeld = false;
+    hand.setNetwork(adapter);
+    if (top && !held) top.visible = true;
+  }
+  function applyNetwork(owner) {
+    const id = owner && typeof owner === 'object' ? owner.owner ?? owner.ownerId ?? null : owner;
+    const self = typeof itemNetwork?.selfId === 'function' ? itemNetwork.selfId() : itemNetwork?.selfId;
+    remoteHeld = id != null && id !== self;
+    hand.applyNetwork(id);
+    if (top) top.visible = !remoteHeld && !held;
+    requestRender?.();
+  }
+  const networkPosition = () => {
+    find(); if (!stack) return null;
+    // Bath meshes bake their shelf coordinates into the geometry; the stack's
+    // Object3D origin is not the paper's physical position. Hidden shelf meshes
+    // stay in place while the held newspaper is a separate DOM presentation.
+    stack.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(stack, true);
+    return box.isEmpty() ? null : box.getCenter(new THREE.Vector3()).toArray();
+  };
+  return { sync, dispose, ready, setNetwork, applyNetwork, networkPosition, applyInteractionState,
+    snapshot: () => ({ issue, page }), interactionMeta: () => (papers || []).map(paper => paper.pages.length),
+    pick: () => hand.pick(), drop: () => hand.drop(), get held() { return held; },
     get status() { return { held, issue: papers?.[issue % (papers?.length || 1)]?.id ?? null, page, low, papers: papers?.length ?? 0, onShelf: !!stack, cover: !!coverTex }; } };
 }
 

@@ -30,7 +30,9 @@
 // Фото-режим и снимок PNG: следы и частицы прячутся (pipe.photo каждый кадр, pipe.onLive на время снимка).
 // Частицы: щепки — инстансы тетраэдров, пыль — инстансы плоскостей к камере (оба освещены, как сцена; пыль не идёт в AO),
 // искры и вспышка попадания — одно облако точек с аддитивным смешением. Всё живёт не дольше IMP.life.
-import { createBreakables } from './breakables.js';
+import { createBreakables, shotHandlers, networkDamageResetters } from './breakables.js';
+import { stableObjectId, indexNetworkObjects, collectNetworkObjects, isTransient, seededRandom } from './network-objects.js';
+import { createNetworkRaycastAcceleration } from './network-raycast.js';
 
 const IMP = {
   max: 200,               // следов всего
@@ -52,6 +54,8 @@ const CRACK_CELL = 256;   // пикселей на вариант трещины
 const rand = (a, b) => a + Math.random() * (b - a);
 
 export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRender, getSound = () => true }) {
+  let effectRandom = Math.random;
+  const rand = (a, b) => a + effectRandom() * (b - a);
   const V3 = () => new THREE.Vector3();
   const ray = new THREE.Raycaster();
   ray.layers.set(0);
@@ -148,9 +152,9 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     const whole = parent.parent && !parent.parent.isScene ? parent.parent : parent;
     while (!fits(whole, hit.point, n, s * 0.28)) { s *= 0.7; if (s < IMP.minSize) return; }
     q.setFromUnitVectors(Z, n);
-    qs.setFromAxisAngle(n, Math.random() * Math.PI * 2);
+    qs.setFromAxisAngle(n, effectRandom() * Math.PI * 2);
     mtx.compose(hit.point.clone().addScaledVector(n, IMP.lift), qs.multiply(q), new THREE.Vector3(s, s, s));
-    const d = new THREE.Mesh(quads[(Math.random() * quads.length) | 0], holeMaterial(rimTint(albedo)));
+    const d = new THREE.Mesh(quads[(effectRandom() * quads.length) | 0], holeMaterial(rimTint(albedo)));
     d.matrixAutoUpdate = false;
     d.matrix.copy(inv.copy(parent.matrixWorld).invert().multiply(mtx));
     d.castShadow = false; d.receiveShadow = true;
@@ -162,6 +166,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     holes = holes.filter(h => inScene(h));   // ушли вместе с пересобранной мебелью
     holes.push(d);
     while (holes.length > IMP.max) holes.shift().removeFromParent();
+    return d;
   }
 
   // ---------- трещины на экранах (видео под ними играет) ----------
@@ -190,9 +195,9 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     const dims = [sz3.x, sz3.y, sz3.z].sort((a, b) => b - a);
     const s = Math.max(IMP.crack[0] * 0.4, Math.min(rand(IMP.crack[0], IMP.crack[1]), dims[1] * 0.6));
     q.setFromUnitVectors(Z, n);
-    qs.setFromAxisAngle(n, Math.random() * Math.PI * 2);
+    qs.setFromAxisAngle(n, effectRandom() * Math.PI * 2);
     mtx.compose(hit.point.clone().addScaledVector(n, 0.0015), qs.multiply(q), new THREE.Vector3(s, s, s));
-    const d = new THREE.Mesh(quads[(Math.random() * quads.length) | 0], crackMat);   // атлас трещин тоже 2×2
+    const d = new THREE.Mesh(quads[(effectRandom() * quads.length) | 0], crackMat);   // атлас трещин тоже 2×2
     d.matrixAutoUpdate = false;
     d.matrix.copy(inv.copy(parent.matrixWorld).invert().multiply(mtx));
     d.castShadow = false; d.receiveShadow = false;
@@ -204,12 +209,20 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     cracks = cracks.filter(h => inScene(h));
     cracks.push(d);
     while (cracks.length > IMP.maxCracks) cracks.shift().removeFromParent();
+    return d;
   }
 
   // ---------- то, что бьётся ----------
   const breaks = createBreakables({ THREE, scene, camera, pipe, requestRender, getSound, burst: (p, n, dir, surf) => burst(p, n, dir, surf) });
+  const pendingEffects = [], appliedShots = new Set(), brokenIds = new Set();
+  const networkDamageEvents = new Map();
+  let damageJournalSignature = '';
+  let network = false, pendingAt = 0;
+  const acceleration = createNetworkRaycastAcceleration({ THREE, scene });
 
   function clear() {
+    pendingEffects.length = 0; appliedShots.clear(); brokenIds.clear();
+    networkDamageEvents.clear(); damageJournalSignature = '';
     for (const h of holes) h.removeFromParent();
     for (const c of cracks) c.removeFromParent();
     holes = []; cracks = [];
@@ -328,6 +341,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   };
   const collect = o => {
     if (!o.isMesh || o.userData.impact || o.userData.shadowOnly) return;
+    for (let x = o; x && x !== scene; x = x.parent) if (isTransient(x)) return;
     const m = o.material, m0 = Array.isArray(m) ? m[0] : m;
     if (!m0 || m0.visible === false || m0.colorWrite === false || (m0.transparent && m0.opacity < 0.05 && !o.userData.glass)) return;
     list.push(o);
@@ -390,6 +404,141 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     return struck;
   }
 
+  function resolveNetworkSurfaces(origin, direction, range = 800, prepared = false) {
+    if (!prepared) { list.length = 0; scene.updateMatrixWorld(true); scene.traverseVisible(collect); }
+    ray.set(new THREE.Vector3(...origin), new THREE.Vector3(...direction).normalize()); ray.far = range;
+    hits.length = 0; ray.intersectObjects(list, false, hits);
+    const effects = [], visited = new Set();
+    for (const hit of hits) {
+      if (!shown(hit.object)) continue;
+      const id = stableObjectId(hit.object);
+      if (!id || visited.has(id)) continue;
+      visited.add(id);
+      if (hit.face) {
+        mtx.copy(hit.object.matrixWorld);
+        if (hit.object.isInstancedMesh && hit.instanceId != null) { hit.object.getMatrixAt(hit.instanceId, inv); mtx.multiply(inv); }
+        nrm.copy(hit.face.normal).applyMatrix3(nm.getNormalMatrix(mtx)).normalize();
+      } else nrm.copy(ray.ray.direction).negate();
+      if (nrm.dot(ray.ray.direction) > 0) nrm.negate();
+      const glass = !!hit.object.userData.glass;
+      if (glass && hit.object.userData.shatter === false) continue;
+      effects.push({ kind: glass ? 'glass' : 'surface', objectId: id,
+        point: hit.point.toArray(), normal: nrm.toArray(), distance: hit.distance });
+      if (!glass || effects.length >= 16) break;
+    }
+    if (!prepared) list.length = 0;
+    return effects;
+  }
+
+  // Capture actual scattered rays without mutating the apartment. The authority
+  // validates these surface observations and independently raycasts wildlife.
+  function captureShot({ spread = 0, pellets = 1, range = 100, weapon = '' } = {}) {
+    list.length = 0; scene.updateMatrixWorld(true); scene.traverseVisible(collect); ray.far = range;
+    const origin = camera.position.toArray(), rays = [];
+    for (let i = 0; i < Math.min(9, pellets); i++) {
+      ray.setFromCamera(centre, camera);
+      if (spread > 0) {
+        const a = Math.random() * Math.PI * 2, u = Math.random(), r = Math.tan(spread) * (pellets > 1 ? Math.sqrt(u) : u);
+        ax.setFromMatrixColumn(camera.matrixWorld, 0); ay.setFromMatrixColumn(camera.matrixWorld, 1);
+        ray.ray.direction.addScaledVector(ax, Math.cos(a) * r).addScaledVector(ay, Math.sin(a) * r).normalize();
+      }
+      const direction = ray.ray.direction.toArray();
+      rays.push({ direction, effects: resolveNetworkSurfaces(origin, direction, range, true) });
+    }
+    ray.setFromCamera(centre, camera); list.length = 0;
+    return { weapon, origin, direction: ray.ray.direction.toArray(), rays };
+  }
+
+  function applyEffect(effect, direction, seed, replay = false, index = null, eventId = null) {
+    const object = (index ?? indexNetworkObjects(scene)).get(effect.objectId);
+    if (!object) return false;
+    if (effect.material === 'glass' && !object.userData.glass && !breaks.breakableOf(object) && !shotHandlers.has(object)) {
+      object.userData.networkMirror = true;
+      return false;
+    }
+    if (!effect.point || !effect.normal) return true;
+    const hit = { object, point: new THREE.Vector3(...effect.point), distance: effect.distance ?? 0 },
+      dir = new THREE.Vector3(...direction), normal = new THREE.Vector3(...effect.normal).normalize();
+    if (!shown(object) && !object.userData.mirrorGlass) return true;
+    const record = networkDamageEvents.get(eventId), previousRandom = effectRandom;
+    effectRandom = seededRandom(seed);
+    if (networkDamageResetters.has(object)) record?.mirrors.add(effect.objectId);
+    try { breaks.withSeed(seed, () => {
+      const surf = surface(hit);
+      if (effect.kind === 'glass') { if (breaks.handle(hit, dir) == null) breaks.shatterPane(hit, dir); return; }
+      if (breaks.handle(hit, dir) || breaks.breakAt(hit, dir, surf)) {
+        if (!replay) burst(hit.point, normal, dir, { ...surf, solid: true });
+      } else {
+        const screen = isScreen(object);
+        const decal = screen ? addCrack(hit, normal) : !surf.cutout ? addHole(hit, normal, surf.albedo) : null;
+        if (decal) record?.decals.add(decal);
+        if (!replay) burst(hit.point, normal, dir, { ...surf, solid: !screen });
+      }
+    }, { replay, eventId }); } finally { effectRandom = previousRandom; }
+    return true;
+  }
+
+  function applyNetworkShot(shot, { replay = false } = {}) {
+    const id = shot.shotId ?? shot.id;
+    if (id && appliedShots.has(id) && (!replay || networkDamageEvents.has(id))) return false;
+    if (id) { appliedShots.add(id); while (appliedShots.size > 512) appliedShots.delete(appliedShots.values().next().value); }
+    networkDamageEvents.set(id, { shot, decals: new Set(), mirrors: new Set() });
+    const index = indexNetworkObjects(scene);
+    for (let ri = 0; ri < (shot.rays?.length ?? 0); ri++) {
+      const r = shot.rays[ri];
+      for (let ei = 0; ei < (r.effects?.length ?? 0); ei++) {
+        const effect = r.effects[ei], seed = `${id}:${ri}:${ei}`;
+        if (!['surface', 'glass'].includes(effect.kind)) continue;
+        if (!applyEffect(effect, r.direction, seed, replay, index, id) && pendingEffects.length < 3072)
+          pendingEffects.push({ effect, direction: r.direction, seed, replay: true, eventId: id });
+      }
+    }
+    requestRender?.(); return true;
+  }
+
+  function applyBroken(ids = []) {
+    for (const id of ids) brokenIds.add(id);
+    breaks.applyBroken(brokenIds);
+  }
+
+  function reconcileNetworkDamage(effects = [], broken = []) {
+    const keys = effects.map(shot => shot.shotId ?? shot.id), next = new Set(keys);
+    const signature = keys.join('|');
+    const latest = effects.length ? Math.max(...effects.map(shot => Number(shot.id) || 0)) : Infinity;
+    const hasEvicted = [...networkDamageEvents].some(([id, record]) => !next.has(id) && Number(record.shot.id) <= latest);
+    if (signature !== damageJournalSignature || hasEvicted || effects.some(shot => !networkDamageEvents.has(shot.shotId ?? shot.id))) {
+      const affectedMirrors = new Set();
+      for (const [id, record] of networkDamageEvents) {
+        // A live reliable event can arrive just before its corresponding snapshot.
+        if (next.has(id) || Number(record.shot.id) > latest) continue;
+        for (const decal of record.decals) decal.removeFromParent();
+        for (const objectId of record.mirrors) affectedMirrors.add(objectId);
+        breaks.forgetNetworkEvent(id); networkDamageEvents.delete(id);
+      }
+      holes = holes.filter(inScene); cracks = cracks.filter(inScene);
+      for (let i = pendingEffects.length - 1; i >= 0; i--) if (!networkDamageEvents.has(pendingEffects[i].eventId)) pendingEffects.splice(i, 1);
+      for (const shot of effects) if (!networkDamageEvents.has(shot.shotId ?? shot.id)) applyNetworkShot(shot, { replay: true });
+      if (affectedMirrors.size) {
+        const index = indexNetworkObjects(scene);
+        breaks.resetNetworkDamage(affectedMirrors, index);
+        // Only aggregate mirror textures need reconstruction. Individual bullet
+        // holes and screen cracks were removed directly through owned references.
+        for (const shot of effects) {
+          const id = shot.shotId ?? shot.id;
+          for (let ri = 0; ri < (shot.rays?.length ?? 0); ri++) {
+            const ray = shot.rays[ri];
+            for (let ei = 0; ei < (ray.effects?.length ?? 0); ei++) {
+              const effect = ray.effects[ei];
+              if (affectedMirrors.has(effect.objectId)) applyEffect(effect, ray.direction, `${id}:${ri}:${ei}`, true, index, id);
+            }
+          }
+        }
+      }
+      damageJournalSignature = signature; requestRender?.();
+    }
+    applyBroken(broken);
+  }
+
   // ---------- кадр ----------
   const camQ = new THREE.Quaternion(), qa = new THREE.Quaternion(), buf = new THREE.Vector2(), dv = V3();
   const offSnap = pipe?.onLive?.(live => { capturing = !live; syncHidden(); if (live) requestRender?.(); });
@@ -418,6 +567,17 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   }
 
   function update(dt = 1 / 60) {
+    acceleration.update();
+    const now = performance.now();
+    if (network && now - pendingAt >= 500) {
+      pendingAt = now;
+      const index = pendingEffects.length ? indexNetworkObjects(scene) : null;
+      for (let i = pendingEffects.length - 1; i >= 0; i--) {
+        const p = pendingEffects[i];
+        if (!networkDamageEvents.has(p.eventId) || applyEffect(p.effect, p.direction, p.seed, p.replay, index, p.eventId)) pendingEffects.splice(i, 1);
+      }
+      if (brokenIds.size) breaks.applyBroken(brokenIds);
+    }
     let changed = syncHidden();
     if (breaks.update(dt)) changed = true;
     // трещина одинаково светлая днём и вечером: яркость делится на экспозицию кадра
@@ -462,6 +622,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   }
 
   function dispose() {
+    acceleration.dispose();
     clear();
     offSnap?.();
     for (const o of [chips, dust, sparks]) o.removeFromParent();
@@ -473,7 +634,12 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   }
 
   return {
-    shoot, update, clear, dispose,
+    shoot, captureShot, resolveNetworkSurfaces, applyNetworkShot, applyBroken, reconcileNetworkDamage, update, clear, dispose,
+    setNetwork(on) { network = !!on; if (network) acceleration.start(); else acceleration.stop(); },
+    get raycastStatus() { return acceleration.status; },
+    get networkDamage() { return { events: networkDamageEvents.size, holes: holes.filter(inScene).length, cracks: cracks.filter(inScene).length, pending: pendingEffects.length }; },
+    collectNetworkObjects: () => collectNetworkObjects(scene, THREE, { breakableOf: breaks.breakableOf, dependentIdsOf: breaks.dependentIdsOf }),
+    get brokenIds() { return breaks.brokenIds; },
     get holes() { return holes.filter(inScene).length + cracks.filter(inScene).length; },
     get broken() { return breaks.broken; },
   };

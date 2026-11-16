@@ -1,0 +1,2 @@
+# Preserve upstream runtime bytes and keep dependency source out of product diffs.
+web/vendor/** linguist-vendored=true -whitespace

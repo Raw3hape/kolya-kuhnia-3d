@@ -23,6 +23,8 @@ import { addHelp } from './help.js';
 import { afterRoom, assetUrl, track, retry } from './loading.js';
 import { NOTICE } from './render.js';
 import { injectStyle } from './minimap.js';
+import { raycastExternalTargets } from './hunt.js';
+import { WEAPON_RULES } from './multiplayer/rules.js';
 
 const PREF = 'kitchen-life-v1';
 const DEF = { life: true, sound: 'walk', mute: false, bellSeen: false };
@@ -60,6 +62,8 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
   getWalk, getDoors, getHunt, getObstacles }) {
   const mods = {};
   let started = false, disposed = false, capturing = false, live = false, frameNo = 0;
+  let network = null, networkSnapshot = null;
+  const externalPending = new Map();
 
   // ---------- звук ----------
   let gestured = false, ctx = null, master = null, buses = null, noiseBuf = null, quietSince = 0;
@@ -225,7 +229,8 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
 
   const offLive = pipe?.onLive?.(l => { capturing = !l; syncLive(); });
   function syncLive() {
-    const l = prefs.life && !pipe?.photo && !capturing;
+    const desired = network && !network.authority ? !!networkSnapshot?.live : prefs.life;
+    const l = desired && !pipe?.photo && !capturing;
     if (l === live) return;
     live = l;
     for (const m of Object.values(mods)) m.setLive?.(live);
@@ -240,11 +245,16 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
     const list = [['neighbours', import('./neighbours.js')], ['landing', import('./landing.js')],
       ['water', import('./water.js')], ['mice', import('./mice.js')]];
     for (const [id, p] of list) {
-      try { const m = await p; if (disposed) return; mods[id] = m.create(core); } catch (e) { console.warn('life:', id, e); }
+      try {
+        const m = await p; if (disposed) return; mods[id] = m.create(core);
+        mods[id].setNetwork?.(network);
+        if (networkSnapshot?.modules?.[id]) mods[id].applyNetworkSnapshot?.(networkSnapshot.modules[id]);
+      } catch (e) { console.warn('life:', id, e); }
     }
     started = true;
     syncLive();
     for (const m of Object.values(mods)) m.setLive?.(live);
+    if (networkSnapshot) applyNetworkSnapshot(networkSnapshot);
   });
 
   function update(dt = 0) {
@@ -266,6 +276,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
   }
 
   function dispose() {
+    externalPending.clear();
     disposed = true;
     for (const t of ['pointerdown', 'keydown', 'touchend']) removeEventListener(t, onGesture, { capture: true });
     removeEventListener('keydown', onKey);
@@ -276,8 +287,56 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
     ctx?.close?.().catch(() => {});
   }
 
+  function setNetwork(value) {
+    const next = value || null;
+    if (network?.authority === next?.authority && !!network === !!next) return;
+    network = next; externalPending.clear();
+    if (!network) networkSnapshot = null;
+    for (const m of Object.values(mods)) m.setNetwork?.(network);
+    syncLive();
+  }
+  function snapshot() {
+    return { live, modules: Object.fromEntries(Object.entries(mods).filter(([, m]) => m.snapshot).map(([id, m]) => [id, m.snapshot()])) };
+  }
+  function applyNetworkSnapshot(value) {
+    if (!value || !network || network.authority) return;
+    networkSnapshot = value; syncLive();
+    for (const [id, state] of Object.entries(value.modules ?? {})) mods[id]?.applyNetworkSnapshot?.(state);
+    requestRender?.();
+  }
+  const externalRay = new THREE.Raycaster(); externalRay.near = 0.02;
+  function traceExternalShot(shot) {
+    const rays = shot?.rays ?? [];
+    if (!network?.authority || !WEAPON_RULES[shot.weapon]?.range) return rays.map(() => null);
+    const range = WEAPON_RULES[shot.weapon].range;
+    const targets = rays.slice(0, 9).map(ray => {
+      externalRay.set(new THREE.Vector3(...shot.origin), new THREE.Vector3(...ray.direction).normalize()); externalRay.far = range;
+      return raycastExternalTargets(externalRay);
+    });
+    if (shot.shotId) {
+      externalPending.set(shot.shotId, targets);
+      while (externalPending.size > 128) externalPending.delete(externalPending.keys().next().value);
+    }
+    return targets.map(hit => hit?.animalId ? { animalId: hit.animalId, species: hit.animal,
+      distance: hit.distance, point: hit.point.toArray(), normal: hit.normal.toArray(), running: !!hit.running } : null);
+  }
+  function resolveExternalShot(shot) {
+    if (!network?.authority) return [];
+    const pending = externalPending.get(shot.shotId) ?? [];
+    externalPending.delete(shot.shotId);
+    const results = [];
+    for (let i = 0; i < (shot.rays?.length ?? 0); i++) {
+      const candidate = shot.rays[i].externalHit, target = pending[i];
+      if (!candidate || !target || target.animalId !== candidate.animalId) continue;
+      const result = target.hit?.(shot.weapon, WEAPON_RULES[shot.weapon]?.damage);
+      if (!result) continue;
+      results.push({ animalId: candidate.animalId, species: candidate.species, running: candidate.running,
+        point: candidate.point, normal: candidate.normal, zone: 'body', ...result });
+    }
+    return results;
+  }
   return {
-    update, colliders, dispose,
+    update, colliders, dispose, setNetwork, snapshot, networkSnapshot: snapshot, applyNetworkSnapshot, traceExternalShot, resolveExternalShot,
     get debug() { return { mods, prefs, core, ring: () => mods.neighbours?.ring(), water: id => mods.water?.start(id), mouse: () => mods.mice?.spawn(true) }; },
   };
 }

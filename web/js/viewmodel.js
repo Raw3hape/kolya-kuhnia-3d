@@ -29,6 +29,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { createImpacts } from './impacts.js';
+import { WEAPON_RULES } from './multiplayer/rules.js';
 import { addHelp } from './help.js';
 
 addHelp(
@@ -52,36 +53,32 @@ addHelp(
 //   lift — глаз выше целика, м (мушка в центре экрана, целик чуть ниже — мушку видно над ним).
 export const WEAPONS = [
   { id: 'none', name: 'Нет' },
-  { id: 'pistol', name: 'Пистолет', file: 'pistol.glb', pos: [0.1, -0.1, -0.36], yaw: 0.1, action: 'semi', rate: 6,
-    mag: 12, reserve: 48, reload: 1.7, shot: 0.25, damage: 34, range: 150, loud: 0.6,
+  { id: 'pistol', name: 'Пистолет', file: 'pistol.glb', pos: [0.1, -0.1, -0.36], yaw: 0.1, action: 'semi', shot: 0.25, loud: 0.6,
     reloadEv: [[0.21, 'magOut'], [0.5, 'magIn', 1], [0.82, 'rack']],
     spread: { hip: 0.008, ads: 0.0012, move: 0.008, run: 0.025, bloom: 0.004, max: 0.012, recover: 0.06 },
     recoil: { up: 0.022, side: 0.006, keep: 0.2 }, kick: { back: 0.03, pitch: 0.12 },
     ads: { zoom: 1.25, time: 0.16, eye: 0.36, lift: 0 },
     flash: 0.13, sound: { gain: 1, cutoff: 3200, decay: 0.16, thump: 150 } },
-  { id: 'rifle', name: 'Автомат', file: 'rifle.glb', pos: [0.14, -0.17, -0.48], yaw: 0.05, pitch: -0.06, action: 'auto', rate: 10,
-    mag: 30, reserve: 120, reload: 2.3, shot: 0.1, damage: 28, range: 400, loud: 0.8,
+  { id: 'rifle', name: 'Автомат', file: 'rifle.glb', pos: [0.14, -0.17, -0.48], yaw: 0.05, pitch: -0.06, action: 'auto', shot: 0.1, loud: 0.8,
     reloadEv: [[0.25, 'magOut'], [0.46, 'magIn', 1], [0.75, 'rack']],
     spread: { hip: 0.01, ads: 0.0012, move: 0.012, run: 0.035, bloom: 0.0015, max: 0.006, recover: 0.03 },
     recoil: { up: 0.007, side: 0.004, keep: 0.25 }, kick: { back: 0.018, pitch: 0.04 },
     ads: { zoom: 1.6, time: 0.22, eye: 0.34, lift: 0.006 },
     flash: 0.2, sound: { gain: 0.8, cutoff: 2400, decay: 0.12, thump: 110 } },
-  { id: 'bolt', name: 'Винтовка', file: 'bolt.glb', pos: [0.14, -0.17, -0.46], yaw: 0.05, pitch: -0.06, action: 'bolt', rate: 1.5,
-    mag: 5, reserve: 30, reload: 2.6, cycle: 0.8, damage: 120, range: 800, loud: 1,
+  { id: 'bolt', name: 'Винтовка', file: 'bolt.glb', pos: [0.14, -0.17, -0.46], yaw: 0.05, pitch: -0.06, action: 'bolt', loud: 1,
     reloadEv: [[0.15, 'boltUp'], [0.21, 'boltBack'], [0.35, 'clip'], [0.6, 'shell', 1], [0.76, 'boltFwd'], [0.81, 'boltDown']],
     cycleEv: [[0.35, 'boltUp'], [0.5, 'boltBack'], [0.7, 'boltFwd'], [0.8, 'boltDown']],
     spread: { hip: 0.012, ads: 0.0003, move: 0.02, run: 0.05, bloom: 0, max: 0, recover: 1 },
     recoil: { up: 0.05, side: 0.012, keep: 0.15 }, kick: { back: 0.05, pitch: 0.1 },
     ads: { zoom: 2.4, time: 0.3, eye: 0.45, lift: 0.008 },
     flash: 0.24, sound: { gain: 1.2, cutoff: 2600, decay: 0.3, thump: 85 } },
-  { id: 'shotgun', name: 'Двустволка', file: 'shotgun.glb', pos: [0.14, -0.17, -0.44], yaw: 0.05, pitch: -0.04, action: 'break', rate: 4,
-    mag: 2, reserve: 24, reload: 2.0, pellets: 9, damage: 14, range: 70, loud: 0.9,
+  { id: 'shotgun', name: 'Двустволка', file: 'shotgun.glb', pos: [0.14, -0.17, -0.44], yaw: 0.05, pitch: -0.04, action: 'break', loud: 0.9,
     reloadEv: [[0.12, 'open'], [0.21, 'shell'], [0.6, 'shell', 1], [0.79, 'close']],
     spread: { hip: 0.03, ads: 0.022, move: 0.01, run: 0.02, bloom: 0, max: 0, recover: 1 },
     recoil: { up: 0.045, side: 0.015, keep: 0.2 }, kick: { back: 0.05, pitch: 0.12 },
     ads: { zoom: 1.3, time: 0.22, eye: 0.5, lift: 0.05 },
     flash: 0.28, sound: { gain: 1.25, cutoff: 2000, decay: 0.28, thump: 75 } },
-];
+].map(w => ({ ...w, ...WEAPON_RULES[w.id] }));
 const VM = {
   fovV: 50,          // вертикальный угол камеры рук (на портретном экране — так, чтобы по ширине было столько же)
   raise: 0.35,       // руки поднимаются при входе и смене оружия, с
@@ -124,6 +121,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   const seated = () => !!getSeats?.()?.active;
   const pref = readPref();
   let weapon = byId(pref.weapon).id, sound = pref.sound !== false;
+  let networkAdapter = null;
 
   // ---------- сцена рук ----------
   const vmScene = new THREE.Scene();
@@ -354,8 +352,12 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     if (a.mag <= 0) { dry(); return false; }
     lastShot = now; shots++; a.mag--;
     const hunt = getHunt?.() ?? null;
-    hunt?.noise?.(ear.copy(camera.position), w.loud);
-    impacts.shoot({ spread: spreadNow(), pellets: w.pellets || 1, range: w.range, hunt, weapon: w.id, damage: w.damage });
+    if (networkAdapter) {
+      networkAdapter.shoot?.({ ...impacts.captureShot({ spread: spreadNow(), pellets: w.pellets || 1, range: w.range, weapon: w.id }), shotId: crypto.randomUUID() });
+    } else {
+      hunt?.noise?.(ear.copy(camera.position), w.loud);
+      impacts.shoot({ spread: spreadNow(), pellets: w.pellets || 1, range: w.range, hunt, weapon: w.id, damage: w.damage });
+    }
     bloom = Math.min(w.spread.max, bloom + w.spread.bloom * (1 - (1 - VM.adsBloom) * adsE));
     const r = w.recoil, k = 1 - (1 - VM.adsRecoil) * adsE;
     getWalk?.()?.kick?.(r.up * k * rand(0.85, 1.15), r.side * k * rand(-1, 1), r.keep);
@@ -399,6 +401,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   function reload() {
     const w = W(), a = ammo[w.id];
     if (!shown || act || !a || a.mag >= w.mag || a.reserve <= 0) return false;
+    networkAdapter?.reload?.(w.id);
     const n = Math.min(w.mag - a.mag, a.reserve);
     begin('reload', 'reload', w.reload, w.reloadEv, 0, () => { a.mag += n; a.reserve -= n; hud(); });
     return true;
@@ -615,7 +618,25 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
 
   return {
     update, setWeapon, setSound, setAim, reload, link, dispose,
-    clearHoles: impacts.clear,
+    setNetwork(adapter) { networkAdapter = adapter || null; impacts.setNetwork(!!networkAdapter); },
+    applyNetworkShot: impacts.applyNetworkShot,
+    applyBroken: impacts.applyBroken,
+    reconcileNetworkDamage: impacts.reconcileNetworkDamage,
+    collectNetworkObjects: impacts.collectNetworkObjects,
+    resolveNetworkSurfaces: impacts.resolveNetworkSurfaces,
+    applyNetworkAmmo(snapshot) {
+      for (const [id, value] of Object.entries(snapshot ?? {})) {
+        if (!ammo[id] || !Number.isFinite(value?.mag) || !Number.isFinite(value?.reserve)) continue;
+        ammo[id] = { mag: Math.max(0, Math.floor(value.mag)), reserve: Math.max(0, Math.floor(value.reserve)) };
+      }
+      syncDom();
+    },
+    clearHoles({ remote = false } = {}) {
+      if (networkAdapter && !remote) networkAdapter.clear?.(); else impacts.clear();
+    },
+    get brokenIds() { return impacts.brokenIds; },
+    get networkRaycasts() { return impacts.raycastStatus; },
+    get networkDamage() { return impacts.networkDamage; },
     get holes() { return impacts.holes; },
     get broken() { return impacts.broken; },
     get weapon() { return weapon; },

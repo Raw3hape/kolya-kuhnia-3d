@@ -26,113 +26,22 @@
 // Ядро столкновений (buildColliders, moveCircle, findFree, roomOf, outdoorAreas, areaBeyond) — чистые функции
 // без DOM, их проверяет тест в node. Проёмы дверей в ядре открыты: закрытые полотна и глухие части рам даёт doors.js.
 
-import { injectStyle, subtractRect } from './minimap.js';
+import { injectStyle } from './minimap.js';
+import { WALK, OUTDOOR, outdoorAreas, areaBeyond, roomOf, buildColliders, isFree, moveCircle, findFree, normalizeColliders } from './multiplayer/collision.js';
+export { WALK, OUTDOOR, outdoorAreas, areaBeyond, roomOf, buildColliders, isFree, moveCircle, findFree } from './multiplayer/collision.js';
 import { addHelp } from './help.js';
 
 // Справка (help.js): ui.js показывает brief-строки в полосе прогулки, все — в окне «?» и в разделе «Прогулка»
 addHelp(
-  { mode: 'design', topic: 'walk', keys: ['F'], text: 'прогулка от первого лица', touch: '«Прогулка» в карточке сверху — пройтись от первого лица', order: 60 },
+  { mode: 'design', topic: 'walk', action: 'walk-toggle', keys: ['F'], text: 'прогулка от первого лица', touch: '«Прогулка» в карточке сверху — пройтись от первого лица', order: 60 },
   { mode: 'walk', topic: 'walk', keys: ['W', 'A', 'S', 'D'], text: 'идти (или стрелки)', touch: 'джойстик слева — идти', brief: true, order: 10 },
   { mode: 'walk', topic: 'walk', keys: ['мышь'], text: 'тянуть — смотреть, двойной клик — захватить мышь', touch: 'ведите пальцем — смотреть', brief: true, order: 20 },
   { mode: 'walk', topic: 'walk', keys: ['Shift'], text: 'быстрее', touch: false, order: 30 },
   { mode: 'walk', topic: 'walk', keys: ['колесо'], text: 'шаг вперёд или назад, щипок — шире или уже обзор', touch: false, order: 35 },
   { mode: 'walk', topic: 'walk', keys: ['Пробел'], text: 'прыжок', touch: 'кнопка со стрелкой — прыжок', brief: true, order: 40 },
-  { mode: 'walk', topic: 'walk', keys: [], text: 'план слева — нажмите на комнату, чтобы перейти туда', order: 80 },
-  { mode: 'walk', topic: 'walk', keys: ['Esc'], text: 'выйти из прогулки (или F)', touch: '«Проект» в карточке сверху — выйти', order: 90 },
+  { mode: 'walk', topic: 'walk', action: 'teleport', keys: [], text: 'план слева — нажмите на комнату, чтобы перейти туда', order: 80 },
+  { mode: 'walk', topic: 'walk', action: 'walk-exit', keys: ['Esc'], text: 'выйти из прогулки (или F)', touch: '«Проект» в карточке сверху — выйти', order: 90 },
 );
-
-export const WALK = {
-  height: 180,        // рост по умолчанию, см; глаза = рост · 0.933 (180 см -> 1.68 м)
-  eyeRatio: 0.933,
-  radius: 0.22,       // «тело» в плане, м
-  walk: 1.4,          // шаг, м/с
-  run: 3.0,           // с Shift, м/с
-  turn: 1.9,          // поворот стрелками, рад/с
-  // Обзор как у человека: вертикальный 55°; горизонтальный не шире 88° (широкие экраны),
-  // на портретном экране вертикальный растёт, чтобы по горизонтали было хотя бы ~60°. Щипок/колесо — в пределах 40–75°.
-  fovV: 55, fovHMax: 88, fovHMinPortrait: 60, fovMin: 40, fovMax: 75,
-  pitch0: -5,         // начальный взгляд чуть вниз, градусы
-  pitchMax: 80,       // наклон взгляда, градусы
-  start: { x: 1.3, z: 4.3, yaw: 0 },   // холл у кухни, взгляд к окнам (−z)
-  transition: 0.75,   // вход/выход, с
-  jump: 3.0,          // скорость отрыва, м/с: подскок ~0.46 м, как у взрослого с места
-  gravity: 9.81,      // м/с²
-  headroom: 0.1,      // голова не выше потолка минус это, м
-};
-
-// Зоны снаружи квартиры, куда можно выйти через открытую дверь. Один источник и для прогулки, и для model.js
-// (ограждение балкона и площадка у входной двери строятся по этим прямоугольникам).
-export const OUTDOOR = {
-  rail: 0.085,         // внутренняя грань ограждения балкона от края плиты, м
-  landingDepth: 1.0,   // площадка за входной дверью, м от двери
-  landingSide: 0.45,   // площадка шире двери на столько с каждой стороны, м
-};
-// -> [{ id, x0, x1, z0, z1, open }]: прямоугольник, по которому можно ходить; open — сторона к дому (там стена с дверью).
-export function outdoorAreas(plan) {
-  const out = [], b = plan.balcony, r = OUTDOOR.rail;
-  if (b) out.push({ id: 'balcony', x0: b.x0 + r, x1: b.x1 - r, z0: b.z0 + r, z1: b.z1, open: 'z1' });
-  const e = plan.openings.find(o => o.type === 'entry');
-  if (e) out.push({ id: 'landing', x0: e.x0 - OUTDOOR.landingSide, x1: e.x1 + OUTDOOR.landingSide, z0: e.z1, z1: e.z1 + OUTDOOR.landingDepth, open: 'z0' });
-  return out;
-}
-
-// Куда ведёт наружная дверь: { area: id | null, side: 'x0'|'x1'|'z0'|'z1' } — сторона проёма, что смотрит из квартиры.
-export function areaBeyond(plan, o) {
-  const X = o.along === 'x', c = X ? (o.x0 + o.x1) / 2 : (o.z0 + o.z1) / 2, d = 0.3;
-  const sides = X ? [['z0', c, o.z0 - d], ['z1', c, o.z1 + d]] : [['x0', o.x0 - d, c], ['x1', o.x1 + d, c]];
-  const pt = sides.map(([side, x, z]) => ({ side, x, z }));
-  const inRoom = q => Object.entries(plan.rooms).some(([id, r]) => id !== 'shaft' && r.rects.some(t => q.x >= t.x0 && q.x <= t.x1 && q.z >= t.z0 && q.z <= t.z1));
-  const out = pt.find(q => !inRoom(q)) ?? pt[0];
-  const area = outdoorAreas(plan).find(a => out.x >= a.x0 - d && out.x <= a.x1 + d && out.z >= a.z0 - d && out.z <= a.z1 + d);
-  return { area: area?.id ?? null, side: out.side };
-}
-
-// ---------- ядро: план -> препятствия ----------
-
-// Где точка: id комнаты, 'door:<id>' в дверном проёме, id зоны снаружи ('balcony', 'landing'),
-// null — вне квартиры (шахта тоже «вне»).
-export function roomOf(plan, x, z) {
-  for (const [id, r] of Object.entries(plan.rooms)) {
-    if (id !== 'shaft' && r.rects.some(q => x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1)) return id;
-  }
-  const d = plan.openings.find(o => o.type !== 'window' && x >= o.x0 && x <= o.x1 && z >= o.z0 && z <= o.z1);
-  if (d) return 'door:' + d.id;
-  return outdoorAreas(plan).find(a => x >= a.x0 && x <= a.x1 && z >= a.z0 && z <= a.z1)?.id ?? null;
-}
-
-// Стены минус все дверные проёмы (межкомнатные, балконные, входная), плюс стойки коробок межкомнатных дверей
-// и границы зон снаружи: ограждение балкона, стены площадки, «французский балкон» за дверью, которая никуда не ведёт.
-// Окна остаются стеной. Полотна дверей и глухие части балконных рам — динамические, их даёт doors.js.
-export function buildColliders(plan) {
-  const holes = plan.openings.filter(o => o.type !== 'window');
-  let boxes = plan.walls.map(w => ({ x0: w.x0, x1: w.x1, z0: w.z0, z1: w.z1 }));
-  for (const o of holes) boxes = boxes.flatMap(b => subtractRect(b, o));
-  for (const o of holes) {
-    if (o.type !== 'interior') continue;
-    const L = o.leaf ?? o.width - 0.1, jamb = (o.width - L) / 2;
-    if (jamb <= 0.001) continue;
-    if (o.along === 'x') boxes.push({ x0: o.x0, x1: o.x0 + jamb, z0: o.z0, z1: o.z1 }, { x0: o.x1 - jamb, x1: o.x1, z0: o.z0, z1: o.z1 });
-    else boxes.push({ x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z0 + jamb }, { x0: o.x0, x1: o.x1, z0: o.z1 - jamb, z1: o.z1 });
-  }
-  // зоны снаружи: три стороны закрыты, сторона к дому открыта (там стена дома со своими проёмами)
-  const F = 0.5;
-  for (const a of outdoorAreas(plan)) {
-    const zLo = a.open === 'z0' ? a.z0 : a.z0 - F, zHi = a.open === 'z1' ? a.z1 : a.z1 + F;
-    boxes.push({ x0: a.x0 - F, x1: a.x0, z0: zLo, z1: zHi }, { x0: a.x1, x1: a.x1 + F, z0: zLo, z1: zHi });
-    if (a.open !== 'z0') boxes.push({ x0: a.x0, x1: a.x1, z0: a.z0 - F, z1: a.z0 });
-    if (a.open !== 'z1') boxes.push({ x0: a.x0, x1: a.x1, z0: a.z1, z1: a.z1 + F });
-  }
-  for (const o of holes) {
-    if (o.type === 'interior') continue;
-    const { area, side } = areaBeyond(plan, o);
-    if (area) continue;
-    const f = { x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z1 };
-    if (side === 'x1') { f.x0 = o.x1; f.x1 = o.x1 + F; } else if (side === 'x0') { f.x1 = o.x0; f.x0 = o.x0 - F; }
-    else if (side === 'z1') { f.z0 = o.z1; f.z1 = o.z1 + F; } else { f.z1 = o.z0; f.z0 = o.z0 - F; }
-    boxes.push(f);
-  }
-  return { boxes, segs: [] };
-}
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
@@ -146,95 +55,6 @@ export function naturalFov(aspect = 16 / 9) {
   return clamp(v, WALK.fovMin, WALK.fovMax);
 }
 
-// Вытолкнуть круг из прямоугольника; true — было пересечение.
-function pushBox(p, b, r) {
-  const cx = clamp(p.x, b.x0, b.x1), cz = clamp(p.z, b.z0, b.z1);
-  const dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
-  if (d2 >= r * r - 1e-12) return false;
-  if (d2 > 1e-12) { const d = Math.sqrt(d2), k = (r - d) / d; p.x += dx * k; p.z += dz * k; return true; }
-  // центр внутри: к ближайшей грани
-  const l = p.x - b.x0, rr = b.x1 - p.x, t = p.z - b.z0, bb = b.z1 - p.z, m = Math.min(l, rr, t, bb);
-  if (m === l) p.x = b.x0 - r; else if (m === rr) p.x = b.x1 + r; else if (m === t) p.z = b.z0 - r; else p.z = b.z1 + r;
-  return true;
-}
-// Вытолкнуть из толстого отрезка (полотно двери).
-function pushSeg(p, s, r) {
-  const vx = s.bx - s.ax, vz = s.bz - s.az, len2 = vx * vx + vz * vz || 1e-9;
-  const t = clamp(((p.x - s.ax) * vx + (p.z - s.az) * vz) / len2, 0, 1);
-  const cx = s.ax + vx * t, cz = s.az + vz * t, R = r + s.h;
-  let dx = p.x - cx, dz = p.z - cz;
-  const d2 = dx * dx + dz * dz;
-  if (d2 >= R * R - 1e-12) return false;
-  if (d2 < 1e-12) { dx = -vz; dz = vx; }
-  const d = Math.hypot(dx, dz);
-  p.x = cx + (dx / d) * R; p.z = cz + (dz / d) * R;
-  return true;
-}
-// Препятствие из списка extra: коробка или толстый отрезок (полотно двери).
-const push = (p, b, r) => (b.ax !== undefined ? pushSeg(p, b, r) : pushBox(p, b, r));
-function resolve(p, col, extra, r) {
-  for (let i = 0; i < 8; i++) {
-    let hit = false;
-    for (const b of col.boxes) if (pushBox(p, b, r)) hit = true;
-    for (const b of extra) if (push(p, b, r)) hit = true;
-    for (const s of col.segs) if (pushSeg(p, s, r)) hit = true;
-    if (!hit) return true;
-  }
-  return false;
-}
-
-// Свободна ли точка (круг никого не задевает).
-export function isFree(p, col, extra = [], r = WALK.radius) {
-  const q = { x: p.x, z: p.z };
-  for (const b of col.boxes) if (pushBox(q, b, r - 1e-4)) return false;
-  for (const b of extra) if (push(q, b, r - 1e-4)) return false;
-  for (const s of col.segs) if (pushSeg(q, s, r - 1e-4)) return false;
-  return true;
-}
-
-// Сдвиг с подшагами (короче четверти радиуса — сквозь тонкую стену не проскочить) и скольжением вдоль стен.
-// Если подшаг не удаётся развести (щель уже тела) — остаёмся на последнем свободном месте.
-export function moveCircle(p, dx, dz, col, extra = [], r = WALK.radius) {
-  const n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (r * 0.25)));
-  for (let i = 0; i < n; i++) {
-    const px = p.x, pz = p.z;
-    p.x += dx / n; p.z += dz / n;
-    if (!resolve(p, col, extra, r) || Math.hypot(p.x - px, p.z - pz) > r) { p.x = px; p.z = pz; break; }
-  }
-  return p;
-}
-
-// Ближайшее свободное место в той же комнате (для входа и телепорта: клик по столешнице -> рядом с ней, а не за стеной).
-// Если в той же комнате места нет (стоял в дверном проёме, а полотно закрылось), — любое место в квартире рядом.
-export function findFree(plan, p, col, extra = [], r = WALK.radius) {
-  const room = roomOf(plan, p.x, p.z);
-  const search = same => {
-    if (same(p) && isFree(p, col, extra, r)) return { x: p.x, z: p.z };
-    for (let d = 0.05; d <= 2.0; d += 0.05) {
-      const n = Math.max(8, Math.round((2 * Math.PI * d) / 0.05));
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2, q = { x: p.x + Math.cos(a) * d, z: p.z + Math.sin(a) * d };
-        if (same(q) && isFree(q, col, extra, r)) return q;
-      }
-    }
-    return null;
-  };
-  const any = q => roomOf(plan, q.x, q.z) != null;
-  return (room ? search(q => roomOf(plan, q.x, q.z) === room) : null) ?? search(any);
-}
-
-// Препятствия в любом виде -> { x0, x1, z0, z1 } или отрезок { ax, az, bx, bz, h } как есть
-function normBoxes(list) {
-  const out = [];
-  for (const b of list || []) {
-    if (!b) continue;
-    if (b.ax !== undefined) out.push(b);
-    else if (b.min && b.max) { if (b.max.x > b.min.x && b.max.z > b.min.z) out.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z }); }
-    else if (b.x1 > b.x0 && b.z1 > b.z0) out.push({ x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1 });
-  }
-  return out;
-}
-
 // ---------- режим прогулки ----------
 
 // E — «использовать» (двери, doors.js), поэтому поворот только стрелками
@@ -245,12 +65,17 @@ const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.tes
 
 export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, requestRender, onChange }) {
   const col = buildColliders(plan);
+  let network = null, inputSeq = 0, pendingInputs = [], jumpRequested = false;
+  const correction = { x: 0, z: 0 };
+  const playerObstacles = () => (network?.players?.() || []).filter(q => Number.isFinite(q.x) && Number.isFinite(q.z))
+    .map(q => ({ x: q.x, z: q.z, radius: q.radius ?? WALK.radius }));
+  const movementObstacles = () => network ? [...extra, ...playerObstacles()] : extra;
   let extra = [], obstaclesAt = -1;
   const refreshObstacles = force => {
     const now = performance.now();
     if (!force && now - obstaclesAt < 750) return;
     obstaclesAt = now;
-    try { extra = normBoxes(getObstacles?.()); } catch { extra = []; }
+    try { extra = normalizeColliders(getObstacles?.()); } catch { extra = []; }
   };
 
   // состояние
@@ -299,7 +124,8 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   // ---------- вход и выход ----------
 
-  function enter(pos, yawArg, { orbit } = {}) {
+  function enter(pos, yawArg, { orbit, network: fromNetwork = false } = {}) {
+    if (network && mode === 'walk' && !fromNetwork && !network.canTeleport?.()) return false;
     jy = vy = 0;
     if (mode === 'entering' || mode === 'exiting') return false;
     refreshObstacles(true);
@@ -344,7 +170,8 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     return true;
   }
 
-  function exit({ restore = true } = {}) {
+  function exit({ restore = true, network: fromNetwork = false } = {}) {
+    if (network && !fromNetwork && !network.canExit?.()) { if (!document.querySelector('dialog[open]')) dispatchEvent(new CustomEvent('kitchen:room-request')); return false; }
     jy = vy = 0;
     if (mode === 'off' || mode === 'exiting') return;
     keys.clear(); joyRelease(); lookRelease(); moving = running = false;
@@ -389,12 +216,12 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   let applied = '';
   function apply() {
-    camera.position.set(p.x, eye + jy, p.z);
+    camera.position.set(p.x + correction.x, eye + jy, p.z + correction.z);
     camera.rotation.set(clamp(pitch + kp, -PITCH, PITCH), yaw + ky, 0, 'YXZ');
     if (Math.abs(camera.fov - fov) > 1e-3) { camera.fov = fov; camera.updateProjectionMatrix(); }
     // цель орбиты держим на сантиметр впереди: если кто-то вызовет controls.update(), взгляд не собьётся
     const f = fwd(), cp = Math.cos(pitch);
-    controls.target.set(p.x + f.x * cp * 0.01, eye + jy + Math.sin(pitch) * 0.01, p.z + f.z * cp * 0.01);
+    controls.target.set(p.x + correction.x + f.x * cp * 0.01, eye + jy + Math.sin(pitch) * 0.01, p.z + correction.z + f.z * cp * 0.01);
   }
 
   function update(dt) {
@@ -421,7 +248,11 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     if (mode !== 'walk') return false;
 
     refreshObstacles(false);
-    if (!isFree(p, col, extra)) { const f = findFree(plan, p, col, extra); if (f) { p.x = f.x; p.z = f.z; } }
+    const canMove = !network || network.canMove?.() !== false;
+    const blockers = movementObstacles();
+    if (!isFree(p, col, blockers)) { const f = findFree(plan, p, col, blockers); if (f) { p.x = f.x; p.z = f.z; } }
+    correction.x *= Math.exp(-16 * dt); correction.z *= Math.exp(-16 * dt);
+    if (Math.hypot(correction.x, correction.z) < 0.0001) correction.x = correction.z = 0;
 
     // поворот стрелками
     const turnIn = (keys.has('ArrowLeft') ? 1 : 0) - (keys.has('ArrowRight') ? 1 : 0);
@@ -451,11 +282,12 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     if (Math.abs(step) < 0.003) take = step;
     step -= take;
 
-    const mx = vel.x * dt + fw.x * take, mz = vel.z * dt + fw.z * take;
+    let mx = vel.x * dt + fw.x * take, mz = vel.z * dt + fw.z * take;
+    if (!canMove) { mx = mz = 0; vel.x = vel.z = 0; step = 0; jumpRequested = false; }
     const px0 = p.x, pz0 = p.z;
     if (mx || mz) {
       const px = p.x, pz = p.z;
-      moveCircle(p, mx, mz, col, extra);
+      moveCircle(p, mx, mz, col, blockers);
       // упёрлись — скорость = фактическая (скольжение вдоль стены без накопления)
       if (dt > 0 && (vel.x || vel.z)) {
         const ax = (p.x - px) / dt, az = (p.z - pz) / dt;
@@ -464,7 +296,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     }
 
     // прыжок: баллистика, голова не выше потолка (в квартире), приземление — на пол
-    if (vy || jy) {
+    if (canMove && (vy || jy)) {
       vy -= WALK.gravity * dt; jy += vy * dt;
       const top = (plan.ceiling ?? 2.64) - WALK.headroom - eye - 0.1;   // 0.1 — от глаз до макушки
       if (jy > top && vy > 0 && roomOf(plan, p.x, p.z) !== 'balcony') { jy = Math.max(0, top); vy = 0; }   // над балконом неба
@@ -483,6 +315,13 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     if (Math.abs(tYaw - yaw) < 1e-4) yaw = tYaw;
     if (Math.abs(tPitch - pitch) < 1e-4) pitch = tPitch;
     if (Math.abs(tFov - fov) < 1e-3) fov = tFov;
+    if (network && canMove && dt > 0) {
+      const command = { type: 'input', seq: ++inputSeq, dt, dx: mx, dz: mz, yaw, pitch, jump: jumpRequested };
+      jumpRequested = false;
+      pendingInputs.push(command);
+      if (pendingInputs.length > 240) pendingInputs.shift();
+      network.onInput?.(command);
+    }
     // отдача: цель гаснет, взгляд догоняет её — быстрый подброс и плавный возврат
     if (kpT || kyT || kp || ky) {
       kpT *= Math.exp(-7 * dt); kyT *= Math.exp(-7 * dt);
@@ -500,7 +339,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   // ---------- ввод ----------
 
-  function jump() { if (mode === 'walk' && jy === 0 && !anim) { vy = WALK.jump; requestRender?.(); } }
+  function jump() { if (mode === 'walk' && jy === 0 && !anim && (!network || network.canMove?.() !== false)) { vy = WALK.jump; jumpRequested = true; requestRender?.(); } }
 
   addEventListener('keydown', e => {
     if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -636,6 +475,45 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     requestRender?.();
   }
 
+  function setNetwork(adapter) {
+    network = adapter || null;
+    inputSeq = 0; pendingInputs = []; jumpRequested = false;
+    correction.x = correction.z = 0;
+  }
+  const getNetworkPose = () => ({ x: p.x, y: jy, z: p.z, yaw, pitch, moving, running });
+  function reconcileNetwork(pose, ack = 0, { snap = false } = {}) {
+    if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.z)) return false;
+    const oldX = p.x + correction.x, oldZ = p.z + correction.z;
+    p.x = pose.x; p.z = pose.z;
+    jy = Number.isFinite(pose.y) ? Math.max(0, pose.y) : jy;
+    vy = Number.isFinite(pose.vy) ? pose.vy : 0;
+    pendingInputs = snap ? [] : pendingInputs.filter(command => command.seq > ack);
+    const blockers = movementObstacles();
+    for (const command of pendingInputs) {
+      moveCircle(p, command.dx, command.dz, col, blockers);
+      if (command.jump && jy <= 0) vy = WALK.jump;
+      if (jy > 0 || vy) {
+        vy -= WALK.gravity * command.dt; jy = Math.max(0, jy + vy * command.dt);
+        if (jy === 0) vy = 0;
+      }
+    }
+    if (snap) {
+      anim = null; mode = 'walk'; controls.enabled = false; syncFloat();
+      if (Number.isFinite(pose.yaw)) yaw = tYaw = pose.yaw;
+      if (Number.isFinite(pose.pitch)) pitch = tPitch = pose.pitch;
+    }
+    correction.x = snap ? 0 : oldX - p.x; correction.z = snap ? 0 : oldZ - p.z;
+    if (Math.hypot(correction.x, correction.z) > 1) correction.x = correction.z = 0;
+    applied = ''; apply(); requestRender?.();
+    return true;
+  }
+
+  function collisionSnapshot() {
+    refreshObstacles(true);
+    return { boxes: [...col.boxes, ...extra.filter(b => b.ax === undefined)],
+      segs: [...col.segs, ...extra.filter(b => b.ax !== undefined)], extra: extra.map(b => ({ ...b })) };
+  }
+
   return {
     get active() { return mode !== 'off'; },
     get walking() { return mode === 'walk'; },
@@ -647,8 +525,9 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     get orbitPose() { return saved && { pos: saved.pos.clone(), target: saved.target.clone(), fov: saved.fov, order: saved.order }; },
     get eyeHeight() { return eye; },
     get airborne() { return jy > 0; },
+    setNetwork, getNetworkPose, reconcileNetwork, collisionSnapshot,
     setPersonHeight, setZoom, kick,
-    nudge(dx, dz) { if (mode === 'walk' && !anim && (dx || dz)) { moveCircle(p, dx, dz, col, extra); requestRender?.(); } },
+    nudge(dx, dz) { if (!network && mode === 'walk' && !anim && (dx || dz)) { moveCircle(p, dx, dz, col, extra); requestRender?.(); } },
     enter, exit, toggle, update, boxesOf,
     colliders: col,
   };

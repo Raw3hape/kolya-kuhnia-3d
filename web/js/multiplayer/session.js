@@ -1,0 +1,244 @@
+// Integration adapter: apartment modules keep their single-player API and rules.
+import { createMultiplayerClient } from './client.js';
+import { createMultiplayerLobby } from './lobby.js';
+import { createHostAuthority } from './host.js';
+import { createAvatar } from './avatars.js';
+import { createShotRenderer } from './shots.js';
+import { NETWORK_RULES as R } from './rules.js';
+
+const angle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
+
+export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui }) {
+  const avatars = new Map(), samples = [], inputs = [], seenEvents = new Set();
+  const shots = createShotRenderer({ THREE, scene, requestRender });
+  let active = false, applying = false, revision = -1, epoch = -1, lastSnapshot = null, disposed = false;
+  let appliedHunt = null, started = false, sendClock = 0, ambientClock = 0, geometryTimer = null, changeSerial = 0;
+  let apartmentQueue = Promise.resolve(), previousState = null, sessionRole = null, lifecycle = 0, pendingApartments = 0, wasWalking = false, sentWeapon = null;
+  let manifestDecor = null, manifestFurniture = null, manifestPass = -1, manifestPending = false;
+  const style = document.createElement('style');
+  style.textContent = `body[data-multiplayer-role="guest"] :is(#tab-mat,#tab-kitchen,#tab-furniture,#tab-light,#pane-mat,#pane-kitchen,#pane-furniture,#pane-light),body[data-multiplayer-role="guest"] .mode[data-mode="design"],body[data-multiplayer-role="guest"] .mode[data-mode="photo"],body[data-multiplayer-role="guest"] #preset-row,body[data-multiplayer-role="guest"] #panel-head .head-row>:not(.hide-btn){display:none!important}body[data-multiplayer-state="reconnecting"] #scene{pointer-events:none}`;
+  document.head.append(style);
+  style.textContent += 'body[data-multiplayer-role="guest"] #coach{display:none!important}';
+  const request = action => client.request(action).catch(error => { ui?.toast?.(error.message); return { ok: false }; });
+
+  const client = createMultiplayerClient({
+    createAuthority: async ({ room, send }) => {
+      const huntSpec = await fetch('spec/hunt.json').then(r => { if (!r.ok) throw new Error('hunt_config'); return r.json(); });
+      return createHostAuthority({ room, plan, site, huntSpec, send,
+        resolveSurfaces: (...args) => getModules().viewmodel.resolveNetworkSurfaces(...args),
+        resolveExternalTrace: shot => getModules().life?.traceExternalShot?.(shot),
+        resolveExternalShot: shot => getModules().life?.resolveExternalShot?.(shot) });
+    },
+    onSnapshot: receiveSnapshot,
+    onEvent: receiveEvent,
+    onStatus(value) {
+      document.body.dataset.multiplayerState = value.status;
+      if (value.status === 'connected') sentWeapon = null;
+      if (value.status === 'reconnecting') inputs.length = 0;
+      if (active && ['idle', 'closed', 'error'].includes(value.status)) deactivate();
+    },
+  });
+
+  async function roomState() {
+    await apartmentQueue.catch(() => {});
+    let modules = getModules();
+    await Promise.all([modules.decor?.ready, modules.furniture?.ready, modules.paper?.ready].filter(Boolean));
+    modules = getModules();
+    // The loader visually grows models after attaching them. Sample authored scale synchronously,
+    // then restore the animation; room entry never waits on an arbitrary animation timeout.
+    const growing = (modules.decor?.grow || []).map(g => ({ object: g.obj, scale: g.obj.scale.clone(), finalScale: g.s }));
+    for (const g of growing) g.object.scale.copy(g.finalScale);
+    let objects;
+    try { objects = modules.viewmodel.collectNetworkObjects(); }
+    finally { for (const g of growing) g.object.scale.copy(g.scale); scene.updateMatrixWorld(true); }
+    const interactions = { ...(modules.hood?.snapshot ? { hood: modules.hood.snapshot() } : {}),
+      ...(modules.paper?.snapshot ? { newspaper: modules.paper.snapshot() } : {}),
+      ...Object.fromEntries(Object.entries(modules.tv?.snapshot?.() || {}).map(([id, value]) => ['media:' + id, value])) };
+    return { apartment: structuredClone(getState()), collision: modules.walk.collisionSnapshot(), objects, interactions,
+      interactionMeta: { media: modules.tv?.interactionMeta?.() || {}, newspaperPages: modules.paper?.interactionMeta?.() || [], hoodPosition: modules.hood?.networkPosition?.() },
+      doors: modules.doors.snapshot(), seats: modules.seats?.networkSeats?.() || [], items: ['phone', 'newspaper'].flatMap(id => {
+        const m = id === 'phone' ? modules.tv : modules.paper, position = m?.networkPosition?.();
+        return position ? [{ id, position }] : [];
+      }) };
+  }
+
+  const lobby = createMultiplayerLobby({ client, getApartment: () => structuredClone(getState()),
+    getCollision: () => getModules().walk.collisionSnapshot(), getRoomState: roomState,
+    onJoined() { requestRender(); }, onLeft: deactivate });
+  let roomRequestTimer = null;
+  const openRoom = () => { clearTimeout(roomRequestTimer); roomRequestTimer = setTimeout(() => { if (active && !disposed) lobby.open(); }, 0); };
+  window.addEventListener('kitchen:room-request', openRoom);
+
+  function syncWeapon(weapon) {
+    if (!active || !client.connected) return false;
+    if (client.self?.held) { sentWeapon = null; return false; }
+    if (sentWeapon === weapon) return true;
+    if (!client.send({ kind: 'weapon', weapon })) return false;
+    sentWeapon = weapon; return true;
+  }
+
+  function activate(snapshot) {
+    if (active) return;
+    active = true; lifecycle++; sessionRole = client.role; previousState = sessionRole === 'guest' ? structuredClone(getState()) : null; started = false;
+    sendClock = ambientClock = 0; manifestDecor = manifestFurniture = null; manifestPass = -1; wasWalking = false;
+    document.body.dataset.multiplayerRole = sessionRole;
+    const m = getModules(); m.furnEditor?.disable(); m.seats?.stand?.();
+    m.walk.setNetwork({ onInput(command) {
+      if (client.connected) inputs.push({ ...command, weapon: getModules().viewmodel.weapon });
+      if (inputs.length > R.maxInputBatch) inputs.splice(0, inputs.length - R.maxInputBatch);
+    }, players: () => (lastSnapshot?.players || []).filter(p => p.id !== client.id),
+    canExit: () => client.role === 'host', canTeleport: () => false,
+    canMove: () => client.connected && !applying && !document.body.classList.contains('kmp-modal-open') });
+    m.doors.setNetwork({ request });
+    m.tv.setNetwork({ request, selfId: () => client.id, isHost: () => client.role === 'host' });
+    m.paper.setNetwork({ request, selfId: () => client.id });
+    m.hood?.setNetwork?.({ request, selfId: () => client.id });
+    m.viewmodel.setNetwork({ shoot(shot) { if (syncWeapon(shot.weapon)) client.send({ kind: 'shoot', ...shot }); },
+      reload(weapon) { if (syncWeapon(weapon)) client.send({ kind: 'reload', weapon }); }, clear() { request({ kind: 'clear' }); } });
+    m.hunt?.setNetwork(true); appliedHunt = m.hunt;
+    m.life?.setNetwork?.({ authority: client.role === 'host' });
+    m.seats?.setNetwork?.({ request, selfId: () => client.id });
+    // The panel remains available for weapons and local device settings.
+    document.getElementById('tab-live')?.click();
+    receiveSnapshot(snapshot);
+  }
+
+  function receiveSnapshot(snapshot) {
+    if (disposed) return;
+    if (!active) { activate(snapshot); return; }
+    lastSnapshot = snapshot;
+    const m = getModules();
+    if (epoch !== snapshot.epoch) {
+      epoch = snapshot.epoch; seenEvents.clear(); m.viewmodel.clearHoles({ remote: true }); shots.clear();
+    }
+    if (revision !== snapshot.revision) {
+      revision = snapshot.revision;
+      if (client.role !== 'host') {
+        const version = lifecycle, apartment = structuredClone(snapshot.apartment);
+        pendingApartments++; applying = true;
+        apartmentQueue = apartmentQueue.catch(() => {}).then(async () => {
+          if (!active || lifecycle !== version) return;
+          await applyState(apartment);
+          await Promise.all([getModules().decor?.ready, getModules().furniture?.ready].filter(Boolean));
+          if (active && lifecycle === version && lastSnapshot?.revision === snapshot.revision) {
+            const latest = lastSnapshot, vm = getModules().viewmodel;
+            vm.clearHoles({ remote: true });
+            vm.reconcileNetworkDamage(latest.effects || [], latest.broken || []);
+          }
+        }).catch(error => { if (active && lifecycle === version) ui?.toast?.('Не удалось загрузить квартиру: ' + error.message); })
+          .finally(() => { if (lifecycle === version) { pendingApartments = Math.max(0, pendingApartments - 1); applying = pendingApartments > 0; } });
+      }
+    }
+    m.doors.applyNetwork(snapshot.doors, { instant: true });
+    m.hood?.applyNetwork?.(snapshot.interactions?.hood);
+    m.paper.applyInteractionState?.(snapshot.interactions?.newspaper);
+    m.tv.applyInteractionState?.(snapshot.interactions || {});
+    m.tv.applyNetwork(snapshot.items?.phone ?? null); m.paper.applyNetwork(snapshot.items?.newspaper ?? null);
+    const me = snapshot.players.find(p => p.id === client.id);
+    m.seats?.applyNetwork?.(snapshot.seats || {}, me, { instant: !started });
+    m.viewmodel.reconcileNetworkDamage(snapshot.effects || [], snapshot.broken || []);
+    if (m.hunt) { if (appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; } m.hunt.applyNetworkSnapshot(snapshot.hunt); }
+    if (client.role !== 'host' && snapshot.ambient) m.life?.applyNetworkSnapshot?.(snapshot.ambient);
+    if (me) {
+      if (m.seats?.active || me.seat) started = false;
+      else if (!started && !applying) {
+        if (!m.walk.active) m.walk.enter({ x: me.x, z: me.z }, me.yaw, { network: true });
+        m.walk.reconcileNetwork(me, me.ack, { snap: true }); started = true; wasWalking = true;
+      } else if (started && (sessionRole !== 'host' || m.walk.active)) {
+        m.walk.reconcileNetwork(me, me.ack, { snap: sessionRole === 'host' && !wasWalking }); wasWalking = true;
+      } else if (sessionRole === 'host' && !m.walk.active) wasWalking = false;
+      m.viewmodel.applyNetworkAmmo(me.ammo);
+    }
+    samples.push({ at: performance.now(), snapshot }); if (samples.length > 6) samples.shift();
+    const present = new Set(snapshot.players.map(p => p.id));
+    for (const [id, avatar] of avatars) if (!present.has(id)) { scene.remove(avatar.root); avatar.dispose(); avatars.delete(id); }
+    for (const p of snapshot.players) if (p.id !== client.id && !avatars.has(p.id)) {
+      const avatar = createAvatar({ slot: p.avatar, name: p.name, host: p.id === snapshot.hostId });
+      avatar.root.userData.networkAvatar = true; avatar.root.userData.rasterOnly = true;
+      avatar.root.position.set(p.x, p.y, p.z); scene.add(avatar.root); avatars.set(p.id, avatar);
+    }
+    requestRender();
+  }
+
+  function receiveEvent(event) {
+    if (!event || seenEvents.has(event.id)) return;
+    seenEvents.add(event.id); if (seenEvents.size > 512) seenEvents.delete(seenEvents.values().next().value);
+    const m = getModules();
+    if (event.kind === 'shot') {
+      m.viewmodel.applyNetworkShot(event); shots.shot(event);
+      for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
+    } else if (event.kind === 'external-hit') {
+      for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
+    } else if (event.kind === 'clear') { m.viewmodel.clearHoles({ remote: true }); shots.clear(); }
+    else if (event.kind === 'door' && event.targetId) m.doors.applyNetwork({ ...lastSnapshot?.doors, [event.targetId]: event.open }, { instant: false });
+    else if (event.kind === 'item' && event.targetId) { (event.targetId === 'phone' ? m.tv : m.paper).applyNetwork(event.owner); }
+    else if (event.kind === 'interaction' && event.targetId) {
+      if (event.targetId === 'hood') m.hood?.applyNetwork?.(event.value);
+      else if (event.targetId === 'newspaper') m.paper.applyInteractionState?.(event.value);
+      else m.tv.applyInteractionState?.({ [event.targetId]: event.value });
+    }
+    requestRender();
+  }
+
+  async function apartmentChanged() {
+    if (!active || applying || client.role !== 'host') return;
+    const serial = ++changeSerial;
+    clearTimeout(geometryTimer);
+    geometryTimer = setTimeout(async () => {
+      try { const data = await roomState(); if (serial === changeSerial && active) client.send({ kind: 'apartment', ...data }); }
+      catch (error) { ui?.toast?.(error.message); }
+    }, 200);
+  }
+
+  function update(dt) {
+    if (!active) return false;
+    const m = getModules();
+    if (sessionRole === 'host' && !m.walk.active) wasWalking = false;
+    syncWeapon(m.viewmodel.weapon);
+    if (m.hunt && appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; if (lastSnapshot?.hunt) m.hunt.applyNetworkSnapshot(lastSnapshot.hunt); }
+    sendClock += dt; ambientClock += dt;
+    if (sendClock >= 1 / R.inputHz) { sendClock %= 1 / R.inputHz; if (inputs.length && client.connected) client.send({ kind: 'inputs', inputs: inputs.splice(0) }); }
+    if (ambientClock > 0.1 && client.role === 'host') { ambientClock = 0; const ambient = m.life?.snapshot?.(); if (ambient) client.send({ kind: 'ambient', ambient }); }
+    const t = performance.now() - R.interpolationMs;
+    let b = samples.find(s => s.at >= t) || samples.at(-1), a = samples[Math.max(0, samples.indexOf(b) - 1)];
+    const k = b && a && b.at > a.at ? THREE.MathUtils.clamp((t - a.at) / (b.at - a.at), 0, 1) : 1;
+    if (b) for (const p of b.snapshot.players) {
+      const avatar = avatars.get(p.id); if (!avatar) continue;
+      const before = a?.snapshot.players.find(q => q.id === p.id) || p;
+      const x = THREE.MathUtils.lerp(before.x, p.x, k), y = THREE.MathUtils.lerp(before.y, p.y, k), z = THREE.MathUtils.lerp(before.z, p.z, k);
+      const speed = Math.min(3, Math.hypot(x - avatar.root.position.x, z - avatar.root.position.z) / Math.max(dt, 0.001));
+      avatar.root.position.set(x, y, z); avatar.root.rotation.y = angle(before.yaw, p.yaw, k);
+      avatar.update({ dt, time: performance.now() / 1000, speed, weapon: p.weapon, aimPitch: p.pitch, held: p.held, seated: !!p.seat, seatY: p.seatY });
+    }
+    // Cheap generation checks only. A scene-wide mesh/bounds scan is done once after a real change.
+    if (client.role === 'host' && started && !manifestPending && (m.decor !== manifestDecor || m.furniture !== manifestFurniture || m.decor?.pass !== manifestPass)) {
+      manifestDecor = m.decor; manifestFurniture = m.furniture; manifestPass = m.decor?.pass;
+      manifestPending = true; const version = lifecycle;
+      roomState().then(data => { if (active && lifecycle === version && client.role === 'host') client.send({ kind: 'geometry', ...data }); })
+        .catch(() => {}).finally(() => { if (lifecycle === version) manifestPending = false; });
+    }
+    shots.update(dt); requestRender(); return true;
+  }
+
+  function deactivate() {
+    if (!active) return;
+    active = false; lifecycle++; clearTimeout(geometryTimer); changeSerial++; pendingApartments = 0; applying = false; manifestPending = false;
+    const m = getModules();
+    m.walk.setNetwork(null); m.doors.setNetwork(null); m.tv.setNetwork(null); m.paper.setNetwork(null);
+    m.hood?.setNetwork?.(null);
+    m.seats?.setNetwork?.(null); m.viewmodel.setNetwork(null); m.hunt?.setNetwork(false); m.life?.setNetwork?.(null);
+    for (const avatar of avatars.values()) { scene.remove(avatar.root); avatar.dispose(); } avatars.clear(); shots.clear();
+    samples.length = 0; inputs.length = 0; seenEvents.clear(); appliedHunt = null; epoch = revision = -1; started = false;
+    delete document.body.dataset.multiplayerRole;
+    const restore = previousState; previousState = null; sessionRole = null; lastSnapshot = null;
+    if (restore) apartmentQueue = apartmentQueue.catch(() => {}).then(() => applyState(restore)).catch(() => {});
+    requestRender();
+  }
+
+  const invite = new URL(location.href).searchParams.get('room');
+  if (invite) lobby.open({ room: invite });
+  return { client, lobby, update, apartmentChanged, roomState,
+    get active() { return active; }, get canEdit() { return !active || (client.role === 'host' && client.connected); },
+    get applying() { return applying; },
+    dispose() { disposed = true; clearTimeout(roomRequestTimer); deactivate(); client.dispose(); lobby.dispose(); shots.dispose(); style.remove(); window.removeEventListener('kitchen:room-request', openRoom); } };
+}

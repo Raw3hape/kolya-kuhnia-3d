@@ -36,11 +36,12 @@ export function create(L) {
   let root = null, lamp = null, bulbMat = null, models = null, loading = null, built = false, live = true;
   let open = !!L.doors?.list?.find(d => d.id === entry.id)?.open;
   const cast = [];   // { def, obj, mixer, acts, x, z, busy }
+  let network = null, networkSnapshot = null;
   let acc = 0, flick = { mode: 'on', t: 0, until: rand(2, 6), k: 1 }, pushCool = 0, pushedOnce = false, wasSeen = false, shove = 0;
 
   // ---------- загрузка и сборка ----------
   function preload() {
-    loading ??= Promise.all(CAST.map(c => L.loadGLB(c.file))).then(g => { models = g; if (built) addCast(); }).catch(e => console.warn('landing:', e));
+    loading ??= Promise.all(CAST.map(c => L.loadGLB(c.file))).then(g => { models = g; if (built) addCast(); if (networkSnapshot) applyNetworkSnapshot(networkSnapshot); }).catch(e => console.warn('landing:', e));
     return loading;
   }
   function build() {
@@ -67,7 +68,7 @@ export function create(L) {
   }
   function addCast() {
     if (cast.length || !models) return;
-    const group = new THREE.Group(); group.name = 'life_monsters';
+    const group = new THREE.Group(); group.name = 'life_monsters'; group.userData.networkEntity = true;
     CAST.forEach((def, i) => {
       const g = models[i];
       const obj = g.clone(g.scene);
@@ -84,7 +85,7 @@ export function create(L) {
       group.add(holder);
       const mixer = new THREE.AnimationMixer(obj), acts = {};
       for (const clip of g.animations) acts[clip.name] = mixer.clipAction(clip);
-      const m = { def, obj: holder, mixer, acts, x, z, busy: 0, cur: null, yaw0: holder.rotation.y };
+      const m = { id: `monster:${i}:1`, def, obj: holder, mixer, acts, x, z, busy: 0, cur: null, yaw0: holder.rotation.y };
       play(m, 'Idle', { offset: Math.random() });
       cast.push(m);
     });
@@ -135,9 +136,10 @@ export function create(L) {
     if (open) {
       build();
       sync();
+      if (network && !network.authority) return;
       // встречают: кто-то машет, кто-то мотает головой, кто-то рычит
       setTimeout(() => {
-        if (!open || !cast.length) return;
+        if (!open || !cast.length || network && !network.authority) return;
         for (const m of cast) act(m, ...(Math.random() < 0.5 ? ['Wave', 'Dance', 'No'] : ['No', 'Wave']));
         growl(cast[Math.floor(Math.random() * cast.length)], 0.8);
         L.requestRender?.();
@@ -214,7 +216,7 @@ export function create(L) {
       const { m, point } = best;
       let used = false;
       return {
-        distance: bt, point, normal: rc.ray.direction.clone().negate(), object: m.obj, animal: 'monster',
+        distance: bt, point, normal: rc.ray.direction.clone().negate(), object: m.obj, animal: 'monster', animalId: m.id,
         surface: { albedo: new THREE.Color(0.5, 0.5, 0.55), solid: true },
         hit() {
           if (used) return null; used = true;
@@ -231,6 +233,11 @@ export function create(L) {
   // ---------- кадр ----------
   let nearT = 0;
   function update(dt) {
+    if (network && !network.authority) {
+      if (!built || !root?.visible) return false;
+      for (const m of cast) m.mixer.update(Math.min(dt, 0.1));
+      return true;
+    }
     // заранее загрузить, когда игрок рядом с дверью или целится в неё
     if (!loading && live && L.walk?.walking && (nearT += dt) > 0.5) {
       nearT = 0;
@@ -271,6 +278,35 @@ export function create(L) {
     if (root) { scene.remove(root); root.traverse(o => { if (o.isMesh && !o.isSkinnedMesh) o.geometry?.dispose(); }); }
   }
 
-  return { update, colliders, setLive, dispose, preload, open: () => L.doors?.setOpen?.(entry.id, true),
+  function snapshot() {
+    return { built, open, visible: !!root?.visible, flicker: { ...flick },
+      cast: cast.map(m => ({ id: m.id, x: m.x, z: m.z, yaw: m.obj.rotation.y, busy: m.busy,
+        clip: m.cur?.getClip()?.name ?? 'Idle', clipTime: m.cur?.time ?? 0 })) };
+  }
+  function applyNetworkSnapshot(value) {
+    if (!value) return;
+    networkSnapshot = value;
+    if (!network || network.authority) return;
+    open = !!value.open;
+    if (value.built && !built) build();
+    if (!root) return;
+    root.visible = !!value.visible && live;
+    if (value.flicker) {
+      Object.assign(flick, value.flicker);
+      lamp.intensity = BULB_LM / (2 * Math.PI * (1 - Math.cos(1.35))) * NIGHT_SCALE * flick.k;
+      bulbMat.emissiveIntensity = 0.15 + 2.5 * flick.k;
+    }
+    for (const pose of value.cast ?? []) {
+      const m = cast.find(c => c.id === pose.id);
+      if (!m) continue;
+      m.x = pose.x; m.z = pose.z; m.busy = pose.busy; m.obj.position.set(pose.x, 0, pose.z); m.obj.rotation.y = pose.yaw;
+      if (m.cur?.getClip()?.name !== pose.clip) play(m, pose.clip, { once: pose.clip !== 'Idle' });
+      if (m.cur && Number.isFinite(pose.clipTime)) m.cur.time = pose.clipTime;
+      m.mixer.update(0);
+    }
+    L.walk?.refreshObstacles?.(); L.requestRender?.();
+  }
+  return { update, colliders, setLive, dispose, preload, snapshot, applyNetworkSnapshot,
+    setNetwork(value) { network = value || null; }, open: () => L.doors?.setOpen?.(entry.id, true),
     get debug() { return { root, cast, flick, area }; } };
 }

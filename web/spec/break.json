@@ -1,33 +1,136 @@
 {
- "_about": "Что бьётся от выстрела и где зеркала у моделей обстановки (web/js/breakables.js, web/js/mirrors.js). Ключ — путь GLB, как в spec/decor/*.json: тип — свойство самой вещи, где бы она ни стояла. break: тип всей модели (glass | ceramic | fruit) или { \"*\": тип, \"<начало имени узла>\": тип | null } по узлам (прямым детям корня GLB; null — этот узел пулей не бьётся). Что стоит внутри разбитого (паста в банке, яблоки в вазе, свеча в фонаре), падает вместе с ним. mirror: стекло зеркала — { \"material\": имя материала меша стекла } (зеркало смотрит в +Z меша) или { \"rect\": { \"center\": [x, y, z], \"size\": [ш, в] } } в координатах модели, лицом в +Z; round: true — круглое (осколки по кругу). Вне квартиры и в коде варианта ничего не меняет.",
- "models": {
-  "models/decor/props/fruit-bowl-stockholm/model.glb": { "break": { "*": "glass", "apple": "fruit", "lemon": "fruit", "lime": "fruit", "pomegranate": "fruit" } },
-  "models/decor/props/mugs-daggaster-fargklar/model.glb": { "break": "ceramic" },
-  "models/decor/props/jars-korken-pantry/model.glb": { "break": "glass" },
-  "models/decor/props/bottles-korken-oil/model.glb": { "break": "glass" },
-  "models/decor/props/coffee-press-set/model.glb": { "break": { "*": "glass", "daggaster-mug": "ceramic" } },
-  "models/decor/props/vase-jug-white/model.glb": { "break": "ceramic" },
-  "models/decor/props/vase-white-tall/model.glb": { "break": "ceramic" },
-  "models/decor/props/vase-stone-slim/model.glb": { "break": "ceramic" },
-  "models/decor/props/vase-kallarhals/model.glb": { "break": "ceramic" },
-  "models/decor/props/vase-pelarbjork-white/model.glb": { "break": "glass" },
-  "models/decor/props/vase-parlhagg-eucalyptus/model.glb": { "break": { "*": "glass", "smycka": null } },
-  "models/decor/props/plates-stack-godmiddag/model.glb": { "break": "ceramic" },
-  "models/decor/props/plates-lean-silversida/model.glb": { "break": "ceramic" },
-  "models/decor/props/bowls-stack-godmiddag/model.glb": { "break": "ceramic" },
-  "models/decor/props/lantern-borrby-20/model.glb": { "break": { "*": "glass", "candle": null, "flame": null } },
-  "models/decor/props/lantern-borrby-28/model.glb": { "break": { "*": "glass", "candle": null, "flame": null } },
-  "models/decor/props/lantern-berggran-34/model.glb": { "break": { "*": "glass", "candle": null, "flame": null } },
-  "models/decor/props/fig-porcelain-horse/model.glb": { "break": "ceramic" },
-  "models/decor/props/bust-marble-mini/model.glb": { "break": "ceramic" },
-  "models/decor/props/fig-concrete-cat/model.glb": { "break": "ceramic" },
-  "models/decor/props/fig-cheeky-cactus/model.glb": { "break": "ceramic" },
-  "models/decor/props/fig-moai/model.glb": { "break": "ceramic" },
-  "models/decor/props/crock-brugdhaj-utensils/model.glb": { "break": { "brugdhaj": "ceramic" } },
-  "models/decor/props/plant-pothos-terracotta/model.glb": { "break": { "pot": "ceramic" } },
-  "models/decor/props/plant-aloe/model.glb": { "break": { "potted_plant_04_pot": "ceramic" } },
-  "models/decor/hall/lindbyn-60x120/model.glb": { "mirror": { "material": "SimplygonCastMaterial_6" } },
-  "models/decor/hall/lindbyn-80/model.glb": { "mirror": { "material": "SimplygonCastMaterial", "round": true } },
-  "models/decor/hall/nissedal-65x150/model.glb": { "mirror": { "rect": { "center": [0, 0.75, 0.0275], "size": [0.6, 1.455] } } }
- }
+  "_about": "Материалы разрушения моделей и зеркала. loosePolicy автоматически включает все переносимые вещи во всех вариантах и комнатах; models уточняет материал отдельных узлов, а не ограничивает набор разрушаемых вещей. Крупная мебель и архитектура сохраняют форму и получают следы. Типы: glass, ceramic, fruit, paper, cloth, wood, plastic, foliage, metal. Зеркала: material или rect в координатах GLB.",
+  "models": {
+    "models/decor/props/fruit-bowl-stockholm/model.glb": {
+      "break": {
+        "*": "glass",
+        "apple": "fruit",
+        "lemon": "fruit",
+        "lime": "fruit",
+        "pomegranate": "fruit"
+      }
+    },
+    "models/decor/props/mugs-daggaster-fargklar/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/jars-korken-pantry/model.glb": {
+      "break": "glass"
+    },
+    "models/decor/props/bottles-korken-oil/model.glb": {
+      "break": "glass"
+    },
+    "models/decor/props/coffee-press-set/model.glb": {
+      "break": {
+        "*": "glass",
+        "daggaster-mug": "ceramic"
+      }
+    },
+    "models/decor/props/vase-jug-white/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/vase-white-tall/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/vase-stone-slim/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/vase-kallarhals/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/vase-pelarbjork-white/model.glb": {
+      "break": "glass"
+    },
+    "models/decor/props/vase-parlhagg-eucalyptus/model.glb": {
+      "break": {
+        "*": "glass",
+        "smycka": null
+      }
+    },
+    "models/decor/props/plates-stack-godmiddag/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/plates-lean-silversida/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/bowls-stack-godmiddag/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/lantern-borrby-20/model.glb": {
+      "break": {
+        "*": "glass",
+        "candle": null,
+        "flame": null
+      }
+    },
+    "models/decor/props/lantern-borrby-28/model.glb": {
+      "break": {
+        "*": "glass",
+        "candle": null,
+        "flame": null
+      }
+    },
+    "models/decor/props/lantern-berggran-34/model.glb": {
+      "break": {
+        "*": "glass",
+        "candle": null,
+        "flame": null
+      }
+    },
+    "models/decor/props/fig-porcelain-horse/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/bust-marble-mini/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/fig-concrete-cat/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/fig-cheeky-cactus/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/fig-moai/model.glb": {
+      "break": "ceramic"
+    },
+    "models/decor/props/crock-brugdhaj-utensils/model.glb": {
+      "break": {
+        "brugdhaj": "ceramic"
+      }
+    },
+    "models/decor/props/plant-pothos-terracotta/model.glb": {
+      "break": {
+        "pot": "ceramic"
+      }
+    },
+    "models/decor/props/plant-aloe/model.glb": {
+      "break": {
+        "potted_plant_04_pot": "ceramic"
+      }
+    },
+    "models/decor/hall/lindbyn-60x120/model.glb": {
+      "mirror": {
+        "material": "SimplygonCastMaterial_6"
+      }
+    },
+    "models/decor/hall/lindbyn-80/model.glb": {
+      "mirror": {
+        "material": "SimplygonCastMaterial",
+        "round": true
+      }
+    },
+    "models/decor/hall/nissedal-65x150/model.glb": {
+      "mirror": {
+        "rect": {
+          "center": [
+            0,
+            0.75,
+            0.0275
+          ],
+          "size": [
+            0.6,
+            1.455
+          ]
+        }
+      }
+    }
+  }
 }

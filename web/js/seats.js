@@ -149,6 +149,16 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
   // mode: off | sitting (переход) | seated | standing (переход); камера: yaw = base + rel (base — лицом по сиденью)
   let mode = 'off', seat = null, eye = null, base = 0, rel = 0, tRel = 0, pitch = 0, tPitch = 0, fov = 55, tFov = 55;
   let anim = null, origin = null, applied = '', target = null, seatKeyRef = null;
+  let network = null, seatOwners = {}, pendingSeat = false, networkGeneration = 0;
+  const selfId = () => typeof network?.selfId === 'function' ? network.selfId() : network?.selfId;
+  const available = id => !network || !seatOwners[id] || seatOwners[id] === selfId();
+  function requestSeat(action) {
+    if (pendingSeat) return false;
+    const current = network, generation = networkGeneration;
+    pendingSeat = true; renderAim();
+    return Promise.resolve(current.request?.(action)).then(result => !!result?.ok).catch(() => false)
+      .finally(() => { if (generation === networkGeneration) { pendingSeat = false; renderAim(); } });
+  }
 
   function aimAt(a, e) {
     base = a.face + Math.PI;   // камера смотрит в −Z: лицом по +face
@@ -164,13 +174,14 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
       fromFov: camera.fov, toFov, end };
   }
 
-  function sitOn(id) {
+  function sitOn(id, { authoritative = false, instant = false } = {}) {
     const a = byId(id);
     if (!a) return false;
+    if (network && !authoritative) return available(id) ? requestSeat({ kind: 'sit', id }) : false;
     if (mode === 'off') {
       if (walk?.active) {
         const orbit = walk.orbitPose;       // облёт до прогулки: туда вернёт выход из неё после того, как встанем
-        walk.exit({ restore: false });
+        walk.exit({ restore: false, network: authoritative });
         if (walk.active) return false;      // прогулка ещё доигрывает выход
         origin = { walk: true, orbit };
       } else {
@@ -183,7 +194,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     seat = a; seatKeyRef = lastKey; eye = eyeOf(a);
     aimAt(a, eye);
     mode = 'sitting';
-    startAnim(eye.clone(), quatOf(base + rel, pitch), fov, SEAT.transition, () => { mode = 'seated'; });
+    startAnim(eye.clone(), quatOf(base + rel, pitch), fov, instant ? 0 : SEAT.transition, () => { mode = 'seated'; });
     if (a.id === 'sofa') getTV?.()?.setAudio(true);
     // фокус с кнопки панели: иначе Пробел («встать») снова нажмёт её
     if (document.activeElement?.closest?.('#panel')) document.activeElement.blur();
@@ -192,18 +203,20 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     return true;
   }
 
-  function stand({ toWalk = false } = {}) {
+  function stand({ toWalk = false, authoritative = false, pose = null } = {}) {
     if (mode === 'off' || mode === 'standing') return;
+    if (network && !authoritative) return requestSeat({ kind: 'stand' });
     const a = seat;
     if (a?.id === 'sofa') getTV?.()?.setAudio(false);
     lookRelease();
     if (origin?.walk || toWalk) {
       // в прогулку: прогулка сама плавно переведёт камеру к свободному месту перед сиденьем
-      const fw = fwdOf(a.face), p = a.hip.clone().addScaledVector(fw, SEAT.standOut);
+      const fw = fwdOf(a.face), p = pose && Number.isFinite(pose.x) && Number.isFinite(pose.z) ? V(pose.x, 0, pose.z) : a.hip.clone().addScaledVector(fw, SEAT.standOut);
       const orbit = origin.walk ? origin.orbit : origin;
       controls.target.copy(camera.position).addScaledVector(camera.getWorldDirection(V()), 2);
       finish(false);
-      if (!walk?.enter({ x: p.x, z: p.z }, a.face + Math.PI, { orbit })) controls.enabled = true;
+      if (!walk?.enter({ x: p.x, z: p.z }, pose?.yaw ?? a.face + Math.PI, { orbit, network: authoritative })) controls.enabled = true;
+      if (authoritative && pose) walk?.reconcileNetwork?.(pose, pose.ack, { snap: true });
       return;
     }
     mode = 'standing';
@@ -303,7 +316,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
 
   const dirTmp = V(), posTmp = V();
   function aim() {
-    const list = getAnchors().filter(a => a.root);
+    const list = getAnchors().filter(a => a.root && available(a.id));
     let next = null;
     if (list.length) {
       camera.getWorldPosition(posTmp); camera.getWorldDirection(dirTmp);
@@ -355,6 +368,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
   const aimed = () => (target && !getDoors?.()?.target ? target : null);
   function renderAim() {
     const t = walk?.walking ? aimed() : null, touch = touchSeen || coarse();
+    aimBtn.disabled = pendingSeat;
     aimHint.hidden = !t || touch;
     if (t) aimHint.innerHTML = `<kbd>E</kbd> — ${t.label.toLowerCase()}`;
     aimBtn.hidden = !t || !touch;
@@ -438,11 +452,30 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     for (const d of [aimHint, aimBtn]) d.remove();
   }
 
+  function setNetwork(adapter) {
+    network = adapter || null; seatOwners = {}; pendingSeat = false; networkGeneration++;
+    if (!network && mode !== 'off') stand({ toWalk: true, authoritative: true });
+    aimDirty = true; renderAim();
+  }
+  function applyNetwork(owners, player, { instant = false } = {}) {
+    seatOwners = owners && typeof owners === 'object' && !Array.isArray(owners) ? { ...owners } : {};
+    const desired = player?.seat ?? null;
+    if (desired && seat?.id !== desired) sitOn(desired, { authoritative: true, instant });
+    else if (!desired && mode !== 'off') stand({ toWalk: true, authoritative: true, pose: player });
+    aimDirty = true; renderAim();
+  }
+  function networkSeats() {
+    return getAnchors().map(a => {
+      const stand = a.hip.clone().addScaledVector(fwdOf(a.face), SEAT.standOut);
+      return { id: a.id, position: a.hip.toArray(), yaw: a.face + Math.PI, eyeY: eyeOf(a).y, stand: [stand.x, stand.z] };
+    });
+  }
+
   return {
     get active() { return mode !== 'off'; },
     get target() { const t = walk?.walking ? aimed() : null; return t ? { id: t.id, label: t.label } : null; },
     get current() { return mode === 'off' ? null : seat?.id ?? null; },
-    update, sitOn, stand, dispose,
+    update, sitOn, stand, dispose, setNetwork, applyNetwork, networkSeats,
     list: () => getAnchors().map(({ id, label }) => ({ id, label })),
   };
 }

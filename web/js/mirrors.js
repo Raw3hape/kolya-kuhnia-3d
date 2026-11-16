@@ -24,7 +24,8 @@
 // Разбитое: пуля (impacts.js → shotHandlers) делит стекло на ячейки Вороного (гуще у попадания), ячейки вокруг пули
 // выпадают осколками (breakables.slabShards), остальные держатся в раме и отражают каждая под своим углом,
 // между ними тёмные трещины, на месте выпавших — подложка. Следующие пули выбивают ещё. «Убрать следы и осколки» — целое.
-import { breakSpec, shotHandlers, onRestore, voronoiCells, impactSeeds, decorHolderOf } from './breakables.js';
+import { breakSpec, shotHandlers, networkDamageResetters, onRestore, voronoiCells, impactSeeds, decorHolderOf } from './breakables.js';
+import { stableObjectId } from './network-objects.js';
 import { decorPart } from './decor.js';
 
 const SCALE = { eco: 0.6, fast: 0.7, high: 0.85, ultra: 1 };
@@ -98,7 +99,8 @@ export function createMirrors({ THREE, scene, camera, renderer, pipe, requestRen
     if (position) surface.position.copy(position);
     surface.castShadow = false; surface.receiveShadow = false;
     surface.visible = !hidden;
-    Object.assign(surface.userData, { rasterOnly: true, mirrorGlass: true, noPick: true });
+    Object.assign(surface.userData, { rasterOnly: true, mirrorGlass: true, noPick: true,
+      networkId: `${stableObjectId(parent)}/mirror` });
     parent.add(surface);
     const vcam = new THREE.PerspectiveCamera();
     vcam.matrixAutoUpdate = false; vcam.matrixWorldAutoUpdate = false;
@@ -106,6 +108,7 @@ export function createMirrors({ THREE, scene, camera, renderer, pipe, requestRen
       lastCam: new THREE.Matrix4(), lastProj: new THREE.Matrix4(), lastWorld: new THREE.Matrix4(), size: [64, 64] };
     surface.onBeforeRender = (r, sc, cam, geo, material) => { if (material === mat && cam === camera && !busy) draw(m); };
     shotHandlers.set(surface, (hit, dir, api) => shoot(m, hit, dir, api));
+    networkDamageResetters.set(surface, () => unbreak(m));
     mirrors.push(m);
     return m;
   }
@@ -115,7 +118,10 @@ export function createMirrors({ THREE, scene, camera, renderer, pipe, requestRen
     if (!g.boundingBox) g.computeBoundingBox();
     const b = g.boundingBox;
     const m = makeMirror({ geometry: g, parent: mesh, rect: { x0: b.min.x, x1: b.max.x, y0: b.min.y, y1: b.max.y, z: b.max.z }, round });
+    m.source = mesh; mesh.userData.networkMirror = true;
+    m.surface.userData.networkId = stableObjectId(mesh);
     shotHandlers.set(mesh, shotHandlers.get(m.surface));   // стекло совпадает с исходным мешем: луч может найти любой из них
+    networkDamageResetters.set(mesh, () => unbreak(m));
     return m;
   }
   function fromRect(root, r, round = false) {
@@ -225,21 +231,23 @@ export function createMirrors({ THREE, scene, camera, renderer, pipe, requestRen
   // описанный многоугольник (не вписанный): между хордой и кромкой круглого стекла не остаётся щелей без ячейки
   function circle(w, h, n = 32) { const k = 1 / Math.cos(Math.PI / n), out = []; for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; out.push([Math.cos(a) * w / 2 * k, Math.sin(a) * h / 2 * k]); } return out; }
   function shoot(m, hit, dir, api) {
+    m.surface.userData.networkDamaged = true;
+    if (m.source) m.source.userData.networkDamaged = true;
     const { x0, x1, y0, y1, z } = m.rect, w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
     m.surface.updateWorldMatrix(true, false);
     lp.copy(hit.point); m.surface.worldToLocal(lp);
     const u = lp.x - cx, v = lp.y - cy;
     const sc = m.surface.getWorldScale(ws), k = 2 / Math.max(1e-4, sc.x + sc.y);   // метры мира -> координаты стекла
     if (!m.st) {
-      const seeds = impactSeeds(w, h, u, v, BREAK.seeds);
+      const seeds = impactSeeds(w, h, u, v, BREAK.seeds, api.random);
       m.st = { seeds, cells: voronoiCells(w, h, seeds, m.round ? circle(w, h) : null), gone: seeds.map(() => false),
-        off: seeds.map(() => [Math.random(), Math.random()]) };
+        off: seeds.map(() => [api.random(), api.random()]) };
     }
     const st = m.st;
     // выпадают: ячейка под пулей, ячейки ближе hole к пуле и немного случайных
     let nearest = -1, nd = Infinity;
     st.seeds.forEach(([sx, sy], i) => { const d = Math.hypot(sx - u, sy - v); if (d < nd) { nd = d; nearest = i; } });
-    const fall = st.seeds.map(([sx, sy], i) => !st.gone[i] && (i === nearest || Math.hypot(sx - u, sy - v) < BREAK.hole * k || Math.random() < BREAK.extra));
+    const fall = st.seeds.map(([sx, sy], i) => !st.gone[i] && (i === nearest || Math.hypot(sx - u, sy - v) < BREAK.hole * k || api.random() < BREAK.extra));
     if (!fall.some(Boolean)) return true;
     fall.forEach((f, i) => { if (f) st.gone[i] = true; });
     // осколки падают от стены в комнату (по нормали зеркала), а не за пулей в стену
@@ -273,6 +281,8 @@ export function createMirrors({ THREE, scene, camera, renderer, pipe, requestRen
     m.force = true;
   }
   function unbreak(m) {
+    m.surface.userData.networkDamaged = false;
+    if (m.source) m.source.userData.networkDamaged = false;
     m.st = null;
     m.mat.uniforms.uBroken.value = 0;
     m.force = true;
