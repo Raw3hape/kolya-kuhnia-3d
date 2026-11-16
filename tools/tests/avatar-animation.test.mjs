@@ -142,9 +142,9 @@ test('Prop cache and articulated rig dispose every owned geometry/material exact
 
 
 test('Party observer cues raise a bottle or mouthpiece hand without duplicating party-rendered props', () => {
-  for (const carried of ['beer', 'vape', 'hookah']) {
+  for (const carried of ['beer', 'energy', 'vape', 'hookah']) {
     const avatar = createAvatar({ slot: 0 });
-    const kind = carried === 'beer' ? 'sip' : 'puff';
+    const kind = ['beer', 'energy'].includes(carried) ? 'sip' : 'puff';
     const idle = solveAvatarPose({ carried });
     const cue = makeAvatarAction(kind, 1, { targetId: carried });
     const active = solveAvatarPose({ carried, action: cue, actionTime: 0.4 });
@@ -154,4 +154,21 @@ test('Party observer cues raise a bottle or mouthpiece hand without duplicating 
     assert.equal(avatar.animation.gear, 'none', 'party renderer owns the single visible prop');
     avatar.dispose();
   }
+});
+
+test('RC controller uses both hands and leaves its single visible model to the RC adapter', () => {
+  const avatar = createAvatar({ slot: 1 });
+  for (const seated of [false, true]) {
+    const pose = solveAvatarPose({ carried: 'controller', held: 'rc-3', seated, time: 1 });
+    assert.equal(pose.gear.kind, 'controller');
+    close(pose.arms.left.wrist[1], pose.arms.right.wrist[1]);
+    close(pose.arms.left.wrist[2], pose.arms.right.wrist[2]);
+    close(pose.arms.right.wrist[0] - pose.arms.left.wrist[0], .22);
+    avatar.update({ carried: 'controller', held: 'rc-3', seated, time: 1 });
+    assert.equal(avatar.animation.pose.gear.kind, 'controller');
+    assert.equal(avatar.animation.gear, 'none');
+  }
+  avatar.update({ weapon: 'pistol', time: 2 });
+  assert.equal(avatar.animation.gear, 'pistol', 'ordinary equipment resumes after releasing the controller');
+  avatar.dispose();
 });

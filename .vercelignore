@@ -1,0 +1,8 @@
+# Canonical art masters stay in Git; runtime GLBs already embed optimized images.
+tools/party/generated-labels/
+tools/rc/concepts/
+tools/rc/garage.blend
+tools/rc/garage-preview.jpg
+output/
+renders/
+exports/

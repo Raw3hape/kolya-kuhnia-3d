@@ -1,0 +1,18 @@
+{
+  "name": "cannon-es",
+  "version": "0.20.0",
+  "license": "MIT",
+  "upstream": "https://github.com/pmndrs/cannon-es",
+  "files": [
+    {
+      "file": "cannon-es.js",
+      "bytes": 346256,
+      "sha256": "f0700cbd3a482954949b9d58c1b0f76dcc74767750297647a39d8c40dd63d37c"
+    },
+    {
+      "file": "LICENSE",
+      "bytes": 1125,
+      "sha256": "4714d0272f50cb21fe46fe29333c7c600d3c85b5ebd2a80f4db07e8cfccbf5b2"
+    }
+  ]
+}

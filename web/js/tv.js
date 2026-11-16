@@ -121,7 +121,7 @@ function findByMaterial(o, name) {
   return null;
 }
 
-export function createTV({ camera, scene, renderer, canvas, pipe, getState, requestRender, getWalk, getVM, getSeats, getDoors, hasWorldInteraction }) {
+export function createTV({ camera, scene, renderer, canvas, pipe, getState, requestRender, getWalk, getVM, getSeats, getDoors, hasWorldInteraction, beforeCarry }) {
   let live = true;
   const offLive = pipe.onLive(on => { live = on; if (!on) for (const s of SCREENS) s.HOLE.value = 0; });
 
@@ -410,7 +410,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
     hasWorldInteraction: () => links.hasWorldInteraction?.(),
     // на столе он спрятан, пока в руке (и пока доигрывает «положить»): видимость проверяем у держателя, не у модели
     getTarget: () => (!remoteHeld && phone.mesh && phone.holder && (!held || dropping) && visibleChain(phone.holder) ? phone.holder : null),
-    getRect: () => scr.getBoundingClientRect(),
+    getRect: () => scr.getBoundingClientRect(), beforeCarry,
     onHold: hold, onStep: d => step(phone.id, d) });
 
   // ---------- кадр ----------

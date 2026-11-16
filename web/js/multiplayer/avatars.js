@@ -5,7 +5,7 @@
 // Slot allocation/identity/collision belong to the room authority, never to this renderer adapter.
 import * as THREE from 'three';
 import { AVATAR_RIG as R, WEAPON_PRESENTATION as W } from './avatar-rig.js';
-import { solveAvatarPose } from './avatar-pose.js';
+import { solveAvatarPose, EXTERNAL_AVATAR_PROPS } from './avatar-pose.js';
 
 export const AVATAR_ROSTER = Object.freeze([
   { id: 'sailor', label: 'Морской свитер', shirt: '#e4e3d8', accent: '#263e59', pants: '#293641', skin: '#d5a47e', hair: '#322b28', style: 'stripes', head: 'crop' },
@@ -337,8 +337,8 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0, app
     const kind = pose.gear.kind;
     if (currentGear?.kind !== kind) {
       currentGear?.root.removeFromParent(); currentGear = null;
-      // Party rendering owns its shared models, liquids and hose. The rig only poses the hand.
-      if (kind !== 'none' && !['beer', 'vape', 'hookah', 'pizza'].includes(kind)) {
+      // Gameplay adapters own shared prop assets; the rig supplies the hand pose.
+      if (kind !== 'none' && !EXTERNAL_AVATAR_PROPS.includes(kind)) {
         if (!gearCache.has(kind)) { const gear = createGear(kind, material, flashMaterial, screenMaterial); setLayer(gear.root); gearCache.set(kind, gear); }
         currentGear = gearCache.get(kind); gearSocket.add(currentGear.root);
       }

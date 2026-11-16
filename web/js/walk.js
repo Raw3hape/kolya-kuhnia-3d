@@ -63,7 +63,7 @@ const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce
 const coarse = () => { try { return matchMedia('(hover: none), (pointer: coarse)').matches; } catch { return false; } };
 const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
-export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, requestRender, onChange }) {
+export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, requestRender, onChange, canMove: movementGuard = () => true }) {
   const col = buildColliders(plan);
   let network = null, inputSeq = 0, pendingInputs = [], jumpRequested = false;
   const correction = { x: 0, z: 0 };
@@ -248,7 +248,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     if (mode !== 'walk') return false;
 
     refreshObstacles(false);
-    const canMove = !network || network.canMove?.() !== false;
+    const canMove = movementGuard() && (!network || network.canMove?.() !== false);
     const blockers = movementObstacles();
     if (!isFree(p, col, blockers)) { const f = findFree(plan, p, col, blockers); if (f) { p.x = f.x; p.z = f.z; } }
     correction.x *= Math.exp(-16 * dt); correction.z *= Math.exp(-16 * dt);
@@ -339,7 +339,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   // ---------- ввод ----------
 
-  function jump() { if (mode === 'walk' && jy === 0 && !anim && (!network || network.canMove?.() !== false)) { vy = WALK.jump; jumpRequested = true; requestRender?.(); } }
+  function jump() { if (mode === 'walk' && jy === 0 && !anim && movementGuard() && (!network || network.canMove?.() !== false)) { vy = WALK.jump; jumpRequested = true; requestRender?.(); } }
 
   addEventListener('keydown', e => {
     if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;

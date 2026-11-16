@@ -1,6 +1,9 @@
 // Party gameplay view/input. The same pure simulation runs solo and in the host Worker.
 // Ownership, sip counts and flights are canonical; pooled smoke, foley and shards are local.
-import { createPartySimulation, createPartyGround } from './party-state.js';
+import { createPartySimulation, createPartyGround, isDrink } from './party-state.js';
+import { createEnergyModels } from './party-energy-models.js';
+import { createPartyBoost } from './party-boost.js';
+import { createPartyLitter } from './party-litter.js';
 import { createPartyModels } from './party-models.js';
 import { createPartyHands } from './party-hands.js';
 import { createPartyHose } from './party-hose.js';
@@ -13,17 +16,17 @@ import { addHelp } from './help.js';
 import {whenRoom} from './loading.js';
 
 addHelp(
-  {mode:'walk',topic:'party',keys:['E'],text:'взять пиво на балконе, дудку на острове или шланг кальяна у дивана',order:63},
+  {mode:'walk',topic:'party',keys:['E'],text:'открыть холодильник под столешницей и взять энергетик; пиво — на балконе',order:63},
   {mode:'walk',topic:'party',keys:['ЛКМ'],text:'один глоток / затяжка; пиво выпивается за пять нажатий',order:64},
-  {mode:'walk',topic:'party',keys:['Q'],text:'бросить бутылку; вернуть дудку или шланг. X — поставить бутылку обратно',order:65},
+  {mode:'walk',topic:'party',keys:['Q'],text:'бросить бутылку; C — сжать пустой энергетик; X — вернуть на место',order:65},
   {mode:'seat',topic:'party',keys:['ПКМ'],text:'с бутылкой, дудкой или шлангом в руке — осмотреться; ЛКМ — глоток или затяжка',order:45},
 );
 const typing=e=>e.target?.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName);
 const visible=o=>{for(let p=o;p;p=p.parent)if(!p.visible)return false;return true;};
-const NAMES={beer:'Пиво',vape:'Облачная дудка',hookah:'Кальян у дивана'};
+const NAMES={energy:'Энергетик',fridge:'Холодильник «Ночной Жабыч»',beer:'Пиво',vape:'Облачная дудка',hookah:'Кальян у дивана'};
 
-export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,getWalk,getSeats,getVM,getTV,getPaper,getDoors,getSocial,getAnchors,requestRender}) {
-  let spec=null,sim=null,models=null,grips=null,hose=null,overlay=null,effects=null,network=null,state=null,players=[],ready=false,disposed=false;
+export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,getWalk,getSeats,getVM,getTV,getPaper,getDoors,getSocial,getAnchors,beforeCarry,requestRender}) {
+  let spec=null,sim=null,energyModels=null,boost=null,litter=null,fridge=null,fridgeAngle=0,models=null,grips=null,hose=null,overlay=null,effects=null,network=null,state=null,players=[],ready=false,disposed=false;
   let pending=false,generation=0,aimed=null,pickClock=0,heldId=null,actionClock=0,uiKey='',savedSolo=null;
   const world=new THREE.Group();world.name='party_world';world.userData.rasterOnly=true;scene.add(world);
   const handRoot=new THREE.Group();handRoot.name='party_first_person';handRoot.userData.viewmodel=true;handRoot.userData.rasterOnly=true;
@@ -53,17 +56,17 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
     if(h?.id!==heldId){
       if(h){getVM()?.setWeapon('none');getTV()?.hold(false);getPaper()?.drop();effects.sound('take');}
       heldId=h?.id||null;clearHand();
-      if(h){handModel=models.create(h.kind==='hookah'?'mouthpiece':h.kind,{held:true,id:h.id});handRoot.add(handModel,grips.create(h.kind));}
+      if(h){handModel=h.kind==='energy'?energyModels.create({held:true,id:h.id}):models.create(h.kind==='hookah'?'mouthpiece':h.kind,{held:true,id:h.id});handRoot.add(handModel,grips.create(h.kind==='energy'?'beer':h.kind));}
     }
     for(const item of state.items){
       const prior=seenAction.get(item.id),key=item.action?`${item.action.kind}:${item.action.at}:${item.action.actorId}`:null;
       if(key&&key!==prior&&state.time-item.action.at<item.action.duration){
         if(item.action.actorId===selfId()||camera.position.distanceTo(new THREE.Vector3().fromArray(item.position))<9)effects.sound(item.action.kind,item.action.actorId===selfId()?1:.35);
-        if(item.kind==='beer'&&item.sips===spec.rules.sips&&item.action.actorId===selfId())effects.sound('empty',.6);
+        if(isDrink(item)&&item.sips===spec.rules.sips&&item.action.actorId===selfId())effects.sound('empty',.6);
       }
       seenAction.set(item.id,key);
       const old=seenBreak.get(item.id);
-      if(old!==undefined&&item.breakSerial>old){effects.shatter(item.position,item.breakSerial*173+item.id.length);effects.sound('break',Math.max(.08,1-camera.position.distanceTo(new THREE.Vector3().fromArray(item.position))/18));}
+      if(old!==undefined&&item.kind==='beer'&&item.breakSerial>old){effects.sound('break',Math.max(.08,1-camera.position.distanceTo(new THREE.Vector3().fromArray(item.position))/18));}
       seenBreak.set(item.id,item.breakSerial||0);
     }
   }
@@ -77,10 +80,12 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
   }
   async function command(verb,id=held()?.id||aimed?.id){
     if(!ready||pending||(!active()&&verb!=='return')||!id)return{ok:false};
-    const item=state.items.find(x=>x.id===id);if(!item)return{ok:false};
+    const item=state.items.find(x=>x.id===id);if(!item&&verb!=='fridge')return{ok:false};
     const version=generation;pending=true;renderHUD();
     camera.getWorldDirection(direction);const payload={kind:'party',verb,id,direction:direction.toArray()};
     try{
+      if(!network&&verb==='take'&&(!sim.canTake(pose(),id)||beforeCarry&&!await beforeCarry()))return{ok:false};
+      if(version!==generation||verb==='take'&&!active())return{ok:false};
       const result=network?await network.request(payload):sim.command(pose(),verb,id,payload.direction);
       if(version!==generation)return{ok:false};
       if(!network)accept(sim.snapshot());
@@ -89,10 +94,10 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
     }finally{if(version===generation){pending=false;renderHUD();requestRender();}}
   }
   function setNetwork(adapter){
-    generation++;pending=false;
+    generation++;pending=false;boost?.clear();litter?.clear();
     if(adapter&&!network)savedSolo=sim?.snapshot();
     network=adapter||null;players=[];heldId=null;clearHand();
-    if(!adapter&&sim){if(savedSolo)sim.restore(savedSolo);savedSolo=null;seenAction.clear();seenBreak.clear();accept(sim.snapshot());}
+    if(!adapter&&sim){if(savedSolo)sim.restore({...savedSolo,boosts:[]});savedSolo=null;seenAction.clear();seenBreak.clear();accept(sim.snapshot());}
   }
   function updateHomes(){
     if(!ready||(network&&!network.isHost?.()))return;
@@ -109,9 +114,11 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
     aimed=null;if(!active())return;
     ray.setFromCamera(new THREE.Vector2(0,0),camera);ray.far=spec.rules.reach;ray.layers.set(0);
     const candidates=[];
-    for(const item of state.items)if(item.status==='ready'&&objects.get(item.id)?.visible)candidates.push(objects.get(item.id));
+    if(fridge)candidates.push(fridge);
+    for(const item of state.items)if(['ready','resting'].includes(item.status)&&objects.get(item.id)?.visible)candidates.push(objects.get(item.id));
     if(state.items.some(i=>i.kind==='beer'&&i.status==='ready'))candidates.push(crate);
     const h=ray.intersectObjects(candidates,true)[0];if(!h)return;
+    for(let p=h.object;p;p=p.parent)if(p.userData.partyFridgeDoor){aimed={id:'fridge',kind:'fridge'};return;}
     let root=h.object;while(root&&root.parent!==world)root=root.parent;
     const id=root===crate?state.items.find(i=>i.kind==='beer'&&i.status==='ready')?.id:root?.userData.partyId;
     if(!id)return;
@@ -120,16 +127,16 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
   }
   function renderHUD(){
     const h=held(),can=active()&&!pipe?.photo,coarse=coarseQuery.matches;
-    const remaining=h?.kind==='beer'?spec.rules.sips-h.sips:null;
+    const remaining=isDrink(h)?spec.rules.sips-h.sips:null;
     const busy=pending||!!(h?.action&&state.time-h.action.at<h.action.duration);
-    const key=[can,h?.id,aimed?.id,remaining,busy,coarse].join(':');if(key===uiKey)return;uiKey=key;
-    const focus=h||aimed;hud.hidden=!can||!focus;title.textContent=models?.labels.get(focus?.id)?.title||NAMES[focus?.kind]||'';
+    const key=[can,h?.id,aimed?.id,remaining,busy,coarse,state?.fridgeOpen,h?.crushed].join(':');if(key===uiKey)return;uiKey=key;
+    const focus=h||aimed;hud.hidden=!can||!focus;title.textContent=energyModels?.labels.get(focus?.id)?.title||models?.labels.get(focus?.id)?.title||NAMES[focus?.kind]||'';
     meter.textContent=remaining===null?'':`${'●'.repeat(Math.max(0,remaining))}${'○'.repeat(h.sips)}  ${remaining} / ${spec.rules.sips}`;
-    actions.textContent=h?(h.kind==='beer'?(remaining?'ЛКМ / E — глоток · Q — бросить · X — на место':'Пусто! Q — бросить с треском · X — на место'):'ЛКМ — затяжка · Q — вернуть'):'E — взять';
-    if(coarse)actions.textContent=h?(h.kind==='beer'?'Каждое нажатие — один глоток · Можно бросить бутылку':'Нажмите «Затяжка», чтобы выпустить облако'):'Нажмите «Взять»';
-    take.hidden=!can||!coarse||!aimed||!!h;use.hidden=put.hidden=!can||!coarse||!h;back.hidden=!can||!coarse||h?.kind!=='beer';
+    actions.textContent=h?(isDrink(h)?(remaining?'ЛКМ / E — глоток · Q — бросить · X — на место':(h.kind==='energy'&&!h.crushed?'Пусто! C — сжать · Q — бросить':'Пусто! Q — бросить · X — на место')):'ЛКМ — затяжка · Q — вернуть'):(aimed?.kind==='fridge'?`E — ${state?.fridgeOpen?'закрыть':'открыть'} холодильник`:'E — взять');
+    if(coarse)actions.textContent=h?(isDrink(h)?'Каждое нажатие — один глоток · Можно бросить бутылку':'Нажмите «Затяжка», чтобы выпустить облако'):'Нажмите «Взять»';
+    take.textContent=aimed?.kind==='fridge'?(state?.fridgeOpen?'Закрыть холодильник':'Открыть холодильник'):'Взять';take.hidden=!can||!coarse||!aimed||!!h;use.hidden=put.hidden=!can||!coarse||!h;back.hidden=!can||!coarse||!isDrink(h);
     for(const b of [take,use,put,back])b.disabled=busy;
-    use.textContent=h?.kind==='beer'?(remaining?'Глоток':'Пусто'):'Затяжка';use.disabled=busy||remaining===0;put.textContent=h?.kind==='beer'?'Бросить':'Вернуть';
+    const canCrush=h?.kind==='energy'&&remaining===0&&!h.crushed;use.textContent=isDrink(h)?(remaining?'Глоток':canCrush?'Сжать':'Пусто'):'Затяжка';use.disabled=busy||remaining===0&&!canCrush;put.textContent=isDrink(h)?'Бросить':'Вернуть';
     document.body.classList.toggle('party-held',!!h);document.body.classList.toggle('party-aimed',!!aimed&&!h);
   }
   const smooth=t=>{const x=Math.max(0,Math.min(1,t));return x*x*(3-2*x);};
@@ -139,12 +146,17 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
     g.userData.liquid?.update(1-consumed/spec.rules.sips,dt);
     if(g.userData.cap)g.userData.cap.visible=item.sips===0&&!item.owner;
   }
+  function paintEnergy(g,item){
+    const progress=item.action?.kind==='crush'?smooth(actionProgress(item)):1,amount=item.crushed?progress:0;
+    g.scale.set(1+amount*.36,1-amount*.52,1-amount*.26);
+    g.traverse(o=>{if(o.userData.energyCap)o.visible=item.sips===0&&!item.owner;});
+  }
   function actionProgress(item){const a=item.action;return a?Math.max(0,Math.min(1,(state.time-a.at)/a.duration)):1;}
   function positionHeld(root,item,local){
     const progress=actionProgress(item),doing=!!item.action&&progress<1,motion=models.recipe.motion;
     const use=doing&&['sip','puff'].includes(item.action.kind)?smooth(progress/motion.useIn)*(1-smooth((progress-motion.useOut)/(1-motion.useOut))):0;
     if(local){
-      const kind=item.kind==='hookah'?'mouthpiece':item.kind,view=models.recipe.models[kind].view;
+      const kind=item.kind==='hookah'?'mouthpiece':item.kind,view=kind==='energy'?spec.energy.view:models.recipe.models[kind].view;
       const bob=getWalk()?.moving?Math.sin(actionClock*8)*motion.walkBob:Math.sin(actionClock*1.6)*motion.breathBob;
       origin.fromArray(view.position);direction.fromArray(view.usePosition);origin.lerp(direction,use);origin.y+=bob;
       const panel=document.body.classList.contains('panel-open')?document.getElementById('panel')?.getBoundingClientRect():null;
@@ -159,7 +171,7 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
       const grip=network?.gripForPlayer?.(item.owner);
       if(grip){
         grip.updateWorldMatrix(true,false);grip.getWorldQuaternion(root.quaternion);grip.getWorldPosition(root.position);
-        root.position.add(origin.set(0,-grips.spec.presets[item.kind].socket[1],0).applyQuaternion(root.quaternion));
+        root.position.add(origin.set(0,-grips.spec.presets[item.kind==='energy'?'beer':item.kind].socket[1],0).applyQuaternion(root.quaternion));
         root.visible=true;return;
       }
       const yaw=p.lookYaw??p.yaw??0;root.position.set(p.x,(p.eyeY??p.y+1.68)-.65+use*.35,p.z);
@@ -180,20 +192,23 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
     if(!network){sim.step(dt,[pose()]);accept(sim.snapshot());}
     else if(state)state={...state,time:state.time+dt};
     if(!state)return false;
+    let fridgeTree=fridge;while(fridgeTree?.parent)fridgeTree=fridgeTree.parent;if(fridgeTree!==scene)fridge=scene.getObjectByName('fridge_door_hinge');
+    const targetAngle=state.fridgeOpen?spec.fridge.openAngle:0;fridgeAngle+=(targetAngle-fridgeAngle)*(1-Math.exp(-dt*12));if(fridge)fridge.rotation.y=fridgeAngle;
+    const boosted=boost.update(state.boosts?.find(b=>b.actorId===selfId()),state.time,active()&&!pipe?.photo),debrisMoving=litter.update(state);
     const h=held();
     if(h&&!active()&&!pending)command('return',h.id);
     if(h&&!network&&(getPaper()?.held||getTV()?.status?.held))command('return',h.id);
     pickClock-=dt;if(pickClock<=0){pickClock=.10;aim();}
     handRoot.visible=!!h&&active()&&!pipe?.photo;
-    if(h&&handRoot.visible){positionHeld(handRoot,h,true);if(h.kind==='beer')paintBottle(handModel,h,dt);}
+    if(h&&handRoot.visible){positionHeld(handRoot,h,true);if(h.kind==='beer')paintBottle(handModel,h,dt);if(h.kind==='energy')paintEnergy(handModel,h);}
     for(const item of state.items){
       const o=objects.get(item.id);if(!o)continue;
-      o.visible=item.kind==='hookah'||item.status==='ready'||item.status==='flying';o.position.fromArray(item.position);
-      if(item.kind==='beer'){if(item.status==='flying'){o.rotation.set(actionClock*11,actionClock*6,actionClock*4);}else o.rotation.set(0,0,0);if(o.visible)paintBottle(o,item,dt);}else if(item.status==='ready')o.rotation.fromArray([...models.recipe.models[item.kind].restEuler,'XYZ']);
+      o.visible=item.kind==='hookah'||item.status==='ready'&&(item.kind!=='energy'||state.fridgeOpen)||item.status==='flying'||item.status==='resting';o.position.fromArray(item.position);
+      if(item.kind==='beer'){if(item.status==='flying'){o.rotation.set(actionClock*11,actionClock*6,actionClock*4);}else o.rotation.set(0,0,0);if(o.visible)paintBottle(o,item,dt);}else if(item.kind==='energy'){paintEnergy(o,item);o.rotation.set(item.status==='resting'?Math.PI/2:item.status==='flying'?actionClock*8:0,Math.PI/2,item.status==='resting'?.4:0);}else if(item.status==='ready')o.rotation.fromArray([...models.recipe.models[item.kind].restEuler,'XYZ']);
       if(item.kind==='hookah')o.userData.restTip.visible=item.status!=='held';
       const remote=item.status==='held'&&item.owner!==selfId();let prop=remoteProps.get(item.id);
-      if(remote&&!prop){prop=item.kind==='hookah'?models.mouthpiece():models[item.kind]({id:item.id});remoteProps.set(item.id,prop);remoteRoot.add(prop);}
-      if(prop){prop.visible=remote;if(remote){positionHeld(prop,item,false);if(item.kind==='beer')paintBottle(prop,item,dt);}}
+      if(remote&&!prop){prop=item.kind==='energy'?energyModels.create({id:item.id}):item.kind==='hookah'?models.mouthpiece():models[item.kind]({id:item.id});remoteProps.set(item.id,prop);remoteRoot.add(prop);}
+      if(prop){prop.visible=remote;if(remote){positionHeld(prop,item,false);if(item.kind==='beer')paintBottle(prop,item,dt);if(item.kind==='energy')paintEnergy(prop,item);}}
       if(item.kind==='hookah')updateHose(item);
       const a=item.action,progress=actionProgress(item);
       if(a?.kind==='puff'&&progress>.25&&progress<1){
@@ -207,33 +222,37 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
         }
       }
     }
-    renderHUD();return effects.update(dt,camera)||!!h||state.items.some(i=>i.status==='flying'||i.action&&actionProgress(i)<1);
+    renderHUD();return effects.update(dt,camera)||boosted||debrisMoving||Math.abs(fridgeAngle-targetAngle)>.001||!!h||state.items.some(i=>i.status==='flying'||i.action&&actionProgress(i)<1);
   }
   const stop=e=>{e.preventDefault();e.stopImmediatePropagation();};
   function onKey(e){
     if(typing(e)||e.metaKey||e.ctrlKey||e.altKey||!active()||!ready)return;
     const h=held();
-    if(e.code==='KeyE'&&!e.repeat&&aimed&&!h){command('take',aimed.id);stop(e);}
-    else if(h&&(e.code==='KeyQ'||e.code==='KeyX')){if(!e.repeat)command(e.code==='KeyQ'&&h.kind==='beer'?'throw':'return',h.id);stop(e);}
-    else if(h&&e.code==='KeyE'&&!worldBusy()&&!getSeats()?.active){if(!e.repeat)command(h.kind==='beer'?'sip':'puff',h.id);stop(e);}
+    if(e.code==='KeyE'&&!e.repeat&&aimed?.kind==='fridge'){command('fridge','fridge');stop(e);}
+    else if(e.code==='KeyE'&&!e.repeat&&aimed&&!h){command('take',aimed.id);stop(e);}
+    else if(h?.kind==='energy'&&e.code==='KeyC'){if(!e.repeat)command('crush',h.id);stop(e);}
+    else if(h&&(e.code==='KeyQ'||e.code==='KeyX')){if(!e.repeat)command(e.code==='KeyQ'&&isDrink(h)?'throw':'return',h.id);stop(e);}
+    else if(h&&e.code==='KeyE'&&!worldBusy()&&!getSeats()?.active){if(!e.repeat)command(isDrink(h)?'sip':'puff',h.id);stop(e);}
     else if(h&&/^Digit[1-5]$/.test(e.code)&&!e.repeat)command('return',h.id);
   }
   function onPointer(e){
     if(e.target!==canvas||!active()||!ready||e.button!==0||e.pointerType==='touch')return;
-    const h=held();if(h&&!worldBusy()){command(h.kind==='beer'?'sip':'puff',h.id);stop(e);}
+    // A held drink owns primary click. World doors/seats keep E, so looking
+    // at a nearby interaction never silently disables drinking.
+    const h=held();if(h){command(isDrink(h)?'sip':'puff',h.id);stop(e);}
   }
-  take.onclick=()=>command('take',aimed?.id);use.onclick=()=>{const h=held();if(h)command(h.kind==='beer'?'sip':'puff',h.id);};
-  put.onclick=()=>{const h=held();if(h)command(h.kind==='beer'?'throw':'return',h.id);};back.onclick=()=>command('return');
+  take.onclick=()=>command(aimed?.kind==='fridge'?'fridge':'take',aimed?.id);use.onclick=()=>{const h=held();if(h)command(h.kind==='energy'&&h.sips===spec.rules.sips&&!h.crushed?'crush':isDrink(h)?'sip':'puff',h.id);};
+  put.onclick=()=>{const h=held();if(h)command(isDrink(h)?'throw':'return',h.id);};back.onclick=()=>command('return');
   window.addEventListener('keydown',onKey,true);window.addEventListener('pointerdown',onPointer,true);
   const loading=fetch('spec/party.json').then(r=>{if(!r.ok)throw Error('party_config');return r.json();}).then(async data=>{
-    if(disposed)return;spec=data;const floorAt=createPartyGround({plan,site});sim=createPartySimulation({spec,collision:traceCollision,floorAt});grips=createPartyHands();[models]=await Promise.all([createPartyModels(THREE,spec),grips.ready]);if(disposed){models.dispose();grips.dispose();return;}overlay=createPartyOverlay({THREE,renderer,scene,camera,pipe,root:handRoot,active:()=>!!held()&&active()&&!pipe.photo});effects=createPartyEffects({THREE,scene,spec,glassColor:models.recipe.bottle.glassTint,floorAt,getSound:()=>getVM()?.sound});
+    if(disposed)return;spec=data;const floorAt=createPartyGround({plan,site});sim=createPartySimulation({spec,collision:traceCollision,floorAt});grips=createPartyHands();[models,energyModels]=await Promise.all([createPartyModels(THREE,spec),createEnergyModels(THREE,spec),grips.ready]);if(disposed){models.dispose();energyModels.dispose();grips.dispose();return;}boost=createPartyBoost({canvas,spec});litter=createPartyLitter({THREE,scene:world,spec,floorAt});overlay=createPartyOverlay({THREE,renderer,scene,camera,pipe,root:handRoot,active:()=>!!held()&&active()&&!pipe.photo});effects=createPartyEffects({THREE,scene,spec,glassColor:models.recipe.bottle.glassTint,floorAt,getSound:()=>getVM()?.sound});
     await whenRoom;if(disposed)return;
     warmViews=new THREE.Group();
-    for(const kind of ['beer','vape','hookah']){const preview=new THREE.Group();preview.add(models.create(kind==='hookah'?'mouthpiece':kind,{held:true}),grips.create(kind));warmViews.add(preview);}
+    for(const kind of ['beer','vape','hookah','energy']){const preview=new THREE.Group();preview.add(kind==='energy'?energyModels.create({held:true}):models.create(kind==='hookah'?'mouthpiece':kind,{held:true}),grips.create(kind==='energy'?'beer':kind));warmViews.add(preview);}
     await overlay.warm(warmViews,()=>disposed);if(disposed)return;
     crate=models.crate();crate.rotation.fromArray([...models.recipe.models.crate.restEuler,'XYZ']);world.add(crate);
     for(const def of spec.items){
-      const o=models[def.kind]({id:def.id});o.position.fromArray(def.position);o.userData.partyId=def.id;
+      const o=def.kind==='energy'?energyModels.create({id:def.id}):models[def.kind]({id:def.id});o.position.fromArray(def.position);o.userData.partyId=def.id;
       if(def.kind==='beer'){o.userData.breakable='glass';assignNetworkObjectIds(o,'party:'+def.id);o.userData.networkId='party:'+def.id;
         o.traverse(mesh=>{if(mesh.isMesh)shotHandlers.set(mesh,()=>{if(!network){sim.breakItem(def.id);accept(sim.snapshot());}return true;});});}
       else{o.userData.networkEntity=true;}
@@ -241,17 +260,18 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
       if(def.kind==='hookah')hose=createPartyHose({THREE,scene:world,recipe:models.recipe.hose});
     }
     ready=true;accept(network&&state?state:sim.snapshot());
-    unrestore=onRestore(()=>{if(!network){sim.reset();effects.clear();seenBreak.clear();accept(sim.snapshot());}});requestRender();
+    unrestore=onRestore(()=>{if(!network){sim.reset();effects.clear();litter.clear();boost.clear();seenBreak.clear();accept(sim.snapshot());}});requestRender();
   });
-  return {ready:loading,snapshot,setNetwork,applyNetworkSnapshot:accept,command,traceCollision,update,clearEffects(){effects?.clear();},
-    interactionPoint(id){const o=objects.get(id);if(!o)return null;o.updateWorldMatrix(true,true);return new THREE.Box3().setFromObject(o).getCenter(V()).toArray();},
-    get spec(){return spec;},get held(){return held();},get target(){return aimed;},get labels(){return{world:Object.fromEntries([...objects].filter(([,o])=>o.userData.labelId).map(([id,o])=>[id,o.userData.labelId])),held:handModel?.userData.labelId||null,remote:Object.fromEntries([...remoteProps].filter(([,o])=>o.userData.labelId).map(([id,o])=>[id,o.userData.labelId]))};},get debug(){return{ready,pending,state,effects:effects?.debug,worldItems:objects.size,liquid:handModel?.userData.liquid?.debug,visualVersion:models?.recipe.version};},
+  return {ready:loading,snapshot,setNetwork,applyNetworkSnapshot:accept,command,traceCollision,update,clearEffects(){effects?.clear();litter?.clear();},
+    interactionPoint(id){const o=id==='fridge'?fridge:objects.get(id);if(!o)return null;o.updateWorldMatrix(true,true);const box=new THREE.Box3().setFromObject(o),point=box.getCenter(V());if(o.userData.energy)point.y=box.max.y-.008;return point.toArray();},
+    get spec(){return spec;},get held(){return held();},get target(){return aimed;},get labels(){return{world:Object.fromEntries([...objects].filter(([,o])=>o.userData.labelId).map(([id,o])=>[id,o.userData.labelId])),held:handModel?.userData.labelId||null,remote:Object.fromEntries([...remoteProps].filter(([,o])=>o.userData.labelId).map(([id,o])=>[id,o.userData.labelId]))};},get debug(){return{ready,pending,state,persistentShards:litter?.count,effects:effects?.debug,worldItems:objects.size,liquid:handModel?.userData.liquid?.debug,visualVersion:models?.recipe.version};},
     dispose(){if(disposed)return;disposed=true;ready=false;generation++;window.removeEventListener('keydown',onKey,true);window.removeEventListener('pointerdown',onPointer,true);unrestore?.();
-      for(const e of [hud,take,use,put,back])e.remove();clearHand();warmViews?.clear();warmViews=null;effects?.dispose();hose?.dispose();overlay?.dispose();models?.dispose();grips?.dispose();
+      for(const e of [hud,take,use,put,back])e.remove();clearHand();warmViews?.clear();warmViews=null;effects?.dispose();litter?.dispose();boost?.dispose();energyModels?.dispose();hose?.dispose();overlay?.dispose();models?.dispose();grips?.dispose();
       world.clear();remoteRoot.clear();objects.clear();remoteProps.clear();world.removeFromParent();handRoot.removeFromParent();remoteRoot.removeFromParent();document.body.classList.remove('party-held','party-aimed');}
   };
 }
 const CSS=`
+.party-energy-effect{position:fixed;inset:0;z-index:6;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,var(--energy-tint) 150%);box-shadow:inset 0 0 100px 12px var(--energy-tint);mix-blend-mode:screen;animation:energy-breathe 1.2s ease-in-out infinite alternate}.party-energy-effect:before{content:'';position:absolute;inset:0;background:repeating-conic-gradient(from 2deg at 50% 50%,transparent 0deg 18deg,var(--energy-tint) 19deg 19.4deg,transparent 20deg 32deg);mask:radial-gradient(ellipse,transparent 45%,#000);opacity:.22}.party-energy-effect.energy-still{animation:none}.party-boost-label{position:fixed;z-index:8;right:18px;top:108px;max-width:240px;background:#17362fe8;color:#fff6dc;border:1px solid;border-radius:10px;padding:7px 11px;font:600 12px system-ui;pointer-events:none}.party-energy-effect[hidden],.party-boost-label[hidden]{display:none}@keyframes energy-breathe{from{filter:brightness(.9)}to{filter:brightness(1.15)}}
 .party-hud{position:fixed;z-index:8;left:50%;bottom:calc(var(--hud-bottom,76px) + 12px);transform:translateX(-50%);padding:10px 15px;border-radius:14px;background:#17362fe8;color:#fff3d6;box-shadow:0 4px 18px #0003;display:flex;align-items:center;gap:13px;max-width:min(660px,88vw);font:12px/1.45 system-ui;pointer-events:none;backdrop-filter:blur(8px)}
 .party-hud[hidden],.party-touch[hidden]{display:none!important}.party-title{font-weight:750;white-space:nowrap}.party-meter{color:#f7ca65;white-space:nowrap;font-weight:700;letter-spacing:1px}.party-actions{opacity:.85}.party-touch{position:fixed;z-index:9;border:1px solid #ffffff60;background:#17362fef;color:#fff3d6;border-radius:15px;padding:13px 18px;right:16px;bottom:calc(var(--hud-bottom,76px) + 180px);font:600 14px system-ui;touch-action:manipulation}.party-use{right:120px}.party-back{right:120px;bottom:calc(var(--hud-bottom,76px) + 234px)}.party-touch:disabled{opacity:.55}body.party-aimed .kd-hint,body.party-aimed .ks-hint{visibility:hidden}
 @media(max-width:650px){.party-hud{bottom:calc(var(--hud-bottom,76px) + 8px);gap:6px;flex-wrap:wrap;justify-content:center;padding:8px 12px}.party-actions{width:100%;text-align:center;font-size:11px}}

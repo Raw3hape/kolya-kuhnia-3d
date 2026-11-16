@@ -1,5 +1,6 @@
 {
   "_about": "Кухня по эскизу SketchUp (source/refs/sketchup-*.webp). Править можно, это авторский файл. Метры, оси как в plan.generated.json.",
+  "fridgeInterior": { "color": "#f1f0e7", "emissive": "#ffe6b8", "glow": 0.025, "shelfColor": "#d8ded7", "shelfGlow": 0.012 },
   "worktop": { "height": 0.90, "thickness": 0.02, "overhang": 0.02 },
   "plinth": { "height": 0.10, "recess": 0.05 },
   "frontGap": 0.003,

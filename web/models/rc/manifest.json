@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "seed": 20261116,
+  "generator": "tools/rc/build.py",
+  "recipe": "web/spec/rc.json",
+  "asset": "garage.glb",
+  "sha256": "d25c3a0f64c425bf4b995ca4853b4644d106607e0924a68fd9327ad5f7c0d7e1",
+  "bytes": 1997252,
+  "cars": [
+    {
+      "id": "rally",
+      "node": "rc_rally",
+      "triangles": 17652,
+      "wheelNodes": [
+        "wheel_FL",
+        "wheel_FR",
+        "wheel_RL",
+        "wheel_RR"
+      ],
+      "length": 1.5,
+      "width": 0.78,
+      "height": 0.96,
+      "features": [
+        "bolted wide arches",
+        "hood louvres",
+        "roof air intake",
+        "white multi-spoke rims",
+        "rally skid plate",
+        "four spotlights"
+      ],
+      "reference": "tools/rc/concepts/rally.jpg"
+    },
+    {
+      "id": "gt",
+      "node": "rc_gt",
+      "triangles": 13880,
+      "wheelNodes": [
+        "wheel_FL.001",
+        "wheel_FR.001",
+        "wheel_RL.001",
+        "wheel_RR.001"
+      ],
+      "length": 1.63,
+      "width": 0.84,
+      "height": 0.87,
+      "features": [
+        "sculpted cyan coupe",
+        "navy center livery",
+        "splitter stays",
+        "side intake",
+        "rear diffuser",
+        "large elevated wing"
+      ],
+      "reference": "tools/rc/concepts/gt.jpg"
+    },
+    {
+      "id": "jeep",
+      "node": "rc_jeep",
+      "triangles": 18640,
+      "wheelNodes": [
+        "wheel_FL.002",
+        "wheel_FR.002",
+        "wheel_RL.002",
+        "wheel_RR.002"
+      ],
+      "length": 1.48,
+      "width": 0.82,
+      "height": 1.06,
+      "features": [
+        "upright square cabin",
+        "roof rack",
+        "rear spare",
+        "seven-slot grille",
+        "offroad bumper",
+        "snorkel"
+      ],
+      "reference": "tools/rc/concepts/jeep.jpg"
+    },
+    {
+      "id": "buggy",
+      "node": "rc_buggy",
+      "triangles": 12936,
+      "wheelNodes": [
+        "wheel_FL.003",
+        "wheel_FR.003",
+        "wheel_RL.003",
+        "wheel_RR.003"
+      ],
+      "length": 1.56,
+      "width": 0.87,
+      "height": 0.88,
+      "features": [
+        "exposed space frame",
+        "triangulated roll cage",
+        "long travel coilovers",
+        "rear engine",
+        "rally light bar",
+        "knobby tires"
+      ],
+      "reference": "tools/rc/concepts/buggy.jpg"
+    },
+    {
+      "id": "drift",
+      "node": "rc_drift",
+      "triangles": 14844,
+      "wheelNodes": [
+        "wheel_FL.004",
+        "wheel_FR.004",
+        "wheel_RL.004",
+        "wheel_RR.004"
+      ],
+      "length": 1.65,
+      "width": 0.8,
+      "height": 0.87,
+      "features": [
+        "widebody coupe",
+        "deep dish five-spoke rims",
+        "exposed intercooler",
+        "ducktail and tall wing",
+        "twin tailpipes"
+      ],
+      "reference": "tools/rc/concepts/drift.jpg"
+    },
+    {
+      "id": "pickup",
+      "node": "rc_pickup",
+      "triangles": 14756,
+      "wheelNodes": [
+        "wheel_FL.005",
+        "wheel_FR.005",
+        "wheel_RL.005",
+        "wheel_RR.005"
+      ],
+      "length": 1.64,
+      "width": 0.82,
+      "height": 0.96,
+      "features": [
+        "short cab",
+        "open ribbed cargo bed",
+        "rear roll bar",
+        "stout offroad tires",
+        "toolbox"
+      ],
+      "reference": "tools/rc/concepts/pickup.jpg"
+    },
+    {
+      "id": "formula",
+      "node": "rc_formula",
+      "triangles": 12436,
+      "wheelNodes": [
+        "wheel_FL.006",
+        "wheel_FR.006",
+        "wheel_RL.006",
+        "wheel_RR.006"
+      ],
+      "length": 1.75,
+      "width": 0.9,
+      "height": 0.69,
+      "features": [
+        "open wheel",
+        "tapered monocoque",
+        "double wishbones",
+        "cockpit halo",
+        "front multi element wing",
+        "rear endplates"
+      ],
+      "reference": "tools/rc/concepts/formula.jpg"
+    },
+    {
+      "id": "van",
+      "node": "rc_van",
+      "triangles": 14156,
+      "wheelNodes": [
+        "wheel_FL.007",
+        "wheel_FR.007",
+        "wheel_RL.007",
+        "wheel_RR.007"
+      ],
+      "length": 1.53,
+      "width": 0.81,
+      "height": 1.06,
+      "features": [
+        "tall delivery body",
+        "parcel roof box",
+        "rear barn doors",
+        "sliding door tracks",
+        "parcel decals"
+      ],
+      "reference": "tools/rc/concepts/van.jpg"
+    },
+    {
+      "id": "classic",
+      "node": "rc_classic",
+      "triangles": 14140,
+      "wheelNodes": [
+        "wheel_FL.008",
+        "wheel_FR.008",
+        "wheel_RL.008",
+        "wheel_RR.008"
+      ],
+      "length": 1.33,
+      "width": 0.76,
+      "height": 0.92,
+      "features": [
+        "round retro lights",
+        "curved compact roof",
+        "chrome bumpers",
+        "rear engine vents",
+        "small sport rims"
+      ],
+      "reference": "tools/rc/concepts/classic.jpg"
+    },
+    {
+      "id": "prototype",
+      "node": "rc_prototype",
+      "triangles": 13588,
+      "wheelNodes": [
+        "wheel_FL.009",
+        "wheel_FR.009",
+        "wheel_RL.009",
+        "wheel_RR.009"
+      ],
+      "length": 1.72,
+      "width": 0.87,
+      "height": 0.8200000000000001,
+      "features": [
+        "pointed sculpted nose",
+        "narrow canopy",
+        "razor LED strip",
+        "floating aero wings",
+        "rear light bar"
+      ],
+      "reference": "tools/rc/concepts/prototype.jpg"
+    }
+  ],
+  "compression": "glTF Transform dedup + Meshopt"
+}

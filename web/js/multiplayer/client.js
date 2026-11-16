@@ -155,7 +155,7 @@ export function createMultiplayerClient({
     if (announce) setStatus('idle');
   }
   return {
-    create: ({ name, apartment, collision, objects, doors, items, seats, interactions, interactionMeta, partySpec }) => start({ type: 'create', name, apartment, collision, objects, doors, items, seats, interactions, interactionMeta, partySpec }),
+    create: ({ name, apartment, collision, objects, doors, items, seats, interactions, interactionMeta, partySpec, rcSpec }) => start({ type: 'create', name, apartment, collision, objects, doors, items, seats, interactions, interactionMeta, partySpec, rcSpec }),
     join: ({ room: nextRoom, name, key }) => start({ type: 'join', room: nextRoom, name, key }),
     send, request, leave: () => stop(),
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },

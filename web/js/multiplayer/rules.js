@@ -1,13 +1,13 @@
 // Shared gameplay limits. Imported by both the browser and the room authority.
 export const NETWORK_RULES = Object.freeze({
-  version: 5, maxPlayers: 10, tickHz: 60, snapshotHz: 20,
+  version: 6, maxPlayers: 10, tickHz: 60, snapshotHz: 20,
   inputHz: 20, interpolationMs: 100, staleMs: 3000,
   heartbeatMs: 1500, timeoutMs: 6500, resumeMs: 60000,
   maxMessageBytes: 192000, maxObjects: 4096, maxEffects: 192,
   maxEffectsBytes: 32768, maxAmbientBytes: 32768,
   maxInputBatch: 12, maxInputDt: 0.05, inputBudget: 0.16,
   maxCollisionBoxes: 1024, maxRays: 9, maxEffectsPerRay: 16,
-  itemReach: 2.4, doorReach: 2.5, hoodReach: 2.9, originTolerance: 0.8,
+  handoffEyeOffset: 0.4, collisionGeometryMargin: 0.06, itemReach: 2.4, doorReach: 2.5, hoodReach: 2.9, originTolerance: 0.8,
   roomIdleMs: 86400000, maxRoomMs: 21600000,
 });
 

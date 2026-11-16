@@ -1,0 +1,612 @@
+{
+  "version": 1,
+  "asset": "models/rc/garage.glb",
+  "_about": "Original ten-car RC garage. Metres; glTF +Z nose, +Y up. Vehicle forces are cannon-es RaycastVehicle, not a bespoke physics model. Authoring sources tools/rc/.",
+  "table": {
+    "position": [
+      -1.43,
+      0.0,
+      -1.82
+    ],
+    "size": [
+      1.34,
+      0.74,
+      0.48
+    ]
+  },
+  "controllers": {
+    "columns": 5,
+    "spacing": [
+      0.245,
+      0.2
+    ],
+    "height": 0.772,
+    "reach": 2.1
+  },
+  "arena": {
+    "kinds": [
+      "field",
+      "meadow"
+    ],
+    "home": [
+      1.67,
+      -1.31
+    ],
+    "minDistance": 12,
+    "maxDistance": 150,
+    "margin": 1.0,
+    "spawn": {
+      "center": [
+        0,
+        -44
+      ],
+      "columns": 5,
+      "spacing": [
+        2.5,
+        3.5
+      ]
+    }
+  },
+  "physics": {
+    "fixedStep": 0.016666666666666666,
+    "maxSubSteps": 6,
+    "mass": 42,
+    "engineForce": 90,
+    "reverseForce": 55,
+    "maxSpeed": 12,
+    "reverseMaxSpeed": 5,
+    "brakeForce": 8,
+    "idleBrake": 0.3,
+    "wheelRadius": 0.17,
+    "track": 0.69,
+    "wheelbase": 0.94,
+    "chassisHalf": [
+      0.33,
+      0.13,
+      0.61
+    ],
+    "chassisOffset": 0.27,
+    "maxSteer": 0.48,
+    "steerResponse": 13,
+    "highSpeedSteer": 0.42,
+    "suspension": {
+      "stiffness": 48,
+      "restLength": 0.16,
+      "travel": 0.14,
+      "compression": 4.4,
+      "relaxation": 2.8,
+      "frictionSlip": 3.7,
+      "rollInfluence": 0.035
+    },
+    "staleInputSeconds": 0.28,
+    "respawnSeconds": 4,
+    "maxHp": 100,
+    "inputHz": 30,
+    "remoteSmooth": 18,
+    "resetCooldown": 2,
+    "angularFactor": [
+      0.32,
+      1,
+      0.32
+    ],
+    "linearDamping": 0.1,
+    "angularDamping": 0.65,
+    "shapeOffset": [
+      0,
+      0.1,
+      0
+    ]
+  },
+  "view": {
+    "controllerPosition": [
+      0.0,
+      -0.34,
+      -0.52
+    ],
+    "controllerRotation": [
+      -0.24,
+      0,
+      0
+    ],
+    "lookHeight": 0.36,
+    "followResponse": 11,
+    "cameraFov": 65,
+    "orbit": {
+      "pitch": 0.46,
+      "minPitch": 0.12,
+      "maxPitch": 1.15,
+      "distance": 5.8,
+      "minDistance": 3.0,
+      "maxDistance": 12,
+      "sensitivity": 0.006,
+      "manualSeconds": 3.0,
+      "recenterResponse": 2.8,
+      "zoomSensitivity": 0.0018
+    }
+  },
+  "designs": [
+    {
+      "id": "rally",
+      "name": "Пан Ралли",
+      "type": "rally",
+      "color": "#ef4d41",
+      "accent": "#fff2d1",
+      "number": "01",
+      "length": 1.5,
+      "width": 0.78,
+      "roof": 0.69,
+      "wheel": 0.17,
+      "spoiler": true,
+      "lights": 4,
+      "cabin": [
+        -0.27,
+        -0.12,
+        0.23,
+        0.35
+      ],
+      "roofWidth": 0.325,
+      "profile": [
+        [
+          -0.5,
+          0.41,
+          0.43
+        ],
+        [
+          -0.37,
+          0.47,
+          0.45
+        ],
+        [
+          0,
+          0.47,
+          0.44
+        ],
+        [
+          0.33,
+          0.47,
+          0.45
+        ],
+        [
+          0.5,
+          0.43,
+          0.42
+        ]
+      ],
+      "features": [
+        "bolted wide arches",
+        "hood louvres",
+        "roof air intake",
+        "white multi-spoke rims",
+        "rally skid plate",
+        "four spotlights"
+      ]
+    },
+    {
+      "id": "gt",
+      "name": "Курьер GT",
+      "type": "gt",
+      "color": "#25bada",
+      "accent": "#14293c",
+      "number": "02",
+      "length": 1.63,
+      "width": 0.84,
+      "roof": 0.6,
+      "wheel": 0.16,
+      "spoiler": true,
+      "lights": 2,
+      "cabin": [
+        -0.28,
+        -0.065,
+        0.13,
+        0.31
+      ],
+      "roofWidth": 0.3,
+      "profile": [
+        [
+          -0.5,
+          0.4,
+          0.36
+        ],
+        [
+          -0.38,
+          0.48,
+          0.42
+        ],
+        [
+          -0.2,
+          0.46,
+          0.43
+        ],
+        [
+          0.05,
+          0.43,
+          0.43
+        ],
+        [
+          0.3,
+          0.5,
+          0.46
+        ],
+        [
+          0.5,
+          0.44,
+          0.38
+        ]
+      ],
+      "features": [
+        "sculpted cyan coupe",
+        "navy center livery",
+        "splitter stays",
+        "side intake",
+        "rear diffuser",
+        "large elevated wing"
+      ]
+    },
+    {
+      "id": "jeep",
+      "name": "Лесной Пан",
+      "type": "jeep",
+      "color": "#82bb47",
+      "accent": "#fff0bf",
+      "number": "03",
+      "length": 1.48,
+      "width": 0.82,
+      "roof": 0.79,
+      "wheel": 0.2,
+      "spare": true,
+      "rack": true,
+      "lights": 2,
+      "cabin": [
+        -0.26,
+        -0.2,
+        0.24,
+        0.31
+      ],
+      "roofWidth": 0.37,
+      "profile": [
+        [
+          -0.5,
+          0.43,
+          0.44
+        ],
+        [
+          -0.34,
+          0.47,
+          0.47
+        ],
+        [
+          0,
+          0.47,
+          0.45
+        ],
+        [
+          0.36,
+          0.47,
+          0.45
+        ],
+        [
+          0.5,
+          0.44,
+          0.43
+        ]
+      ],
+      "features": [
+        "upright square cabin",
+        "roof rack",
+        "rear spare",
+        "seven-slot grille",
+        "offroad bumper",
+        "snorkel"
+      ]
+    },
+    {
+      "id": "buggy",
+      "name": "Песочный Дзык",
+      "type": "buggy",
+      "color": "#ffb52e",
+      "accent": "#22283e",
+      "number": "04",
+      "length": 1.56,
+      "width": 0.87,
+      "roof": 0.61,
+      "wheel": 0.19,
+      "cage": true,
+      "lights": 2,
+      "features": [
+        "exposed space frame",
+        "triangulated roll cage",
+        "long travel coilovers",
+        "rear engine",
+        "rally light bar",
+        "knobby tires"
+      ]
+    },
+    {
+      "id": "drift",
+      "name": "Пирог Дрифт",
+      "type": "drift",
+      "color": "#b283ed",
+      "accent": "#ffed78",
+      "number": "05",
+      "length": 1.65,
+      "width": 0.8,
+      "roof": 0.6,
+      "wheel": 0.16,
+      "spoiler": true,
+      "lights": 2,
+      "cabin": [
+        -0.26,
+        -0.08,
+        0.13,
+        0.3
+      ],
+      "roofWidth": 0.33,
+      "profile": [
+        [
+          -0.5,
+          0.43,
+          0.4
+        ],
+        [
+          -0.31,
+          0.48,
+          0.45
+        ],
+        [
+          0.03,
+          0.46,
+          0.44
+        ],
+        [
+          0.32,
+          0.5,
+          0.45
+        ],
+        [
+          0.5,
+          0.44,
+          0.41
+        ]
+      ],
+      "features": [
+        "widebody coupe",
+        "deep dish five-spoke rims",
+        "exposed intercooler",
+        "ducktail and tall wing",
+        "twin tailpipes"
+      ]
+    },
+    {
+      "id": "pickup",
+      "name": "Жук Пикап",
+      "type": "pickup",
+      "color": "#f17fa3",
+      "accent": "#f7efdf",
+      "number": "06",
+      "length": 1.64,
+      "width": 0.82,
+      "roof": 0.69,
+      "wheel": 0.19,
+      "bed": true,
+      "lights": 2,
+      "cabin": [
+        -0.27,
+        -0.19,
+        0.02,
+        0.09
+      ],
+      "roofWidth": 0.35,
+      "profile": [
+        [
+          -0.5,
+          0.43,
+          0.43
+        ],
+        [
+          -0.33,
+          0.48,
+          0.46
+        ],
+        [
+          0,
+          0.47,
+          0.44
+        ],
+        [
+          0.5,
+          0.46,
+          0.43
+        ]
+      ],
+      "features": [
+        "short cab",
+        "open ribbed cargo bed",
+        "rear roll bar",
+        "stout offroad tires",
+        "toolbox"
+      ]
+    },
+    {
+      "id": "formula",
+      "name": "Формула Бигос",
+      "type": "formula",
+      "color": "#f3e64d",
+      "accent": "#253b37",
+      "number": "07",
+      "length": 1.75,
+      "width": 0.9,
+      "roof": 0.42,
+      "wheel": 0.17,
+      "spoiler": true,
+      "openWheel": true,
+      "lights": 0,
+      "features": [
+        "open wheel",
+        "tapered monocoque",
+        "double wishbones",
+        "cockpit halo",
+        "front multi element wing",
+        "rear endplates"
+      ]
+    },
+    {
+      "id": "van",
+      "name": "Пачкомат Экспресс",
+      "type": "van",
+      "color": "#42bba3",
+      "accent": "#ffdf78",
+      "number": "08",
+      "length": 1.53,
+      "width": 0.81,
+      "roof": 0.79,
+      "wheel": 0.17,
+      "box": true,
+      "lights": 2,
+      "cabin": [
+        -0.38,
+        -0.29,
+        -0.06,
+        0.02
+      ],
+      "roofWidth": 0.365,
+      "profile": [
+        [
+          -0.5,
+          0.44,
+          0.44
+        ],
+        [
+          -0.34,
+          0.48,
+          0.47
+        ],
+        [
+          0.4,
+          0.48,
+          0.47
+        ],
+        [
+          0.5,
+          0.44,
+          0.45
+        ]
+      ],
+      "features": [
+        "tall delivery body",
+        "parcel roof box",
+        "rear barn doors",
+        "sliding door tracks",
+        "parcel decals"
+      ]
+    },
+    {
+      "id": "classic",
+      "name": "Малюх Турбо",
+      "type": "classic",
+      "color": "#ef8a42",
+      "accent": "#f7f4e4",
+      "number": "09",
+      "length": 1.33,
+      "width": 0.76,
+      "roof": 0.65,
+      "wheel": 0.16,
+      "lights": 2,
+      "cabin": [
+        -0.3,
+        -0.18,
+        0.18,
+        0.31
+      ],
+      "roofWidth": 0.32,
+      "profile": [
+        [
+          -0.5,
+          0.36,
+          0.39
+        ],
+        [
+          -0.35,
+          0.47,
+          0.44
+        ],
+        [
+          0,
+          0.46,
+          0.44
+        ],
+        [
+          0.32,
+          0.46,
+          0.43
+        ],
+        [
+          0.5,
+          0.36,
+          0.38
+        ]
+      ],
+      "features": [
+        "round retro lights",
+        "curved compact roof",
+        "chrome bumpers",
+        "rear engine vents",
+        "small sport rims"
+      ]
+    },
+    {
+      "id": "prototype",
+      "name": "Варшава 2077",
+      "type": "prototype",
+      "color": "#6c8beb",
+      "accent": "#d2fffb",
+      "number": "10",
+      "length": 1.72,
+      "width": 0.87,
+      "roof": 0.55,
+      "wheel": 0.16,
+      "spoiler": true,
+      "lights": 2,
+      "cabin": [
+        -0.31,
+        -0.09,
+        0.17,
+        0.36
+      ],
+      "roofWidth": 0.26,
+      "profile": [
+        [
+          -0.5,
+          0.32,
+          0.31
+        ],
+        [
+          -0.33,
+          0.49,
+          0.39
+        ],
+        [
+          -0.1,
+          0.44,
+          0.42
+        ],
+        [
+          0.25,
+          0.5,
+          0.42
+        ],
+        [
+          0.5,
+          0.39,
+          0.33
+        ]
+      ],
+      "features": [
+        "pointed sculpted nose",
+        "narrow canopy",
+        "razor LED strip",
+        "floating aero wings",
+        "rear light bar"
+      ]
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import { createHuntSimulation } from './hunt-simulation.js';
 import { makeAvatarAction } from './action-contract.js';
 import { createPartySimulation, createPartyGround } from '../party-state.js';
 import { createSocialSimulation } from '../social-state.js';
+import { createRCSimulation } from '../rc-state.js';
 
 const finite = Number.isFinite;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -64,11 +65,12 @@ export function rayBox(origin, direction, bounds, range = Infinity) {
   return { distance: near, point: origin.map((v, i) => q(v + direction[i] * near)), normal };
 }
 
-export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, socialSpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
+export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, socialSpec, rcSpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
   const players = new Map(), links = new Map(), objects = new Map(), broken = new Set();
   const completedExternal = new Set(), killedExternal = new Set();
   const effectSizes = new Map(), pendingExternal = new Map();
   const col = buildColliders(plan), hunt = createHuntSimulation({ spec: huntSpec, site, plan, seed });
+  const rc = rcSpec ? createRCSimulation({ spec: rcSpec, site }) : null;
   let apartment = null, hostId = null, revision = 0, seq = 0, eventSeq = 0, time = 0, disposed = false;
   let extra = [], ambientExtra = [], doorMeta = [], doors = {}, items = {}, itemMeta = [], seatMeta = [], seats = {}, effects = [], effectsBytes = 2, snapshotClock = 0, epoch = 0, ambient = null;
   let interactionMeta = { media: {}, newspaperPages: [], hoodPosition: null }, interactions = {};
@@ -276,7 +278,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   function releaseItems(p) {
     const paper = items.newspaper === p.id;
     for (const id of Object.keys(items)) if (items[id] === p.id) items[id] = null;
-    party.release(p.id); social?.releaseItem(p.id); p.held = null; if (paper) advanceNewspaper();
+    party.release(p.id); social?.releaseItem(p.id); rc?.releasePlayer(p.id); p.held = null; if (paper) advanceNewspaper();
   }
   function releaseSeat(p) { for (const id of Object.keys(seats)) if (seats[id] === p.id) seats[id] = null; p.seat = null; p.seatOrigin = null; p.eyeY = null; p.lookYaw = p.yaw; }
   function release(p) { releaseItems(p); releaseSeat(p); social?.release(p.id); }
@@ -297,7 +299,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       p.pitch = clamp(cmd.pitch, -Math.PI / 2.05, Math.PI / 2.05);
       if (finite(cmd.aiming)) p.aiming = p.held ? 0 : clamp(cmd.aiming, 0, 1);
       if (weaponOf(cmd.weapon)) equip(p, cmd.weapon);
-      if (p.seat) continue;
+      if (p.seat || rc?.held(p.id)) continue;
       const length = Math.hypot(cmd.dx, cmd.dz), max = WALK.run * allowed;
       const k = length > max ? max / length : 1;
       const before = { x: p.x, z: p.z };
@@ -318,6 +320,40 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     event({ kind: 'apartment', actorId: p.id, revision }); emitSnapshot(); return true;
   }
   const releaseAll = () => { for (const p of players.values()) release(p); };
+
+  // One authority transaction for every carryable family. No optimistic ownership
+  // changes on clients; two simultaneous handoffs can never duplicate a prop.
+  function handoff(p, action) {
+    const target = players.get(action.targetId);
+    if (!target || target === p || target.link === null || p.held !== action.id || target.held ||
+      social?.heldBy(target.id) || party.held(target.id) || rc?.held(target.id) || rc?.held(p.id) && target.seat ||
+      distance([p.x, p.eyeY ?? p.y + 1.2, p.z], [target.x, target.eyeY ?? target.y + 1.2, target.z]) > R.itemReach || pathBlocked(p, target)) return false;
+    // Walking proxies have no height. Use actual 3D item bounds so a low
+    // table/stool does not become an invisible ceiling-high handoff barrier.
+    const eye = actor => actor.eyeY ?? actor.y + WALK.height / 100 * WALK.eyeRatio;
+    const origin = [p.x, eye(p) - R.handoffEyeOffset, p.z];
+    const delta = [target.x - p.x, eye(target) - eye(p), target.z - p.z], length = Math.hypot(...delta);
+    if (length > 0.01) {
+      const direction = delta.map(n => n / length), geometry = [...objects.values()];
+      if (geometry.some(o => !broken.has(o.unitId) && !(o.unitId.startsWith('party:') && party.status(o.unitId.slice(6)) !== 'ready') &&
+        rayBox(origin, direction, o.bounds, length - 0.01))) return false;
+      const represented = box => geometry.some(o => o.bounds[0] >= box.x0 - R.collisionGeometryMargin && o.bounds[3] <= box.x1 + R.collisionGeometryMargin &&
+        o.bounds[2] >= box.z0 - R.collisionGeometryMargin && o.bounds[5] <= box.z1 + R.collisionGeometryMargin);
+      if (extra.some(box => box.ax === undefined && !represented(box) && rayBox(origin, direction,
+        [box.x0, 0, box.z0, box.x1, plan.ceiling, box.z1], length - 0.01))) return false;
+    }
+    let accepted = false;
+    if (items[action.id] === p.id) { items[action.id] = target.id; accepted = true; }
+    else for (const family of [party, social, rc]) {
+      if (family?.transfer?.(p.id, target.id, action.id, [p, target])?.ok) { accepted = true; break; }
+    }
+    if (!accepted) return false;
+    target.held = action.id; p.held = null; target.weapon = 'none'; target.aiming = 0;
+    animate(p, 'drop', action.id, [target.x, target.eyeY ?? target.y + 1.2, target.z]);
+    animate(target, 'pickup', action.id, [p.x, p.eyeY ?? p.y + 1.2, p.z]);
+    event({ kind: 'handoff', actorId: p.id, targetId: target.id, itemId: action.id });
+    emitSnapshot(); return true;
+  }
 
   function reload(p, weapon) {
     const w = weaponOf(weapon), a = Object.hasOwn(p.ammo, weapon) ? p.ammo[weapon] : null;
@@ -365,12 +401,13 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       surfaces.sort((a, b) => a.distance - b.distance);
       const accepted = [], seen = new Set(); let range = w.range;
       const animal = hunt.raycast(action.origin, ray.direction, w.range);
+      const vehicle = rc?.raycast(action.origin, ray.direction, w.range);
       const candidate = externalTrace?.[rayIndex];
       const external = plain(candidate) && typeof candidate.animalId === 'string' && candidate.animalId.length <= 120 &&
         Object.hasOwn(EXTERNAL_TARGET_RULES, candidate.species) && finite(candidate.distance) && candidate.distance > 0.005 && candidate.distance <= w.range &&
         vec(candidate.point) && vec(candidate.normal) ? { animalId: candidate.animalId, species: candidate.species,
           distance: candidate.distance, point: [...candidate.point], normal: [...candidate.normal], running: !!candidate.running } : null;
-      const nearest = Math.min(animal?.distance ?? Infinity, external?.distance ?? Infinity);
+      const nearest = Math.min(animal?.distance ?? Infinity, external?.distance ?? Infinity, vehicle?.distance ?? Infinity);
       for (const surface of surfaces) {
         if (surface.distance >= nearest) break;
         const o = surface.object;
@@ -386,11 +423,13 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
         if (!o.glass) { range = Math.max(0, effect.distance - 0.01); break; }
         if (accepted.length >= R.maxEffectsPerRay) break;
       }
+      const vehicleHit = vehicle && vehicle.distance <= range && vehicle.distance <= (animal?.distance ?? Infinity) && vehicle.distance <= (external?.distance ?? Infinity) ? vehicle : null;
+      if (vehicleHit) { rc.damage(vehicleHit.id, w.damage); range = Math.min(range, Math.max(0, vehicleHit.distance - 0.01)); }
       const externalHit = external && external.distance <= range && external.distance <= (animal?.distance ?? Infinity) ? external : null;
       if (externalHit) range = Math.min(range, Math.max(0, externalHit.distance - 0.01));
       const hit = hunt.hit({ origin: action.origin, direction: ray.direction, weapon: action.weapon, range, playerId: p.id });
       if (hit) { hits.push(hit); p.score += hit.points || 0; if (hit.killed) p.kills++; }
-      rays.push({ direction: [...ray.direction], effects: accepted, ...(hit ? { hit } : {}), ...(externalHit ? { externalHit } : {}) });
+      rays.push({ direction: [...ray.direction], effects: accepted, ...(hit ? { hit } : {}), ...(externalHit ? { externalHit } : {}), ...(vehicleHit ? { vehicleHit } : {}) });
     }
     const shot = event({ kind: 'shot', actorId: p.id, shotId: action.shotId, weapon: action.weapon,
       origin: [...action.origin], direction: [...action.direction], rays, hits });
@@ -430,12 +469,32 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       case 'weapon': ok = equip(p, action.weapon); break;
       case 'shoot': ok = shoot(p, action, worldTrace, externalTrace); break;
       case 'reload': ok = reload(p, action.weapon); break;
+      case 'handoff': ok = handoff(p, action); break;
+      case 'rc': {
+        if (!rc || p.seat && action.verb === 'take') break;
+        const controller = rc.controllers.find(item => item.id === action.id);
+        if (action.verb === 'take' && (!controller || pathBlocked(p, { x: controller.position[0], z: controller.position[2] }))) break;
+        const previous = p.held;
+        const accepted = rc.command({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio }, action.verb, action.id, action.input);
+        if (!accepted?.ok) break;
+        if (action.verb === 'take') {
+          // The RC simulation already accepted its ownership. Release the other
+          // families separately so the newly acquired controller is preserved.
+          const paper = items.newspaper === p.id;
+          for (const id of Object.keys(items)) if (items[id] === p.id) items[id] = null;
+          party.release(p.id); social?.releaseItem(p.id); if (paper) advanceNewspaper();
+          p.weapon = 'none'; p.aiming = 0;
+        }
+        p.held = rc.held(p.id)?.id || (action.verb === 'release' ? null : previous);
+        if (action.verb === 'take' || action.verb === 'release') animate(p, action.verb === 'take' ? 'pickup' : 'drop', action.id, controller?.position);
+        ok = true; break;
+      }
       case 'social': {
         ok = social?.command({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio }, action) || false;
         if (ok && ['take', 'receive'].includes(action.verb)) {
           const paper = items.newspaper === p.id;
           for (const id of Object.keys(items)) if (items[id] === p.id) items[id] = null;
-          party.release(p.id); if (paper) advanceNewspaper();
+          party.release(p.id); rc?.releasePlayer(p.id); if (paper) advanceNewspaper();
           p.held = 'pizza'; p.weapon = 'none'; p.aiming = 0; animate(p, 'pickup', 'pizza');
         } else if (ok && ['place', 'return'].includes(action.verb)) { p.held = null; animate(p, 'drop', 'pizza'); }
         else if (ok && action.verb === 'eat') animate(p, 'use', 'pizza');
@@ -466,7 +525,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       }
       case 'claim': {
         const item = itemMeta.find(i => i.id === action.id);
-        if (item && !items[action.id] && distance(item.position, [p.x, p.y + 1.2, p.z]) < R.itemReach && !broken.has(item.objectId)) {
+        if (item && !items[action.id] && distance(item.position, [p.x, p.y + 1.2, p.z]) < R.itemReach && !pathBlocked(p, { x: item.position[0], z: item.position[2] }) && !broken.has(item.objectId)) {
           releaseItems(p); items[action.id] = p.id; p.held = action.id; p.weapon = 'none'; p.aiming = 0; ok = true;
           animate(p, 'pickup', action.id, item.position);
           event({ kind: 'item', actorId: p.id, targetId: action.id, owner: p.id });
@@ -474,12 +533,13 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       }
       case 'release': if (items[action.id] === p.id) { items[action.id] = null; p.held = null; if (action.id === 'newspaper') advanceNewspaper(); ok = true; animate(p, 'drop', action.id, itemMeta.find(item => item.id === action.id)?.position); event({ kind: 'item', actorId: p.id, targetId: action.id, owner: null }); } break;
       case 'party': {
+        if (action.verb === 'fridge' && partySpec?.fridge?.position && pathBlocked(p, { x: partySpec.fridge.position[0], z: partySpec.fridge.position[2] })) break;
         const item = party.snapshot().items.find(item => item.id === action.id);
         if (action.verb === 'take' && item && pathBlocked(p, { x: item.position[0], z: item.position[2] })) break;
         const accepted = party.command({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio }, action.verb, action.id, action.direction);
         if (!accepted.ok) break;
         if (action.verb === 'take') {
-          social?.releaseItem(p.id);
+          social?.releaseItem(p.id); rc?.releasePlayer(p.id);
           // Release only the older phone/paper; the party simulation has already
           // atomically replaced any previous party item owned by this player.
           const paper = items.newspaper === p.id;
@@ -487,6 +547,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
           if (paper) advanceNewspaper();
           p.weapon = 'none'; p.aiming = 0;
         }
+        if (action.verb === 'fridge') { event({ kind: 'party', verb: action.verb, state: party.snapshot() }); ok = true; break; }
         const carried = party.held(p.id); p.held = carried?.id || null;
         const kind = action.verb === 'take' ? 'pickup' : action.verb === 'return' ? 'drop' : action.verb;
         animate(p, kind, accepted.item.kind, action.verb === 'take' || action.verb === 'return' ? accepted.item.position : undefined);
@@ -517,7 +578,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       case 'sit': {
         const seat = seatMeta.find(seat => seat.id === action.id);
         if (seat && p.seat === seat.id) { ok = true; break; }
-        if (seat && (!seats[seat.id] || seats[seat.id] === p.id) && Math.hypot(p.x - seat.position[0], p.z - seat.position[2]) <= R.itemReach &&
+        if (seat && !rc?.held(p.id) && (!seats[seat.id] || seats[seat.id] === p.id) && Math.hypot(p.x - seat.position[0], p.z - seat.position[2]) <= R.itemReach &&
           roomOf(plan, seat.position[0], seat.position[2]) && !pathBlocked(p, { x: seat.position[0], z: seat.position[2] }) &&
           !others(p).some(other => Math.hypot(other.x - seat.position[0], other.z - seat.position[2]) < WALK.radius * 2)) {
           const seatOrigin = p.seatOrigin || { x: p.x, z: p.z };
@@ -539,13 +600,13 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
         const owners = { ...items }, seated = { ...seats }; setGeometry(action);
         items = Object.fromEntries(Object.keys(items).map(id => [id, owners[id] || null])); seats = Object.fromEntries(Object.keys(seats).map(id => [id, seated[id] || null]));
         for (const player of players.values()) {
-          if (player.held && items[player.held] !== player.id && party.held(player.id)?.id !== player.held && !social?.heldBy(player.id)) player.held = null;
+          if (player.held && items[player.held] !== player.id && party.held(player.id)?.id !== player.held && rc?.held(player.id)?.id !== player.held && !social?.heldBy(player.id)) player.held = null;
           if (player.seat && seats[player.seat] !== player.id) releaseSeat(player);
           else if (player.seat) { const seat = seatMeta.find(seat => seat.id === player.seat); player.x = seat.position[0]; player.z = seat.position[2]; player.eyeY = seat.eyeY; }
         }
         ok = true;
       } break;
-      case 'clear': if (p.id === hostId) { party.reset(); for (const player of players.values()) if (!items[player.held] && !social?.heldBy(player.id)) player.held = null; broken.clear(); effects = []; effectsBytes = 2; effectSizes.clear(); pendingExternal.clear(); epoch++; ok = true; event({ kind: 'clear', actorId: p.id }); } break;
+      case 'clear': if (p.id === hostId) { party.reset(); for (const player of players.values()) if (!items[player.held] && !rc?.held(player.id) && !social?.heldBy(player.id)) player.held = null; broken.clear(); effects = []; effectsBytes = 2; effectSizes.clear(); pendingExternal.clear(); epoch++; ok = true; event({ kind: 'clear', actorId: p.id }); } break;
       case 'ambient': if (p.id === hostId && link === 'local' && plain(action.ambient)) {
         try { if (byteLength(action.ambient) <= R.maxAmbientBytes) { ambient = copy(action.ambient); ambientExtra = sanitizeCollision({ extra: ambient.collision || [] }); ok = true; } } catch { /* Reject non-serializable host state. */ }
       } break;
@@ -561,11 +622,11 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
         reloading: !!p.ammo[p.weapon]?.reloadAt,
         reloadProgress: p.ammo[p.weapon]?.reloadAt ? q(clamp(1 - (p.ammo[p.weapon].reloadAt - time) / WEAPON_RULES[p.weapon].reload, 0, 1)) : 0,
         shotAge: finite(p.ammo[p.weapon]?.shotAt) ? q(Math.max(0, time - p.ammo[p.weapon].shotAt)) : null,
-        weapon: p.weapon, score: p.score, kills: p.kills, held: p.held, eyeY: p.eyeY ?? q(p.y + WALK.height / 100 * WALK.eyeRatio), carried: party.held(p.id)?.kind || null, seat: p.seat,
+        weapon: p.weapon, score: p.score, kills: p.kills, held: p.held, eyeY: p.eyeY ?? q(p.y + WALK.height / 100 * WALK.eyeRatio), carried: rc?.held(p.id) ? 'controller' : party.held(p.id)?.kind || null, seat: p.seat,
         seatY: p.seat ? seatMeta.find(seat => seat.id === p.seat)?.position[1] ?? 0 : null,
         reclined: !!p.seat && seatMeta.find(seat => seat.id === p.seat)?.posture === 'recline', ack: p.ack,
         ammo: Object.fromEntries(Object.entries(p.ammo).map(([id, a]) => [id, { mag: a.mag, reserve: a.reserve, reloading: !!a.reloadAt }])) })),
-      doors: { ...doors }, items: { ...items }, seats: { ...seats }, interactions: copy(interactions), broken: [...broken], effects: [...effects], hunt: hunt.snapshot(), ambient, party: party.snapshot(), ...(social ? { social: social.snapshot() } : {}) };
+      doors: { ...doors }, items: { ...items }, seats: { ...seats }, interactions: copy(interactions), broken: [...broken], effects: [...effects], hunt: hunt.snapshot(), ambient, party: party.snapshot(), ...(social ? { social: social.snapshot() } : {}), ...(rc ? { rc: rc.snapshot() } : {}) };
   }
   // Called only by the creator's private simulation bridge after its scene target
   // adapter has applied an already-approved shot. Never exposed as a wire action.
@@ -598,7 +659,8 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     hunt.step(dt); party.step(dt, active().map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
     social?.step(dt, active().map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
     social?.reconcileSupport(socialSupport);
-    for (const player of players.values()) if (player.held && !Object.hasOwn(items, player.held) && !party.held(player.id) && !social?.heldBy(player.id)) player.held = null;
+    rc?.step(dt, active());
+    for (const player of players.values()) if (player.held && !Object.hasOwn(items, player.held) && !party.held(player.id) && !rc?.held(player.id) && !social?.heldBy(player.id)) player.held = null;
     for (const p of players.values()) {
       p.actions = Math.max(0, p.actions - dt * 100); p.budget = Math.min(R.inputBudget, p.budget + dt);
       if (p.link !== null && now() - p.lastSeen > R.timeoutMs) { disconnect(p.link); continue; }
@@ -614,7 +676,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     if (snapshotClock >= 1 / R.snapshotHz) { snapshotClock %= 1 / R.snapshotHz; emitSnapshot(); }
     if (now() - started > R.maxRoomMs) { broadcast({ type: 'error', error: 'room_expired' }); disposed = true; }
   }
-  return { connect, receive, disconnect, step, snapshot, completeExternal, dispose() { disposed = true; links.clear(); players.clear(); },
+  return { connect, receive, disconnect, step, snapshot, completeExternal, dispose() { disposed = true; rc?.dispose(); links.clear(); players.clear(); },
     get size() { return active().length; }, get hostId() { return hostId; },
     exportState() { return { roomId, snapshot: snapshot() }; } };
 }

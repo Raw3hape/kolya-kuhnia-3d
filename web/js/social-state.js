@@ -31,6 +31,11 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     if (shower.owner === id) shower = { owner: null, until: 0 };
     cooldowns.delete(id);
   }
+  function canTake(player, verb) {
+    if (!player?.id || !pizza || pizza.owner || !near(player, pizza.position)) return false;
+    if (verb === 'receive') return !player.seat && pizza.location === 'courier' && courier?.phase === 'offering' && isEntryOpen();
+    return verb === 'take' && pizza.location !== 'courier' && !transferBusy();
+  }
   function command(player, action) {
     if (!player?.id) return false;
     const verb = action.verb;
@@ -51,13 +56,13 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     }
     if (!pizza) return false;
     if (verb === 'receive') {
-      if (player.seat || pizza.location !== 'courier' || pizza.owner || courier?.phase !== 'offering' || !isEntryOpen() || !near(player, pizza.position)) return false;
+      if (!canTake(player, verb)) return false;
       pizza.owner = player.id; pizza.location = 'held'; pizza.open = false; pizza.transferFrom = [...pizza.position]; pizza.transferAt = time; pizza.transferUntil = time + spec.courier.handoffSeconds;
       courier.recipient = player.id; setPhase('handoff'); return true;
     }
     if (pizza.location === 'courier' || transferBusy()) return false;
     if (verb === 'take') {
-      if (pizza.owner || !near(player, pizza.position)) return false;
+      if (!canTake(player, verb)) return false;
       pizza.owner = player.id; pizza.location = 'held'; pizza.open = false; pizza.safePosition = [...pizza.position];
       return true;
     }
@@ -116,7 +121,11 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     if (shower.owner && (time >= shower.until || !players.some(p => p.id === shower.owner && Math.hypot(p.x - shower.point[0], p.z - shower.point[2]) < rules.showerReach))) shower = { owner: null, until: 0 };
     for (const [id, until] of cooldowns) if (time > until + 5) cooldowns.delete(id);
   }
-  return { step, command, release, releaseItem, heldBy: id => pizza?.owner === id, reservesLanding: () => landingReserved,
+  return { step, canTake, command, release, releaseItem, heldBy: id => pizza?.owner === id, reservesLanding: () => landingReserved,
+    transfer(from, to, id) {
+      if (id !== 'pizza' || pizza?.owner !== from || !to || to === from || transferBusy()) return { ok: false };
+      pizza.owner = to; pizza.open = false; return { ok: true };
+    },
     reconcileSupport(lookup) {
       if (!pizza?.support) return;
       const before = pizza.support.bounds, after = lookup(pizza.support.id), margin = spec.pizza.size / 2 - 0.015;

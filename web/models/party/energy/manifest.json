@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "source": "tools/party/build-energy.blender.py",
+  "recipe": "web/spec/party.json#energy",
+  "labels": "tools/party/generated-labels/generation.json",
+  "variants": [
+    "zabych",
+    "panika",
+    "pierog",
+    "bobr",
+    "paragon",
+    "tram"
+  ],
+  "triangles": 13032,
+  "bytes": 1935180,
+  "units": "metres",
+  "up": "Y",
+  "provenance": "Original ChatGPT Images packaging, recipe and prompts under tools/party/generated-labels. Original deterministic Blender geometry."
+}

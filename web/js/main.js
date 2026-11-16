@@ -42,6 +42,9 @@ import { createMultiplayerSession } from './multiplayer/session.js';
 import { createParty } from './party.js';
 import { createPartyProps } from './party-props.js';
 import { createSocial } from './social.js';
+import { createRC } from './rc.js';
+import { createCarryCoordinator } from './carry-coordinator.js';
+import { createViewCameraAdapter } from './render-view-camera.js';
 
 const [plan, kit, viewSpec, site, bathSpec, socialSpec] = await Promise.all([
   fetch('spec/plan.generated.json').then(r => r.json()),
@@ -170,6 +173,8 @@ controls.screenSpacePanning = true;
 
 // Растр, качество и фото-режим (трассировка пути) живут в render.js; тон-маппинг ставит он же.
 const pipe = createPipeline({ THREE, renderer, scene, camera });
+const viewCamera = createViewCameraAdapter(camera);
+pipe.setViewCamera = value => { viewCamera.set(value); requestRender(); };
 
 // ---------- материалы слотов ----------
 
@@ -466,6 +471,7 @@ function frame(now) {
   if (life?.update(dt)) needs = true;     // LIFE: «Живой дом» — кадры только пока эффект виден
   if (party?.update(dt)) needs = true;
   if (social?.update(dt)) needs = true;
+  if (rc?.update(dt)) needs = true;
   partyProps?.updateAnchors(furnitureAnchors(furn, state, plan, kit), state);
   if (mirrors.update()) needs = true;     // BREAK: новое зеркало появилось или фото спрятало стёкла
   if (nav?.update()) needs = true;
@@ -481,8 +487,10 @@ function frame(now) {
   if (!walk?.active && !seats?.active && controls.update()) needs = true;
   if (lighting.update()) needs = true;
   const dirty = needs;
-  if (needs) { needs = false; updateCutaway(); pipe.invalidate(); }
-  pipe.render();
+  viewCamera.render(() => {
+    if (needs) { needs = false; updateCutaway(); pipe.invalidate(); }
+    pipe.render();
+  });
   if (!dirty) return;
   tv?.sync();
   paper?.sync();   // BEDROOM: газета в руке
@@ -557,8 +565,9 @@ export async function exportGLB() {
 
 // ---------- запуск ----------
 
-let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null, paper = null, hood = null, party = null, partyProps = null, partyPropsReady = null, social = null;
-const hasWorldInteraction = () => [doors, seats, hood, party, social].some(module => !!module?.target);
+let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null, paper = null, hood = null, party = null, partyProps = null, partyPropsReady = null, social = null, rc = null;
+const carry = createCarryCoordinator();
+const hasWorldInteraction = () => [doors, seats, hood, party, social, rc].some(module => !!module?.target);
 registerFurnitureUI(addSection);
 registerDecorUI(addSection);
 registerViewmodelUI(addSection, () => viewmodel);
@@ -569,7 +578,7 @@ ui = initUI({ state, defaults: DEFAULT, setState, setSplit, goView, snapshot, ex
 setQuality(ui.pref('quality') ?? DEFAULT_QUALITY);
 
 // Прогулка WASD и мини-карта. Препятствия: кухня и остров (мебель добавится сюда же).
-walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, getObstacles: () => [...walk.boxesOf(kitchen?.group), ...(furn?.colliders || []), ...bath.colliders, ...(decor?.colliders || []), ...(doors?.colliders() || []), ...(life?.colliders() || [])],
+walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, canMove: () => !rc?.controlling, getObstacles: () => [...walk.boxesOf(kitchen?.group), ...(furn?.colliders || []), ...bath.colliders, ...(decor?.colliders || []), ...(doors?.colliders() || []), ...(life?.colliders() || []), ...(rc?.colliders || [])],
   onChange: () => { if (walk.active && furnEditor?.enabled) { furnEditor.disable(); ui.info({ furnEdit: false }); } requestRender(); } });
 
 // Двери открываются взглядом + E / кликом (doors.js); руки с оружием в прогулке (viewmodel.js)
@@ -579,15 +588,24 @@ doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, wa
 afterRoom(() => { hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site }); });
 viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getWalk: () => walk, getHunt: () => hunt });
 social = createSocial({ THREE, scene, camera, canvas, pipe, plan, bathSpec, spec: socialSpec, canPlay: () => startup.status === 'ready', getWalk: () => walk, getSeats: () => seats, getVM: () => viewmodel,
-  getFurniture: () => furn, getDoors: () => doors, getParty: () => party, getTV: () => tv, getPaper: () => paper, getLife: () => life, requestRender });
+  getFurniture: () => furn, getDoors: () => doors, getParty: () => party, getTV: () => tv, getPaper: () => paper, getLife: () => life, beforeCarry: () => carry.prepare('social'), requestRender });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
-tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction });   // ТВ, ноутбуки, телефон (в руке — handheld.js: с ним можно сесть)
+tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction, beforeCarry: () => carry.prepare('phone') });   // ТВ, ноутбуки, телефон (в руке — handheld.js: с ним можно сесть)
 // BEDROOM: газета на полочке над унитазом (newspaper.js, полка — bath.js): взять E, листать, сесть с ней, Q — на место; до seats: газета под прицелом важнее унитаза под ней
-paper = createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction });
+paper = createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction, beforeCarry: () => carry.prepare('newspaper') });
 // Register item capture before seating: E on a small prop must not also sit on the sofa behind it.
 party = createParty({ THREE, scene, camera, renderer, canvas, pipe, plan, site, getWalk: () => walk, getSeats: () => seats,
   getVM: () => viewmodel, getTV: () => tv, getPaper: () => paper, getDoors: () => doors, getSocial: () => social,
-  getAnchors: () => furnitureAnchors(furn, state, plan, kit), requestRender });
+  getAnchors: () => furnitureAnchors(furn, state, plan, kit), beforeCarry: () => carry.prepare('party'), requestRender });
+rc = createRC({ THREE, scene, camera, renderer, canvas, pipe, site, getWalk: () => walk, getSeats: () => seats,
+  getVM: () => viewmodel, getParty: () => party, getTV: () => tv, getPaper: () => paper, beforeCarry: () => carry.prepare('rc'), requestRender });
+for (const [id, held, release] of [
+  ['phone', () => tv.status.held, () => tv.hold(false)],
+  ['newspaper', () => paper.held, () => paper.drop()],
+  ['party', () => !!party.held, () => party.command('return')],
+  ['social', () => social.held, () => social.command('return')],
+  ['rc', () => rc.controlling, () => rc.command('release')],
+]) carry.register(id, { held, release });
 seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender, getState: () => state,
   getFurniture: () => furn, getDecor: () => decor, getDoors: () => doors, getTV: () => tv, seating: socialSpec.seating });
 // --- KITCHEN: вытяжка над варкой (hood.js, геометрия — model.js buildHood) и крипто-биржа на мониторе в комнате 3 (ticker.js) ---
@@ -649,7 +667,7 @@ const mark = name => { try { performance.mark(`kitchen:${name}`); } catch { /* �
 prepareStartup({
   first: Promise.all([lighting.ready, furn?.ready, decor?.near, context.ready]),
   releaseDeferred: roomReady,
-  modules: () => [bath.ready, furn?.ready, decor?.ready, context.ready, context.later, paper.ready, party.ready, social.ready, partyPropsReady, life.ready],
+  modules: () => [bath.ready, furn?.ready, decor?.ready, context.ready, context.later, paper.ready, party.ready, social.ready, rc.ready, partyPropsReady, life.ready],
   enter() {
     if (!walk.active && !seats?.active && !multiplayer?.client?.connected) walk.enter();
   },
@@ -663,10 +681,11 @@ Object.defineProperties(window.__kitchen, { hood: { get: () => hood }, ticker: {
 Object.defineProperty(window.__kitchen, 'life', { get: () => life });   // LIFE
 Object.defineProperties(window.__kitchen, { party: { get: () => party }, partyProps: { get: () => partyProps } });
 Object.defineProperty(window.__kitchen, 'social', { get: () => social });
+Object.defineProperty(window.__kitchen, 'rc', { get: () => rc });
 window.__kitchen.mirrors = mirrors;   // BREAK
 multiplayer = createMultiplayerSession({ THREE, scene, plan, site, getState: () => state,
   whenReady: startup.whenPlayable,
   applyState: patch => setState(patch, { push: false, network: true }), requestRender, ui,
-  getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, party, social, partyPropsReady, furnEditor, furniture: furn, decor }) });
+  getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, party, social, rc, partyPropsReady, furnEditor, furniture: furn, decor }) });
 window.__kitchen.multiplayer = multiplayer;
 window.__kitchen.startup = startup;

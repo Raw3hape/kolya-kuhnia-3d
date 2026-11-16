@@ -17,7 +17,7 @@ addHelp(
   { mode: 'seat', topic: 'social', keys: ['ЛКМ'], text: 'можно есть пиццу, сидя рядом с открытой коробкой', order: 46 },
 );
 const typing = event => event.target?.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(event.target?.tagName);
-export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bathSpec, spec, canPlay, getFurniture, getWalk, getSeats, getVM, getDoors, getParty, getTV, getPaper, getLife, requestRender }) {
+export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bathSpec, spec, canPlay, getFurniture, getWalk, getSeats, getVM, getDoors, getParty, getTV, getPaper, getLife, beforeCarry, requestRender }) {
   let sim, state, models, audio, locations, disposed = false, network = null, savedSolo = null, capturing = false;
   const offLive = pipe.onLive?.(live => { capturing = !live; if (models) models.root.visible = live && !pipe.photo; });
   let target = null, pending = false, generation = 0, aimClock = 0, lastBell = null, lastUI = '', noticeUntil = 0, notice = '', players = [], lastCommand = null;
@@ -92,13 +92,15 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     const payload = { kind: 'social', verb, ...extra, ...(verb === 'place' ? { point: placement } : {}), ...(verb === 'shower' ? { point: showerPoint } : {}) };
     pending = true; const version = generation;
     try {
+      if (!network && ['take', 'receive'].includes(verb) && (!sim.canTake(pose(), verb) || beforeCarry && !await beforeCarry())) return { ok: false };
+      if (version !== generation || !active()) return { ok: false };
       const result = network ? await network.request(payload) : { ok: sim.command(pose(), payload) };
       lastCommand = { verb, ok: !!result?.ok, error: result?.error || null };
       if (version !== generation) return { ok: false };
       if (!network) accept(sim.snapshot());
       if (result?.ok && ['take', 'receive'].includes(verb)) {
         getVM()?.setWeapon('none');
-        if (!network) { if (getParty()?.held) await getParty().command('return'); getTV()?.hold(false); getPaper()?.drop(); }
+        if (!network && !beforeCarry) { if (getParty()?.held) await getParty().command('return'); getTV()?.hold(false); getPaper()?.drop(); }
       }
       if (!result?.ok) show(verb === 'receive' ? 'Подойдите к коробке через открытую дверь · её мог забрать другой игрок' : 'Уже занято или слишком далеко');
       return result;

@@ -1,0 +1,49 @@
+{
+  "status": "pass",
+  "images": [
+    {
+      "name": "bobr",
+      "width": 800,
+      "height": 960,
+      "mimeType": "image/jpeg"
+    },
+    {
+      "name": "panika",
+      "width": 800,
+      "height": 960,
+      "mimeType": "image/jpeg"
+    },
+    {
+      "name": "paragon",
+      "width": 640,
+      "height": 960,
+      "mimeType": "image/jpeg"
+    },
+    {
+      "name": "pierog",
+      "width": 640,
+      "height": 960,
+      "mimeType": "image/jpeg"
+    },
+    {
+      "name": "tram",
+      "width": 640,
+      "height": 960,
+      "mimeType": "image/jpeg"
+    },
+    {
+      "name": "zabych",
+      "width": 640,
+      "height": 960,
+      "mimeType": "image/jpeg"
+    }
+  ],
+  "meshes": 24,
+  "triangles": 13032,
+  "bytes": 1935180,
+  "labelFrontUV": {
+    "screenLeftX": -0.030111193656921387,
+    "screenRightX": 0.030111193656921387
+  },
+  "note": "Full-frame images, correct left-to-right presentation UV, shared geometry/material caches. Actual browser final is recorded separately."
+}

@@ -37,14 +37,15 @@ test('exclusive ownership, reach, release, disconnect and hose distance preserve
   assert(!sim.command(actor, 'take', '__proto__').ok);
 });
 
-test('swept flight hits a thin obstacle, shatters once, restores late joins and refills after timeout', () => {
+test('swept flight hits a thin obstacle, shatters once and preserves glass for late joiners and the entire room', () => {
   const collision = (from, to) => from[2] > -0.4 && to[2] <= -0.4 ? { point: [0, 1.2, -0.4] } : null;
   const sim = createPartySimulation({ spec, collision });
   sim.command(actor, 'take', 'beer-0'); sim.command(actor, 'throw', 'beer-0', [0, 0, -1]); step(sim, 0.2);
   assert.equal(item(sim).status, 'broken'); assert.equal(item(sim).breakSerial, 1); assert.equal(item(sim).position[2], -0.4);
   const peer = createPartySimulation({ spec }); assert(peer.restore(sim.snapshot())); assert.deepEqual(peer.snapshot(), sim.snapshot());
-  assert(!sim.breakItem('beer-0')); step(sim, 3.2); assert.equal(item(sim).status, 'ready'); assert.equal(item(sim).sips, 0);
-  assert(sim.command(actor, 'take', 'beer-0').ok); sim.command(actor, 'throw', 'beer-0', [0, 0, -1]); step(sim, 0.2); assert.equal(item(sim).breakSerial, 2);
+  assert(!sim.breakItem('beer-0')); step(sim, 120); assert.equal(item(sim).status, 'broken'); assert.equal(item(sim).breakSerial, 1);
+  assert(!sim.command(actor, 'take', 'beer-0').ok); const late=createPartySimulation({spec});assert(late.restore(sim.snapshot()));assert.deepEqual(late.snapshot(),sim.snapshot());
+  sim.reset();assert.equal(item(sim).status,'ready');assert.equal(item(sim).sips,0);
 });
 
 test('concurrent throws share one simulation clock and home changes preserve owned progress', () => {

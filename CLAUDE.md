@@ -177,6 +177,14 @@ blender -b -P blender/render.py -- --glb exports/<file>.glb --view living --out 
 в `tools/textures.json` и в `catalog.js`, затем пересобрать миниатюры (`make_procedural.py --thumbs`).
 Потом `make_web_assets.py textures` (уровни 512/1k). Новые GLB обстановки и диванов — после конвейера `make_web_assets.py glb`.
 
+## Интерактивные предметы и радиомашинки
+
+[Вход и контракты](docs/interactive.md), [QA](docs/interactive-validation.md).
+`party-state.js` / `rc-state.js` общие с Worker authority; не создавать отдельные правила для соло.
+Передача любой вещи — атомарная команда `handoff`, `rc` ввод — только намерения, не позиция/HP.
+`tools/rc/` и `tools/party/build-energy.blender.py` — источники моделей; GLB в `web/models/`.
+Камера гонки действует только на отрисовку через `render-view-camera.js`; тело остаётся на балконе.
+
 ## Порядок
 
 - `exports/` и `renders/` временные: держать последние, тестовые удалять.

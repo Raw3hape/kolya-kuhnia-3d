@@ -2,6 +2,11 @@
 // No DOM, Three.js, wall clock, physics state, global RNG or network side effects.
 import { AVATAR_RIG as R, WEAPON_PRESENTATION as W } from './avatar-rig.js';
 import { actionDuration } from './action-contract.js';
+// These prop families are rendered by their gameplay adapters. Avatars provide
+// the pose and attachment sockets without constructing another visible prop.
+export const EXTERNAL_AVATAR_PROPS = Object.freeze(['beer', 'energy', 'vape', 'hookah', 'pizza', 'controller']);
+const HELD_PROPS = Object.freeze(['phone', 'newspaper', ...EXTERNAL_AVATAR_PROPS]);
+const PARTY_PROPS = Object.freeze(['beer', 'energy', 'vape', 'hookah']);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const finite = (v, fallback = 0) => Number.isFinite(v) ? v : fallback;
 const lerp = (a, b, k) => a + (b - a) * k;
@@ -83,15 +88,20 @@ export function solveAvatarPose(state = {}, slot = 0) {
   const leftLeg = leg(-1), rightLeg = leg(1);
   let right = [R.shoulderX, 0.91, -0.025 - step * motion * 0.11], left = [-R.shoulderX, 0.91, -0.025 + step * motion * 0.11];
   let handEuler = [0, 0, 0], leftEuler = [0, 0, 0], headPitch = clamp(finite(state.aimPitch) * 0.72, -0.65, 0.65);
-  const held = ['beer', 'vape', 'hookah'].includes(state.carried) ? state.carried : ['phone', 'newspaper', 'beer', 'vape', 'hookah', 'pizza'].includes(state.held) ? state.held : null;
+  const held = EXTERNAL_AVATAR_PROPS.includes(state.carried) ? state.carried : HELD_PROPS.includes(state.held) ? state.held : null;
   let gear = held || (state.weapon && Object.hasOwn(W, state.weapon) ? state.weapon : 'none');
-  if (!state.held && activeAction && kind === 'drop' && ['phone', 'newspaper', 'beer', 'vape', 'hookah'].includes(action?.targetId)) gear = action.targetId;
+  if (!state.held && activeAction && kind === 'drop' && HELD_PROPS.includes(action?.targetId)) gear = action.targetId;
   if (!held && activeAction && kind === 'holster' && Object.hasOwn(W, action?.targetId)) gear = action.targetId;
   const aiming = clamp(finite(state.aiming), 0, 1), pitch = clamp(finite(state.aimPitch), -1.1, 1.1);
   const weapon = W[gear], isPhone = gear === 'phone', isPaper = gear === 'newspaper';
   const targetId = action?.targetId || state.interaction?.targetId;
-  const partyItem = ['beer', 'vape', 'hookah'].includes(gear);
+  const partyItem = PARTY_PROPS.includes(gear), drinkItem = gear === 'beer' || gear === 'energy', isController = gear === 'controller';
   if (gear === 'pizza') { const center = state.heldGrip?.center || [0, 1.16, -0.42], half = (state.heldGrip?.width ?? 0.38) / 2; right = [center[0] + half, center[1], center[2]]; left = [center[0] - half, center[1], center[2]]; handEuler = leftEuler = [-0.2, 0, 0]; }
+  if (isController) {
+    const center = state.heldGrip?.center || [0, 1.14, -0.30], half = (state.heldGrip?.width ?? 0.22) / 2;
+    right = [center[0] + half, center[1], center[2]]; left = [center[0] - half, center[1], center[2]];
+    handEuler = leftEuler = [-0.12, 0, 0];
+  }
   if (state.washing) { const rub = Math.sin(time * 7) * 0.035; right = [0.10 + rub, 1.57, -0.16]; left = [-0.10 + rub, 1.57, -0.16]; }
   const selfUse = partyItem && ['sip', 'puff'].includes(kind) || isPhone && targetId === 'phone' || isPaper && (kind === 'page' || targetId === 'newspaper');
   let gearVisible = gear !== 'none', gearScale = 1, page = 0, tap = 0, magazine = 0, bolt = 0, breakOpen = 0;
@@ -146,8 +156,8 @@ export function solveAvatarPose(state = {}, slot = 0) {
     if (activeAction && ['sip', 'puff'].includes(kind)) {
       const drink = windowed(progress, 0, 0.22) * (1 - windowed(progress, 0.72, 1));
       right = mix(right, [0.075, 1.51, -0.21], drink);
-      handEuler = [drink * (gear === 'beer' ? 1.65 : 0.3), 0, 0.08];
-      headPitch -= drink * (gear === 'beer' ? 0.23 : 0.04);
+      handEuler = [drink * (drinkItem ? 1.65 : 0.3), 0, 0.08];
+      headPitch -= drink * (drinkItem ? 0.23 : 0.04);
     }
   }
   if (activeAction && kind === 'throw') {
@@ -159,7 +169,7 @@ export function solveAvatarPose(state = {}, slot = 0) {
     if (kind === 'pickup') {
       const grasp = windowed(progress, 0.32, 0.85);
       right = mix(target, holding, grasp); gearScale *= windowed(progress, 0.24, 0.45);
-      if (isPaper) left = mix([-0.18, 0.98, -0.1], left, grasp);
+      if (isPaper || isController) left = mix([-0.18, 0.98, -0.1], left, grasp);
     } else {
       right = mix(holding, target, windowed(progress, 0.05, 0.65));
       gearVisible = progress < 0.65; gearScale *= 1 - windowed(progress, 0.52, 0.68);

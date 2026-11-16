@@ -43,7 +43,7 @@ function bodyClasses() {
 }
 
 export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats, getDoors, hasWorldInteraction, requestRender, reach = 2, getTarget, getRect,
-  onHold, onStep, name = {}, networkId = 'phone' }) {
+  onHold, onStep, beforeCarry, name = {}, networkId = 'phone' }) {
   const N = { take: 'взять телефон', btn: 'Взять телефон', scroll: 'листать', heldHint: true, ...name };
   const state = { on: false, held: false, aimed: false };
   let network = null, ownerId = null, pending = false, generation = 0;
@@ -129,7 +129,11 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
   }
   function pick() {
     if (held || pending || !walking() || unavailable()) return false;
-    return network ? requestOwnership('claim') : pickLocal();
+    if (network) return requestOwnership('claim');
+    if (!beforeCarry) return pickLocal();
+    const token = generation; pending = true; render();
+    return Promise.resolve(beforeCarry()).then(ok => ok && token === generation && !network && carrying() ? pickLocal() : false)
+      .catch(() => false).finally(() => { if (token === generation) { pending = false; render(); } });
   }
   function drop() {
     if (!held || pending) return false;

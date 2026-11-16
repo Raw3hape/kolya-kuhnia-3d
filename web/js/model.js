@@ -470,7 +470,7 @@ export function buildKitchen(kit, state, M) {
   if (fr) g.add(buildFridge(state.fridge, fr, kit, top - th, M));
   let sinkZ = null, hobZ = null;
   for (const { zA, zB, ...mod } of mods) {
-    if (free && zA === free.zA) continue;
+    if (fr && zA === fr.zA) continue;
     const panels = frontPanels(mod.front, ph + gap, top - th - gap, gap);
     for (const [ya, yb] of panels) {
       g.add(boxAt(D - ft, D, ya, yb, zB + gap / 2, zA - gap / 2, M.fronts, { slot: 'fronts' }));
@@ -487,7 +487,7 @@ export function buildKitchen(kit, state, M) {
   for (const p of top0) g.add(boxAt(p.x0, p.x1, p.y0, p.y1, p.z0, p.z1, M.counter, { slot: 'counter' }));
   let body = [{ x0: 0, x1: D - ft, y0: ph, y1: top - th, z0: 0, z1: Z0 }];
   if (cut) body = subtract(body[0], { x0: cut.x0 - 0.01, x1: cut.x1 + 0.01, z0: cut.z0 - 0.01, z1: cut.z1 + 0.01, y0: top - th - kit.sink.depth - 0.02, y1: 9 });
-  if (free) body = body.flatMap(p => subtract(p, { x0: -1, x1: 9, y0: -1, y1: 9, z0: free.zB + 0.016, z1: free.zA - 0.016 }));
+  if (fr) body = body.flatMap(p => subtract(p, { x0: -1, x1: 9, y0: -1, y1: 9, z0: fr.zB + 0.016, z1: fr.zA - 0.016 }));
   for (const p of body) g.add(boxAt(p.x0, p.x1, p.y0, p.y1, p.z0, p.z1, M.carcass, { slot: 'fronts' }));
   if (cut) g.add(buildSink(cut, top - th, kit.sink.depth, M));
   if (sinkZ != null) g.add(buildFaucet(0.07, top, sinkZ, M.metal));
@@ -599,16 +599,22 @@ export function islandBox(kit, state) {
 // under: встроенный, снаружи обычный фасад, выдаёт его только решётка в цоколе.
 // under-free: отдельностоящий 0.60 × 0.85 в нише между боковинами корпуса.
 function buildFridge(kind, m, kit, yTop, M) {
-  const g = new THREE.Group(); g.name = 'fridge';
-  const D = kit.run.depth, ph = kit.plinth.height, pr = kit.plinth.recess;
-  if (kind === 'under') {
-    g.add(boxAt(D - pr, D - pr + 0.004, 0.02, ph - 0.02, m.zB + 0.08, m.zA - 0.08, M.vent, { slot: 'fronts' }));
-    return g;
-  }
-  const s = 0.004, z0 = m.zB + 0.016 + s, z1 = m.zA - 0.016 - s, h = Math.min(0.85, yTop - 0.01), d = D - 0.02;
-  g.add(boxAt(0.02, d - 0.03, 0.01, h, z0, z1, M.fridge, { slot: 'fridge' }));
-  g.add(boxAt(d - 0.03, d, 0.01, h, z0, z1, M.fridge, { slot: 'fridge' }));   // дверь
-  g.add(vHandle(d, h - 0.3, z0 + 0.04, 0.22, M.metal));
+  const g = new THREE.Group(); g.name = 'fridge'; g.userData.partyFridge=true;
+  const D=kit.run.depth,ph=kit.plinth.height,pr=kit.plinth.recess;
+  const z0=m.zB+.020,z1=m.zA-.020,bottom=ph+.014,h=Math.min(.86,yTop-.012),d=D-.024,wall=.023;
+  const interior=kit.fridgeInterior;
+  const lining=M.fridgeLining??=new THREE.MeshStandardMaterial({color:interior.color,roughness:.42,emissive:interior.emissive,emissiveIntensity:interior.glow});
+  const shelf=M.fridgeShelf??=new THREE.MeshStandardMaterial({color:interior.shelfColor,metalness:0,roughness:.12,transparent:true,opacity:.23,depthWrite:false,side:THREE.DoubleSide,emissive:interior.emissive,emissiveIntensity:interior.shelfGlow});
+  // Five panels form a genuinely hollow interior, with an independently hinged door.
+  for(const p of [[.025,.025+wall,bottom,h,z0,z1],[.025,d,bottom,bottom+wall,z0,z1],[.025,d,h-wall,h,z0,z1],
+    [.025,d,bottom,h,z0,z0+wall],[.025,d,bottom,h,z1-wall,z1]])g.add(boxAt(...p,lining));
+  for(const ratio of [1/3,2/3]){const y=bottom+(h-bottom)*ratio,panel=boxAt(.06,d-.035,y,y+.006,z0+wall,z1-wall,shelf,{cast:false});panel.userData.partyShelf=true;panel.userData.passLight=true;g.add(panel);}
+  const hinge=new THREE.Group();hinge.name='fridge_door_hinge';hinge.userData.partyFridgeDoor=true;hinge.position.set(d-.012,bottom,z1);
+  const door=boxAt(d-.03,D,ph+kit.frontGap,h,z0,z1,kind==='under'?M.fronts:M.fridge,{slot:kind==='under'?'fronts':'fridge',partyFridgeHandle:true});
+  door.position.sub(hinge.position);hinge.add(door);
+  const handle=vHandle(D,h-.30,z0+.045,.20,M.metal);handle.position.sub(hinge.position);hinge.add(handle);g.add(hinge);
+  g.add(boxAt(D-pr,D-pr+.004,.02,ph-.02,m.zB+.08,m.zA-.08,M.vent,{slot:'fronts'}));
+  g.userData.fridgeBounds={x0:.025+wall,x1:d-.03,y0:bottom+wall,y1:h-wall,z0:z0+wall,z1:z1-wall};
   return g;
 }
 
