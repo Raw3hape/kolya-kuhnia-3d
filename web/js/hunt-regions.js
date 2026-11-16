@@ -31,8 +31,9 @@ const centroid = p => [p.reduce((s, v) => s + v[0], 0) / p.length, p.reduce((s, 
 // по расстоянию от него (spec.region.near — основная полоса, ближе и дальше — реже).
 //   inside(x, z), safe(x, z, m), clear(x0, z0, x1, z1) — путь по прямой без запретов,
 //   point({ near: [x, z], r, far }) -> [x, z] (рядом с near — только куда дойти по прямой), dist(x, z)
-function makeRegion(kind, polys, R, blocked, home, margin) {
-  const box = bboxOf(polys.flat());
+function makeRegion(kind, polys, R, blocked, home, margin, bounds = null) {
+  const box = bounds ?? bboxOf(polys.flat());
+  let safeFallback = null;
   const inside = (x, z) => {
     if (x < box.x0 || x > box.x1 || z < box.z0 || z > box.z1) return false;
     let ok = false;
@@ -59,11 +60,14 @@ function makeRegion(kind, polys, R, blocked, home, margin) {
       const d = dist(x, z);
       if (random() < (far ? (d > R.near[1] ? 1 : 0.03) : weight(d))) return [x, z];
     }
-    return any ?? (local ? [near[0], near[1]] : [(box.x0 + box.x1) / 2, (box.z0 + box.z1) / 2]);
+    return any ?? (local && safe(near[0], near[1]) ? [near[0], near[1]] : safeFallback?.slice() ?? [home[0], home[1]]);
   };
   // площадь свободной части (оценка по выборке)
   let free = 0;
-  for (let i = 0; i < 400; i++) if (safe(rand(box.x0, box.x1), rand(box.z0, box.z1))) free++;
+  for (let i = 0; i < 400; i++) {
+    const x = rand(box.x0, box.x1), z = rand(box.z0, box.z1);
+    if (safe(x, z)) { free++; safeFallback ??= [x, z]; }
+  }
   const area = free / 400 * (box.x1 - box.x0) * (box.z1 - box.z0);
   return { kind, polys, inside, safe, clear, point, dist, box, area, ok: polys.length > 0 && free > 0 };
 }
@@ -78,6 +82,16 @@ function buildRegions(site, R, home) {
   const out = [];
   const field = makeRegion('field', fieldPolys, R, ownOff, home, R.margin);
   if (field.ok) out.push(field);
+  // A bounded slice of the real meadow keeps a visible, moving foreground herd.
+  // The same habitat is used by solo and room authority; no animals cross the house.
+  const B = R.balcony;
+  if (B && field.ok) {
+    const [near, far] = B.distance;
+    const bounds = { x0: home[0] - far, x1: home[0] + far, z0: home[1] - far, z1: home[1] + far };
+    const blocked = (x, z) => ownOff(x, z) || Math.hypot(x - home[0], z - home[1]) < near || Math.hypot(x - home[0], z - home[1]) > far;
+    const balcony = makeRegion('balcony', fieldPolys, { ...R, near: B.distance, closeWeight: 1, farWeight: 0 }, blocked, home, B.margin, bounds);
+    if (balcony.ok) out.push(balcony);
+  }
   const C = R.city;
   if (!C) return out;
   const [x0, x1, z0, z1] = C.box, pad = 12;

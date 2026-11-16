@@ -26,11 +26,16 @@ export function createHuntSimulation({ spec, site, plan, seed = 1 }) {
 
   function regionFor(a) { return regions[a.region ?? 0] ?? regions[0]; }
   function newTarget(a, radius = 12) {
-    const p = regionFor(a).point({ near: [a.x, a.z], r: radius });
-    a.tx = p[0]; a.tz = p[1]; a.timer = rand(3, 10);
+    const region = regionFor(a), roam = region.kind === 'balcony' ? spec.region.balcony?.roam : null;
+    const p = region.point({ near: [a.x, a.z], r: roam?.radius ?? radius });
+    a.tx = p[0]; a.tz = p[1]; a.timer = roam ? rand(3, 6.8) : rand(3, 10);
+    a.jog = !!roam && random() < roam.jogChance;
   }
   function spawnBoar(i, previous = null) {
-    const ri = regions.length > 1 && random() < (spec.region.city?.share ?? 0) ? 1 : 0;
+    // Stable pool slots keep a guaranteed foreground population through respawns.
+    const balcony = regions.findIndex(r => r.kind === 'balcony'), city = regions.findIndex(r => r.kind === 'city');
+    const nearCount = Math.round(spec.boars.count * (spec.region.balcony?.share ?? 0));
+    const ri = balcony >= 0 && i < nearCount ? balcony : city >= 0 && random() < (spec.region.city?.share ?? 0) ? city : 0;
     const reg = regions[ri], pig = random() < spec.boars.piglets;
     const p = reg.point(), generation = (previous?.generation ?? 0) + 1;
     const a = { id: `boar:${i}:${generation}`, kind: 'boar', i, generation, active: true, dead: false,
@@ -89,7 +94,8 @@ export function createHuntSimulation({ spec, site, plan, seed = 1 }) {
         const afraid = a.fear > 0;
         if (afraid && a.threat) { dx = a.x - a.threat[0]; dz = a.z - a.threat[2]; }
         const grazing = !afraid && a.timer > 6;
-        const wanted = grazing ? 0 : afraid ? (a.pig ? spec.boars.speed.pigletGallop : spec.boars.speed.gallop) : spec.boars.speed.walk;
+        const roam = regionFor(a).kind === 'balcony' ? spec.region.balcony?.roam : null;
+        const wanted = grazing ? 0 : afraid ? (a.pig ? spec.boars.speed.pigletGallop : spec.boars.speed.gallop) : a.jog && roam ? roam.jogSpeed : spec.boars.speed.walk;
         a.speed += (wanted - a.speed) * Math.min(1, dt * 5);
         a.yaw = turn(a.yaw, Math.atan2(dx, dz), Math.min(1, dt * (afraid ? 4.5 : 1.8)));
         const nx = a.x + Math.sin(a.yaw) * a.speed * dt, nz = a.z + Math.cos(a.yaw) * a.speed * dt;

@@ -1,0 +1,18 @@
+{
+  "_about": "Party interactions. Metres in apartment coordinates; authored positions, animation and bounded effect budgets. Beer sips count completed commands, one press per sip.",
+  "rules": {"sips":5,"sipSeconds":1.05,"puffSeconds":2.6,"reach":2.1,"hoseLength":2.4,"throwSpeed":8,"gravity":9.8,"respawnSeconds":24,"maxFlightSeconds":5},
+  "crate": {"position":[4.85,0.025,-1.03],"size":[0.48,0.24,0.34],"label":"КАБАН ЛАГЕР"},
+  "effects": {"smokeBudget":180,"shardBudget":72,"smokeSeconds":3.4,"shardSeconds":4.5,"smokeSize":0.42},
+  "items": [
+    {"id":"beer-0","kind":"beer","position":[4.68,0.08,-1.12]},
+    {"id":"beer-1","kind":"beer","position":[4.79,0.08,-1.12]},
+    {"id":"beer-2","kind":"beer","position":[4.90,0.08,-1.12]},
+    {"id":"beer-3","kind":"beer","position":[5.01,0.08,-1.12]},
+    {"id":"beer-4","kind":"beer","position":[4.68,0.08,-0.95]},
+    {"id":"beer-5","kind":"beer","position":[4.79,0.08,-0.95]},
+    {"id":"beer-6","kind":"beer","position":[4.90,0.08,-0.95]},
+    {"id":"beer-7","kind":"beer","position":[5.01,0.08,-0.95]},
+    {"id":"vape-island","kind":"vape","position":[2.10,0.915,1.74],"anchor":"island"},
+    {"id":"hookah-lounge","kind":"hookah","position":[3.72,0.025,2.30],"anchor":"sofa"}
+  ]
+}

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createMultiplayerClient, cleanPlayerName } from '../web/js/multiplayer/client.js';
 import { decodeHostKey } from '../web/js/multiplayer/peer-transport.js';
+import { NETWORK_RULES as R } from '../web/js/multiplayer/rules.js';
 
 const peers = new Map(), storage = new Map(); let serial = 0;
 globalThis.location = new URL('https://test.example/#v3-preserved');
@@ -43,7 +44,7 @@ function authorityFactory(log = {}) {
     const broadcast = () => { const value = snapshot(); for (const peerId of sessions.keys()) send(peerId, value); };
     return {
       connect(peerId, hello) {
-        if (hello.version !== 1) { send(peerId, { type: 'error', code: 'version_mismatch' }); return; }
+        if (hello.version !== R.version) { send(peerId, { type: 'error', code: 'version_mismatch' }); return; }
         log.connections = (log.connections || 0) + 1;
         let id = hello.token && tokens.get(hello.token);
         if (id === hostId && peerId !== 'local') { send(peerId, { type: 'error', code: 'unauthorized' }); return; }
@@ -151,9 +152,9 @@ test('Remote PeerJS identity local is rejected before it can reach the private h
     attacker = new MockPeer('local');
     await new Promise(resolve => attacker.once('open', resolve));
     const connection = attacker.connect('kk3d-' + host.room);
-    connection.on('open', () => connection.send({ type: 'auth', protocol: 1, room: host.room,
+    connection.on('open', () => connection.send({ type: 'auth', protocol: R.version, room: host.room,
       clientId: 'local', nonce: 'reservedRemoteAliasAttackNonce' }));
-    connection.on('data', packet => { if (packet.type === 'proof') connection.send({ type: 'join', version: 1, room: host.room, name: 'Подмена хоста' }); });
+    connection.on('data', packet => { if (packet.type === 'proof') connection.send({ type: 'join', version: R.version, room: host.room, name: 'Подмена хоста' }); });
     await new Promise((resolve, reject) => {
       const deadline = setTimeout(() => reject(new Error('Reserved remote identity was not rejected immediately')), 250);
       connection.once('close', () => { clearTimeout(deadline); resolve(); });

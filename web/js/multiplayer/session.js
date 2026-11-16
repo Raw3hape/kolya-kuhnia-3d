@@ -9,7 +9,7 @@ import { sampleAvatarAction, selectAvatarPresentation } from './action-contract.
 
 const angle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
-export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui }) {
+export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui, getParty = () => getModules().party }) {
   const avatars = new Map(), samples = [], inputs = [], seenEvents = new Set();
   const shots = createShotRenderer({ THREE, scene, requestRender });
   let active = false, applying = false, revision = -1, epoch = -1, lastSnapshot = null, disposed = false;
@@ -26,8 +26,10 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
 
   const client = createMultiplayerClient({
     createAuthority: async ({ room, send }) => {
-      const huntSpec = await fetch('spec/hunt.json').then(r => { if (!r.ok) throw new Error('hunt_config'); return r.json(); });
-      return createHostAuthority({ room, plan, site, huntSpec, send,
+      const [huntSpec, partySpec] = await Promise.all(['hunt', 'party'].map(name => fetch(`spec/${name}.json`).then(r => {
+        if (!r.ok) throw new Error(`${name}_config`); return r.json();
+      })));
+      return createHostAuthority({ room, plan, site, huntSpec, partySpec, send,
         resolveSurfaces: (...args) => getModules().viewmodel.resolveNetworkSurfaces(...args),
         resolveExternalTrace: shot => getModules().life?.traceExternalShot?.(shot),
         resolveExternalShot: shot => getModules().life?.resolveExternalShot?.(shot) });
@@ -45,7 +47,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
   async function roomState() {
     await apartmentQueue.catch(() => {});
     let modules = getModules();
-    await Promise.all([modules.decor?.ready, modules.furniture?.ready, modules.paper?.ready].filter(Boolean));
+    await Promise.all([modules.decor?.ready, modules.furniture?.ready, modules.paper?.ready, getParty()?.ready].filter(Boolean));
     modules = getModules();
     // The loader visually grows models after attaching them. Sample authored scale synchronously,
     // then restore the animation; room entry never waits on an arbitrary animation timeout.
@@ -57,7 +59,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     const interactions = { ...(modules.hood?.snapshot ? { hood: modules.hood.snapshot() } : {}),
       ...(modules.paper?.snapshot ? { newspaper: modules.paper.snapshot() } : {}),
       ...Object.fromEntries(Object.entries(modules.tv?.snapshot?.() || {}).map(([id, value]) => ['media:' + id, value])) };
-    return { apartment: structuredClone(getState()), collision: modules.walk.collisionSnapshot(), objects, interactions,
+    return { partySpec: getParty()?.spec, apartment: structuredClone(getState()), collision: modules.walk.collisionSnapshot(), objects, interactions,
       interactionMeta: { media: modules.tv?.interactionMeta?.() || {}, newspaperPages: modules.paper?.interactionMeta?.() || [], hoodPosition: modules.hood?.networkPosition?.() },
       doors: modules.doors.snapshot(), seats: modules.seats?.networkSeats?.() || [], items: ['phone', 'newspaper'].flatMap(id => {
         const m = id === 'phone' ? modules.tv : modules.paper, position = m?.networkPosition?.();
@@ -101,6 +103,8 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.hunt?.setNetwork(true); appliedHunt = m.hunt;
     m.life?.setNetwork?.({ authority: client.role === 'host' });
     m.seats?.setNetwork?.({ request, selfId: () => client.id });
+    getParty()?.setNetwork?.({ request, selfId: () => client.id, isHost: () => client.role === 'host',
+      gripForPlayer: id => avatars.get(id)?.root.getObjectByName('right_wrist') });
     // The panel remains available for weapons and local device settings.
     document.getElementById('tab-live')?.click();
     receiveSnapshot(snapshot);
@@ -112,7 +116,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     lastSnapshot = snapshot;
     const m = getModules();
     if (epoch !== snapshot.epoch) {
-      epoch = snapshot.epoch; seenEvents.clear(); m.viewmodel.clearHoles({ remote: true }); shots.clear();
+      epoch = snapshot.epoch; seenEvents.clear(); m.viewmodel.clearHoles({ remote: true }); shots.clear(); getParty()?.clearEffects?.();
       damageModule = null;
     }
     if (revision !== snapshot.revision) {
@@ -138,6 +142,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.paper.applyInteractionState?.(snapshot.interactions?.newspaper);
     m.tv.applyInteractionState?.(snapshot.interactions || {});
     m.tv.applyNetwork(snapshot.items?.phone ?? null); m.paper.applyNetwork(snapshot.items?.newspaper ?? null);
+    getParty()?.applyNetworkSnapshot?.(snapshot.party, { players: snapshot.players, time: snapshot.time, selfId: client.id });
     const me = snapshot.players.find(p => p.id === client.id);
     m.seats?.applyNetwork?.(snapshot.seats || {}, me, { instant: !started });
     if (m.viewmodel !== damageModule || snapshot.effects !== damageEffects || snapshot.broken !== damageBroken) {
@@ -187,7 +192,8 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
     } else if (event.kind === 'external-hit') {
       for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
-    } else if (event.kind === 'clear') { m.viewmodel.clearHoles({ remote: true }); shots.clear(); damageModule = null; }
+    } else if (event.kind === 'party') getParty()?.applyNetworkSnapshot?.(event.state, { players: lastSnapshot?.players || [], time: event.time, selfId: client.id });
+    else if (event.kind === 'clear') { m.viewmodel.clearHoles({ remote: true }); shots.clear(); damageModule = null; }
     else if (event.kind === 'door' && event.targetId) m.doors.applyNetwork({ ...lastSnapshot?.doors, [event.targetId]: event.open }, { instant: false });
     else if (event.kind === 'item' && event.targetId) { (event.targetId === 'phone' ? m.tv : m.paper).applyNetwork(event.owner); }
     else if (event.kind === 'interaction' && event.targetId) {
@@ -244,7 +250,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       const lookYaw = angle(before.lookYaw ?? before.yaw, p.lookYaw ?? p.yaw, k);
       const aimYaw = Math.atan2(Math.sin(lookYaw - avatar.root.rotation.y), Math.cos(lookYaw - avatar.root.rotation.y));
       avatar.update({ dt, ...visual, speed, weapon: shown.weapon, aimPitch: angle(before.pitch, p.pitch, k),
-        aimYaw, held: shown.held, seated: !!shown.seat, seatY: shown.seatY });
+        aimYaw, held: shown.held, carried: shown.carried, seated: !!shown.seat, seatY: shown.seatY });
     }
     // Cheap generation checks only. A scene-wide mesh/bounds scan is done once after a real change.
     if (client.role === 'host' && started && !manifestPending && (m.decor !== manifestDecor || m.furniture !== manifestFurniture || m.decor?.pass !== manifestPass)) {
@@ -261,7 +267,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     active = false; lifecycle++; clearTimeout(geometryTimer); changeSerial++; pendingApartments = 0; applying = false; manifestPending = false;
     const m = getModules();
     m.walk.setNetwork(null); m.doors.setNetwork(null); m.tv.setNetwork(null); m.paper.setNetwork(null);
-    m.hood?.setNetwork?.(null);
+    m.hood?.setNetwork?.(null); getParty()?.setNetwork?.(null);
     m.seats?.setNetwork?.(null); m.viewmodel.setNetwork(null); m.hunt?.setNetwork(false); m.life?.setNetwork?.(null);
     for (const avatar of avatars.values()) { scene.remove(avatar.root); avatar.dispose(); } avatars.clear(); shots.clear();
     samples.length = 0; inputs.length = 0; seenEvents.clear(); appliedHunt = null; appliedAmbient = ambientModule = null; epoch = revision = -1; started = false;

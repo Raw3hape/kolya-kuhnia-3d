@@ -4,7 +4,7 @@ import { WEAPON_RULES } from './rules.js';
 
 export const ACTION_DURATIONS = Object.freeze({
   draw: 0.35, holster: 0.35, fire: 0.15, reload: 0,
-  pickup: 0.6, drop: 0.55, use: 0.55, page: 0.5,
+  pickup: 0.6, drop: 0.55, use: 0.55, page: 0.5, sip: 1.05, puff: 2.6, throw: 0.55,
   sit: 0.5, stand: 0.45, jump: 0.35, land: 0.22,
 });
 const clamp = (value, a, b) => Math.max(a, Math.min(b, value));
@@ -50,7 +50,7 @@ export function sampleAvatarAction(player, roomTime, snapshotTime = roomTime) {
   const cueProgress = reloadCue ? clamp((time - action.at) / action.duration, 0, 1) : 0;
   const reloading = reloadCue ? cueProgress < 1 : !!player.reloading && reloadDuration > 0 && progress < 1 &&
     time >= at - clamp(finite(player.reloadProgress), 0, 1) * reloadDuration;
-  const interaction = action && actionTime < action.duration && ['pickup', 'drop', 'use', 'page'].includes(action.kind) ? action : null;
+  const interaction = action && actionTime < action.duration && ['pickup', 'drop', 'use', 'page', 'sip', 'puff', 'throw'].includes(action.kind) ? action : null;
   return { time, aiming: clamp(finite(player.aiming), 0, 1),
     grounded: typeof player.grounded === 'boolean' ? player.grounded : finite(player.y) <= 0.001 && finite(player.vy) <= 0,
     verticalSpeed: finite(player.verticalSpeed, finite(player.vy)), action, actionTime,

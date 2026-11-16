@@ -81,6 +81,23 @@ External combat is deliberately two-phase:
 Mouse IDs contain spawn generation. Landing monsters keep stable cast IDs;
 they remain invulnerable, as in the original game. Their hit reactions are shared.
 
+## Beer and smoke items
+
+`party-state.js` is the portable rules engine shared by solo and the room Worker;
+`spec/party.json` owns positions, five-sip timing, hose reach and bounded lifetimes.
+The authority accepts `party` commands (`take`, `sip`, `puff`, `throw`, `return`),
+checks ownership/reach/cooldowns, and publishes `snapshot.party`. Only accepted
+commands create observer cues; `players[].carried` chooses the hand prop. A player
+can carry one party item or the existing phone/newspaper. Disconnect releases it;
+a hookah hose returns when its holder moves beyond the configured length.
+
+Bottle flight uses swept segments against the authority's trusted geometry and
+breaks once. Party bottles use stable `party:<id>` units, with their own durable
+state and timed replacement; they are excluded from the permanent apartment
+`broken` journal. Late join restores the current item state. Leaving multiplayer
+removes the adapter and restores the module's saved solo state. Authored furniture
+anchors update homes through the owner-only geometry manifest.
+
 ## Verification
 
 `node --test tools/tests/multiplayer-content.test.mjs` covers catalog-wide loose

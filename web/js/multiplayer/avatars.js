@@ -320,7 +320,8 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0 } = 
     const kind = pose.gear.kind;
     if (currentGear?.kind !== kind) {
       currentGear?.root.removeFromParent(); currentGear = null;
-      if (kind !== 'none') {
+      // Party rendering owns its shared models, liquids and hose. The rig only poses the hand.
+      if (kind !== 'none' && !['beer', 'vape', 'hookah'].includes(kind)) {
         if (!gearCache.has(kind)) { const gear = createGear(kind, material, flashMaterial, screenMaterial); setLayer(gear.root); gearCache.set(kind, gear); }
         currentGear = gearCache.get(kind); gearSocket.add(currentGear.root);
       }

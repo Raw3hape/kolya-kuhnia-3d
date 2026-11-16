@@ -83,14 +83,15 @@ export function solveAvatarPose(state = {}, slot = 0) {
   const leftLeg = leg(-1), rightLeg = leg(1);
   let right = [R.shoulderX, 0.91, -0.025 - step * motion * 0.11], left = [-R.shoulderX, 0.91, -0.025 + step * motion * 0.11];
   let handEuler = [0, 0, 0], leftEuler = [0, 0, 0], headPitch = clamp(finite(state.aimPitch) * 0.72, -0.65, 0.65);
-  const held = ['phone', 'newspaper'].includes(state.held) ? state.held : null;
+  const held = ['beer', 'vape', 'hookah'].includes(state.carried) ? state.carried : ['phone', 'newspaper', 'beer', 'vape', 'hookah'].includes(state.held) ? state.held : null;
   let gear = held || (state.weapon && Object.hasOwn(W, state.weapon) ? state.weapon : 'none');
-  if (!state.held && activeAction && kind === 'drop' && ['phone', 'newspaper'].includes(action?.targetId)) gear = action.targetId;
+  if (!state.held && activeAction && kind === 'drop' && ['phone', 'newspaper', 'beer', 'vape', 'hookah'].includes(action?.targetId)) gear = action.targetId;
   if (!held && activeAction && kind === 'holster' && Object.hasOwn(W, action?.targetId)) gear = action.targetId;
   const aiming = clamp(finite(state.aiming), 0, 1), pitch = clamp(finite(state.aimPitch), -1.1, 1.1);
   const weapon = W[gear], isPhone = gear === 'phone', isPaper = gear === 'newspaper';
   const targetId = action?.targetId || state.interaction?.targetId;
-  const selfUse = isPhone && targetId === 'phone' || isPaper && (kind === 'page' || targetId === 'newspaper');
+  const partyItem = ['beer', 'vape', 'hookah'].includes(gear);
+  const selfUse = partyItem && ['sip', 'puff'].includes(kind) || isPhone && targetId === 'phone' || isPaper && (kind === 'page' || targetId === 'newspaper');
   let gearVisible = gear !== 'none', gearScale = 1, page = 0, tap = 0, magazine = 0, bolt = 0, breakOpen = 0;
   let shotAge = Number.isFinite(state.shotAge) ? Math.max(0, state.shotAge) : activeAction && kind === 'fire' ? elapsed : state.shooting ? 0.035 : Infinity;
   const recoil = weapon ? Math.exp(-shotAge * 24) * Math.sin(Math.min(1, shotAge / 0.075) * Math.PI) * weapon.recoil : 0;
@@ -138,7 +139,19 @@ export function solveAvatarPose(state = {}, slot = 0) {
       page = smooth(progress); left = mix(left, [0.03 - page * 0.2, 1.19, -0.31], actionWave);
     }
   }
-  if (activeAction && (kind === 'pickup' || kind === 'drop')) {
+  if (partyItem) {
+    right = [0.19, 1.12, -0.29]; handEuler = [0, 0, 0.08];
+    if (activeAction && ['sip', 'puff'].includes(kind)) {
+      const drink = windowed(progress, 0, 0.22) * (1 - windowed(progress, 0.72, 1));
+      right = mix(right, [0.075, 1.51, -0.21], drink);
+      handEuler = [drink * (gear === 'beer' ? 1.65 : 0.3), 0, 0.08];
+      headPitch -= drink * (gear === 'beer' ? 0.23 : 0.04);
+    }
+  }
+  if (activeAction && kind === 'throw') {
+    right = mix([0.22, 1.45, 0.13], [0.13, 1.32, -0.57], windowed(progress, 0.1, 0.7));
+    handEuler = [-progress * 1.4, 0, 0]; gearVisible = progress < 0.3;
+  } else if (activeAction && (kind === 'pickup' || kind === 'drop')) {
     const holding = [...right];
     const target = Array.isArray(state.interactionTarget) && state.interactionTarget.length === 3 ? state.interactionTarget.map((v, i) => finite(v, holding[i])) : [0.15, 1.0, -0.47];
     if (kind === 'pickup') {

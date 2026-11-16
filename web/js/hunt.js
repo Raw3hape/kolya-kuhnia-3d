@@ -465,6 +465,11 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function freeBoar() { for (const b of boars) if (!b.active) return b; return null; }
   // где родиться новому стаду: газонам справа — их доля spec.region.city.share, остальное — поле
   function herdRegion() {
+    const balcony = regions.find(r => r.kind === 'balcony');
+    if (balcony) {
+      const nearCount = boars.filter(b => b.active && !b.dead && b.group.region === balcony).length;
+      if (nearCount < Math.round(S.boars.count * S.region.balcony.share)) return balcony;
+    }
     const city = regions.filter(r => r.kind === 'city');
     if (!city.length) return region;
     let inCity = 0;
@@ -498,6 +503,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     if (!g.members.length) return;
     g.leader ??= g.members[0];
     if (walkIn) { const [hx, hz] = reg.point(); g.tx = hx; g.tz = hz; g.wait = 0; }
+    if (reg.kind === 'balcony') pickTarget(g, g.leader);
     groups.push(g);
     boarMesh.instanceColor.needsUpdate = true;
   }
@@ -569,8 +575,8 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
         if (b === lead) {
           const d = Math.hypot(g.tx - b.x, g.tz - b.z);
           if (g.wait > 0) { g.wait -= dt; graze = 1; if (g.wait <= 0) pickTarget(g, b); }
-          else if (d < 2) g.wait = rand(6, 18);
-          else { dx = g.tx - b.x; dz = g.tz - b.z; want = d > 50 ? B.speed.walk * 2.2 : B.speed.walk; }
+          else if (d < 2) g.wait = g.region.kind === 'balcony' ? pick(S.region.balcony.roam.wait) : rand(6, 18);
+          else { dx = g.tx - b.x; dz = g.tz - b.z; want = g.jog ? S.region.balcony.roam.jogSpeed : d > 50 ? B.speed.walk * 2.2 : B.speed.walk; }
         } else {
           // за вожаком со своим смещением (в осях вожака)
           const c = Math.cos(lead.yaw), s = Math.sin(lead.yaw);
@@ -645,8 +651,9 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   // куда идти пастись: рядом (до 35 м), с весом к основной полосе расстояний; ушли далеко — назад, ближе к балкону
   function pickTarget(g, lead) {
     const far = g.region.dist(lead.x, lead.z) > S.region.near[1];
-    const [x, z] = far ? g.region.point() : g.region.point({ near: [lead.x, lead.z], r: 35 });
-    g.tx = x; g.tz = z;
+    const roam = g.region.kind === 'balcony' ? S.region.balcony.roam : null;
+    const [x, z] = far ? g.region.point() : g.region.point({ near: [lead.x, lead.z], r: roam?.radius ?? 35 });
+    g.tx = x; g.tz = z; g.jog = !!roam && Math.random() < roam.jogChance;
   }
   function stepDead(b, dt, B) {
     b.deadT += dt; b.speed = 0; b.gait = 0; b.alert = 0;

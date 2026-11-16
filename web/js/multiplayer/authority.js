@@ -4,6 +4,7 @@ import { NETWORK_RULES as R, WEAPON_RULES, EXTERNAL_TARGET_RULES, refillMagazine
 import { WALK, buildColliders, moveCircle, findFree, roomOf, isFree } from './collision.js';
 import { createHuntSimulation } from './hunt-simulation.js';
 import { makeAvatarAction } from './action-contract.js';
+import { createPartySimulation, createPartyGround } from '../party-state.js';
 
 const finite = Number.isFinite;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -62,7 +63,7 @@ export function rayBox(origin, direction, bounds, range = Infinity) {
   return { distance: near, point: origin.map((v, i) => q(v + direction[i] * near)), normal };
 }
 
-export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMany, now = () => performance.now(), seed = 1 }) {
+export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
   const players = new Map(), links = new Map(), objects = new Map(), broken = new Set();
   const completedExternal = new Set(), killedExternal = new Set();
   const effectSizes = new Map(), pendingExternal = new Map();
@@ -70,6 +71,25 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMa
   let apartment = null, hostId = null, revision = 0, seq = 0, eventSeq = 0, time = 0, disposed = false;
   let extra = [], doorMeta = [], doors = {}, items = {}, itemMeta = [], seatMeta = [], seats = {}, effects = [], effectsBytes = 2, snapshotClock = 0, epoch = 0, ambient = null;
   let interactionMeta = { media: {}, newspaperPages: [], hoodPosition: null }, interactions = {};
+  const party = createPartySimulation({ spec: partySpec, floorAt: createPartyGround({ plan, site }), collision(from, to, item) {
+    const delta = to.map((n, i) => n - from[i]), length = Math.hypot(...delta);
+    if (length < 1e-8) return null;
+    const direction = delta.map(n => n / length), candidates = [];
+    for (const box of col.boxes) {
+      const hit = rayBox(from, direction, [box.x0, 0, box.z0, box.x1, plan.ceiling, box.z1], length);
+      if (hit) candidates.push(hit);
+    }
+    for (const object of objects.values()) {
+      if (broken.has(object.unitId) || object.unitId === `party:${item.id}` || object.id.startsWith(`party:${item.id}/`)) continue;
+      const hit = rayBox(from, direction, object.bounds, length); if (hit) candidates.push(hit);
+    }
+    for (const door of doorObstacles()) {
+      const hit = rayBox(from, direction, [Math.min(door.ax, door.bx) - door.h, 0, Math.min(door.az, door.bz) - door.h,
+        Math.max(door.ax, door.bx) + door.h, plan.ceiling, Math.max(door.az, door.bz) + door.h], length);
+      if (hit) candidates.push(hit);
+    }
+    return candidates.sort((a, b) => a.distance - b.distance)[0] || null;
+  } });
   const started = now();
 
   const active = () => [...players.values()].filter(p => p.link !== null);
@@ -185,6 +205,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMa
       Array.isArray(seat.stand) && seat.stand.length === 2 && seat.stand.every(n => finite(n) && Math.abs(n) < 100));
     seats = Object.fromEntries(seatMeta.map(seat => [seat.id, null]));
     setInteractions(payload);
+    for (const item of boundedArray(payload.partySpec?.items, 64)) party.setHome(item?.id, item?.position);
   }
 
   function spawn(p) {
@@ -232,7 +253,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMa
   function releaseItems(p) {
     const paper = items.newspaper === p.id;
     for (const id of Object.keys(items)) if (items[id] === p.id) items[id] = null;
-    p.held = null; if (paper) advanceNewspaper();
+    party.release(p.id); p.held = null; if (paper) advanceNewspaper();
   }
   function releaseSeat(p) { for (const id of Object.keys(seats)) if (seats[id] === p.id) seats[id] = null; p.seat = null; p.eyeY = null; p.lookYaw = p.yaw; }
   function release(p) { releaseItems(p); releaseSeat(p); }
@@ -335,7 +356,10 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMa
         const effect = { kind: o.glass ? 'glass' : 'surface', objectId: o.id, unitId: o.unitId,
           point: surface.point, normal: surface.normal, distance: surface.distance, material: o.breakable };
         accepted.push(effect);
-        if (o.breakable) { broken.add(o.unitId); for (const id of o.dependentIds) broken.add(id); }
+        if (o.breakable) {
+          if (o.unitId.startsWith('party:')) party.breakItem(o.unitId.slice(6), surface.point);
+          else { broken.add(o.unitId); for (const id of o.dependentIds) broken.add(id); }
+        }
         if (!o.glass) { range = Math.max(0, effect.distance - 0.01); break; }
         if (accepted.length >= R.maxEffectsPerRay) break;
       }
@@ -415,6 +439,25 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMa
         } break;
       }
       case 'release': if (items[action.id] === p.id) { items[action.id] = null; p.held = null; if (action.id === 'newspaper') advanceNewspaper(); ok = true; animate(p, 'drop', action.id, itemMeta.find(item => item.id === action.id)?.position); event({ kind: 'item', actorId: p.id, targetId: action.id, owner: null }); } break;
+      case 'party': {
+        const item = party.snapshot().items.find(item => item.id === action.id);
+        if (action.verb === 'take' && item && pathBlocked(p, { x: item.position[0], z: item.position[2] })) break;
+        const accepted = party.command({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio }, action.verb, action.id, action.direction);
+        if (!accepted.ok) break;
+        if (action.verb === 'take') {
+          // Release only the older phone/paper; the party simulation has already
+          // atomically replaced any previous party item owned by this player.
+          const paper = items.newspaper === p.id;
+          for (const id of Object.keys(items)) if (items[id] === p.id) items[id] = null;
+          if (paper) advanceNewspaper();
+          p.weapon = 'none'; p.aiming = 0;
+        }
+        const carried = party.held(p.id); p.held = carried?.id || null;
+        const kind = action.verb === 'take' ? 'pickup' : action.verb === 'return' ? 'drop' : action.verb;
+        animate(p, kind, accepted.item.kind, action.verb === 'take' || action.verb === 'return' ? accepted.item.position : undefined);
+        if (p.action && accepted.item.action && ['sip', 'puff'].includes(kind)) p.action.duration = accepted.item.action.duration;
+        event({ ...accepted.event, kind: 'party', verb: action.verb, state: party.snapshot() }); ok = true; break;
+      }
       case 'interaction': {
         if (typeof action.id !== 'string' || !Object.hasOwn(interactions, action.id)) break;
         const value = normalizedInteraction(action.id, action.value); if (!value) break;
@@ -460,13 +503,13 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMa
         const owners = { ...items }, seated = { ...seats }; setGeometry(action);
         items = Object.fromEntries(Object.keys(items).map(id => [id, owners[id] || null])); seats = Object.fromEntries(Object.keys(seats).map(id => [id, seated[id] || null]));
         for (const player of players.values()) {
-          if (player.held && items[player.held] !== player.id) player.held = null;
+          if (player.held && items[player.held] !== player.id && party.held(player.id)?.id !== player.held) player.held = null;
           if (player.seat && seats[player.seat] !== player.id) releaseSeat(player);
           else if (player.seat) { const seat = seatMeta.find(seat => seat.id === player.seat); player.x = seat.position[0]; player.z = seat.position[2]; player.eyeY = seat.eyeY; }
         }
         ok = true;
       } break;
-      case 'clear': if (p.id === hostId) { broken.clear(); effects = []; effectsBytes = 2; effectSizes.clear(); pendingExternal.clear(); epoch++; ok = true; event({ kind: 'clear', actorId: p.id }); } break;
+      case 'clear': if (p.id === hostId) { party.reset(); for (const player of players.values()) if (!items[player.held]) player.held = null; broken.clear(); effects = []; effectsBytes = 2; effectSizes.clear(); pendingExternal.clear(); epoch++; ok = true; event({ kind: 'clear', actorId: p.id }); } break;
       case 'ambient': if (p.id === hostId && link === 'local' && plain(action.ambient)) {
         try { if (byteLength(action.ambient) <= R.maxAmbientBytes) { ambient = copy(action.ambient); ok = true; } } catch { /* Reject non-serializable host state. */ }
       } break;
@@ -482,10 +525,10 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMa
         reloading: !!p.ammo[p.weapon]?.reloadAt,
         reloadProgress: p.ammo[p.weapon]?.reloadAt ? q(clamp(1 - (p.ammo[p.weapon].reloadAt - time) / WEAPON_RULES[p.weapon].reload, 0, 1)) : 0,
         shotAge: finite(p.ammo[p.weapon]?.shotAt) ? q(Math.max(0, time - p.ammo[p.weapon].shotAt)) : null,
-        weapon: p.weapon, score: p.score, kills: p.kills, held: p.held, seat: p.seat,
+        weapon: p.weapon, score: p.score, kills: p.kills, held: p.held, eyeY: p.eyeY ?? q(p.y + WALK.height / 100 * WALK.eyeRatio), carried: party.held(p.id)?.kind || null, seat: p.seat,
         seatY: p.seat ? seatMeta.find(seat => seat.id === p.seat)?.position[1] ?? 0 : null, ack: p.ack,
         ammo: Object.fromEntries(Object.entries(p.ammo).map(([id, a]) => [id, { mag: a.mag, reserve: a.reserve, reloading: !!a.reloadAt }])) })),
-      doors: { ...doors }, items: { ...items }, seats: { ...seats }, interactions: copy(interactions), broken: [...broken], effects: [...effects], hunt: hunt.snapshot(), ambient };
+      doors: { ...doors }, items: { ...items }, seats: { ...seats }, interactions: copy(interactions), broken: [...broken], effects: [...effects], hunt: hunt.snapshot(), ambient, party: party.snapshot() };
   }
   // Called only by the creator's private simulation bridge after its scene target
   // adapter has applied an already-approved shot. Never exposed as a wire action.
@@ -515,7 +558,8 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMa
   function step(dt) {
     if (disposed || !hostId) return;
     dt = clamp(dt, 0, 0.05); time += dt; snapshotClock += dt;
-    hunt.step(dt);
+    hunt.step(dt); party.step(dt, active().map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
+    for (const player of players.values()) if (player.held && !Object.hasOwn(items, player.held) && !party.held(player.id)) player.held = null;
     for (const p of players.values()) {
       p.actions = Math.max(0, p.actions - dt * 100); p.budget = Math.min(R.inputBudget, p.budget + dt);
       if (p.link !== null && now() - p.lastSeen > R.timeoutMs) { disconnect(p.link); continue; }

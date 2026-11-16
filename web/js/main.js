@@ -40,6 +40,8 @@ import { createTicker } from './ticker.js';   // KITCHEN: крипто-бирж�
 import { createLife, registerLifeUI } from './life.js';   // LIFE: соседи, звонок, монстры за дверью, вода, мыши
 import { createMirrors } from './mirrors.js';   // BREAK: честные зеркала (плоское отражение), бьются от выстрела
 import { createMultiplayerSession } from './multiplayer/session.js';
+import { createParty } from './party.js';
+import { createPartyProps } from './party-props.js';
 
 const [plan, kit, viewSpec, site, bathSpec] = await Promise.all([
   fetch('spec/plan.generated.json').then(r => r.json()),
@@ -460,6 +462,8 @@ function frame(now) {
   if (hood?.update(dt)) needs = true;     // KITCHEN: вытяжка (яркость полосы под экспозицию)
   if (ticker?.update(dt)) needs = true;   // KITCHEN: биржа на мониторе — кадры только когда экран виден рядом
   if (life?.update(dt)) needs = true;     // LIFE: «Живой дом» — кадры только пока эффект виден
+  if (party?.update(dt)) needs = true;
+  partyProps?.updateAnchors(furnitureAnchors(furn, state, plan, kit), state);
   if (mirrors.update()) needs = true;     // BREAK: новое зеркало появилось или фото спрятало стёкла
   if (nav?.update()) needs = true;
   if (anim) {
@@ -550,8 +554,8 @@ export async function exportGLB() {
 
 // ---------- запуск ----------
 
-let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null, paper = null, hood = null;
-const hasWorldInteraction = () => [doors, seats, hood].some(module => !!module?.target);
+let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null, paper = null, hood = null, party = null, partyProps = null;
+const hasWorldInteraction = () => [doors, seats, hood, party].some(module => !!module?.target);
 registerFurnitureUI(addSection);
 registerDecorUI(addSection);
 registerViewmodelUI(addSection, () => viewmodel);
@@ -580,6 +584,13 @@ seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, wa
 // --- KITCHEN: вытяжка над варкой (hood.js, геометрия — model.js buildHood) и крипто-биржа на мониторе в комнате 3 (ticker.js) ---
 hood = createHood({ THREE, scene, camera, canvas, renderer, pipe, requestRender, getWalk: () => walk, getVM: () => viewmodel });
 let ticker = createTicker({ THREE, scene, camera, renderer, pipe, requestRender });
+party = createParty({ THREE, scene, camera, canvas, pipe, plan, site, getWalk: () => walk, getSeats: () => seats,
+  getVM: () => viewmodel, getTV: () => tv, getPaper: () => paper, getDoors: () => doors,
+  getAnchors: () => furnitureAnchors(furn, state, plan, kit), requestRender });
+afterRoom(async () => {
+  partyProps = await createPartyProps({ THREE, scene, requestRender });
+  partyProps.updateAnchors(furnitureAnchors(furn, state, plan, kit), state);
+});
 // --- /KITCHEN ---
 // --- LIFE: «Живой дом» — соседи за стенами и звонок, монстры за входной дверью, вода сама, мыши (life.js + модули) ---
 registerLifeUI(addSection, () => life);
@@ -649,8 +660,9 @@ window.addEventListener('hashchange', () => { const s = decode(location.hash); i
 window.__kitchen = { state, setState, setSplit, goView, snapshot, exportGLB, encode, decode, scene, camera, controls, renderer, shell, M, get floors() { return floors; }, requestRender, lighting, cutaway, pipe, get furnEditor() { return furnEditor; }, get decor() { return decor; }, get doors() { return doors; }, get viewmodel() { return viewmodel; }, get walk() { return walk; }, get seats() { return seats; }, get tv() { return tv; }, get hunt() { return hunt; }, get paper() { return paper; } };
 Object.defineProperties(window.__kitchen, { hood: { get: () => hood }, ticker: { get: () => ticker } });   // KITCHEN (геттеры живые, Object.assign скопировал бы значение)
 Object.defineProperty(window.__kitchen, 'life', { get: () => life });   // LIFE
+Object.defineProperties(window.__kitchen, { party: { get: () => party }, partyProps: { get: () => partyProps } });
 window.__kitchen.mirrors = mirrors;   // BREAK
 multiplayer = createMultiplayerSession({ THREE, scene, plan, site, getState: () => state,
   applyState: patch => setState(patch, { push: false, network: true }), requestRender, ui,
-  getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, furnEditor, furniture: furn, decor }) });
+  getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, party, furnEditor, furniture: furn, decor }) });
 window.__kitchen.multiplayer = multiplayer;

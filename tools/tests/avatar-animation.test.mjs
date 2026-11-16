@@ -139,3 +139,19 @@ test('Prop cache and articulated rig dispose every owned geometry/material exact
   avatar.dispose(); avatar.dispose();
   assert.ok(geometry.size > 20); for (const count of geometry.values()) assert.equal(count, 1); for (const count of materials.values()) assert.equal(count, 1);
 });
+
+
+test('Party observer cues raise a bottle or mouthpiece hand without duplicating party-rendered props', () => {
+  for (const carried of ['beer', 'vape', 'hookah']) {
+    const avatar = createAvatar({ slot: 0 });
+    const kind = carried === 'beer' ? 'sip' : 'puff';
+    const idle = solveAvatarPose({ carried });
+    const cue = makeAvatarAction(kind, 1, { targetId: carried });
+    const active = solveAvatarPose({ carried, action: cue, actionTime: 0.4 });
+    assert.equal(active.gear.kind, carried); assert.ok(active.arms.right.wrist[1] > idle.arms.right.wrist[1] + 0.1);
+    avatar.update({ carried, action: cue, actionTime: 0.4, time: 1.4 });
+    assert.equal(avatar.animation.pose.gear.kind, carried);
+    assert.equal(avatar.animation.gear, 'none', 'party renderer owns the single visible prop');
+    avatar.dispose();
+  }
+});

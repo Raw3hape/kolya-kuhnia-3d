@@ -130,6 +130,8 @@
   короткие v3) читаются. Сейчас хвост: …FURN_SCHEMA_2, LAMP_SCHEMA_ROOMS.
 - `window.__kitchen` в консоли: `setState`, `goView`, `snapshot`, `exportGLB`, `pipe`, `lighting`, `furnEditor`
   для автоматических проверок.
+- Пиво, кальян, дудка, новые мишени и близкое стадо: [docs/party.md](docs/party.md).
+  `party-state.js` — общие чистые правила; `party.js` — ввод/представление; позиции и лимиты в `spec/party*.json`.
 - Проверка в браузере: встроенная панель Claude теряет WebGL после тяжёлой трассировки; надёжнее chrome-devtools MCP
   (`new_page` с `isolatedContext`). Перетаскивание стрелок редактора скриптом не проверить (нужна настоящая мышь).
 
