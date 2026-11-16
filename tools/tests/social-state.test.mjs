@@ -52,6 +52,11 @@ test('courier repeats a bounded bell, leaves and eventually brings another share
   for (let i = 0; i < 800; i++) f.sim.step(0.1, f.players);
   assert.equal(f.sim.snapshot().courier, null); assert(f.sim.snapshot().pizza);
 });
+test('opening the delivered box accepts delivery and stops the courier ringing while people eat', () => {
+  const f = fixture(); assert(f.command('a', 'open')); assert.notEqual(f.sim.snapshot().courier.leaving, null);
+  for (let i = 0; i < 100; i++) f.sim.step(.1, f.players);
+  assert.equal(f.sim.snapshot().courier, null); assert.equal(f.sim.snapshot().bell, 1); assert(f.sim.snapshot().pizza.open);
+});
 test('pizza follows a moving support and falls to the floor when that support is removed', () => {
   const bounds = [home[0] - .5, 0, home[2] - .5, home[0] + .5, .6, home[2] + .5];
   const f = fixture({ validatePlacement: () => ({ id: 'table', bounds }) });

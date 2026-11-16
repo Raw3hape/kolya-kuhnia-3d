@@ -14,6 +14,7 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
   const cooldowns = new Map();
   const eye = player => [player.x, player.eyeY ?? (player.y || 0) + 1.68, player.z];
   const near = (player, position) => Math.hypot(...eye(player).map((v, i) => v - position[i])) <= rules.reach && !blocked(player, position);
+  const acceptDelivery = () => { if (courier && courier.leaving === null) { courier.leaving = time; courier.until = time + 3; } };
   function releaseItem(id) {
     if (pizza?.owner === id) { pizza.owner = null; pizza.position = [...pizza.safePosition]; }
   }
@@ -44,7 +45,7 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     if (verb === 'take') {
       if (pizza.owner || !near(player, pizza.position)) return false;
       pizza.owner = player.id; pizza.open = false; pizza.safePosition = [...pizza.position];
-      if (courier) { courier.leaving = time; courier.until = time + 3; }
+      acceptDelivery();
       return true;
     }
     if (verb === 'place') {
@@ -55,7 +56,7 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     }
     if (verb === 'return') { if (pizza.owner !== player.id) return false; pizza.owner = null; pizza.position = [...pizza.safePosition]; return true; }
     if (!near(player, pizza.position) && pizza.owner !== player.id) return false;
-    if (verb === 'open') { if (pizza.owner && pizza.owner !== player.id) return false; pizza.open = !pizza.open; return true; }
+    if (verb === 'open') { if (pizza.owner && pizza.owner !== player.id) return false; pizza.open = !pizza.open; acceptDelivery(); return true; }
     if (verb === 'eat') {
       if (!pizza.open || pizza.owner || pizza.remaining <= 0 || time < (cooldowns.get(player.id) || 0)) return false;
       pizza.remaining--; cooldowns.set(player.id, time + rules.eatSeconds);
