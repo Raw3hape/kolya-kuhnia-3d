@@ -1,4 +1,15 @@
 # Canonical art masters stay in Git; runtime GLBs already embed optimized images.
+.git
+node_modules
+dist/
+.vercel/
+.claude/
+.env*
+source/
+blender/
+**/__pycache__/
+**/*.blend
+**/*.blend1
 tools/party/generated-labels/
 tools/rc/concepts/
 tools/rc/garage.blend
