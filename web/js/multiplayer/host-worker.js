@@ -6,7 +6,9 @@ self.onmessage = ({ data }) => {
   try {
     if (data.command === 'init') {
       room?.dispose(); clearInterval(timer);
-      room = createRoomAuthority({ ...data.options, send: (peer, packet) => self.postMessage({ type: 'packet', peer, packet }) });
+      room = createRoomAuthority({ ...data.options,
+        send: (peer, packet) => self.postMessage({ type: 'packet', peer, packet }),
+        sendMany: (peers, packet) => { if (peers.length) self.postMessage({ type: 'broadcast', peers, packet }); } });
       last = performance.now();
       timer = setInterval(() => {
         const now = performance.now(), elapsed = (now - last) / 1000; last = now;

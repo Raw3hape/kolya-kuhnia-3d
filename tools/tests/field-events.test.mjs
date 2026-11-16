@@ -7,7 +7,8 @@ import { createHuntSimulation } from '../../web/js/multiplayer/hunt-simulation.j
 import { createSnapshotEncoder, createSnapshotDecoder } from '../../web/js/multiplayer/snapshot-codec.js';
 import { validate } from '../../api/_scores-core.js';
 import * as THREE from '../../web/vendor/three-0.169/build/three.module.js';
-import { collectFieldOccluders } from '../../web/js/field-events-visibility.js';
+import { collectFieldOccluders, fieldRayBlocked } from '../../web/js/field-events-visibility.js';
+import { createFieldEventView } from '../../web/js/field-events-view.js';
 
 const json = p => JSON.parse(fs.readFileSync(new URL('../../' + p, import.meta.url)));
 const authored = json('web/spec/hunt.json'), site = json('web/spec/site.json'), plan = json('web/spec/plan.generated.json');
@@ -154,4 +155,60 @@ test('HP occlusion excludes real Three sprites and avatars before tracing but re
   const objects = collectFieldOccluders(scene, eventRoot); assert.deepEqual(objects, [wall]);
   assert.ok(ray.intersectObjects(objects, false).length > 0);
   geometry.dispose(); material.dispose(); label.material.dispose();
+});
+
+test('HP visibility stops at an opaque wall while transparent and non-writing surfaces cannot hide a target', () => {
+  const geometry = new THREE.BoxGeometry(2, 2, 0.2);
+  const solid = new THREE.MeshBasicMaterial(), clear = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.01 });
+  const mask = new THREE.MeshBasicMaterial({ colorWrite: false });
+  const wall = new THREE.Mesh(geometry, solid), pane = new THREE.Mesh(geometry, clear), hole = new THREE.Mesh(geometry, mask);
+  wall.position.z = -5; pane.position.z = -2; hole.position.z = -3;
+  for (const mesh of [wall, pane, hole]) mesh.updateMatrixWorld(true);
+  const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, 0, -1), 0, 20);
+  const costlyRoom = { raycast() { throw new Error('Occluded furnished rooms must not be traced'); }, layers: new THREE.Layers() };
+  assert.equal(fieldRayBlocked(ray, [pane, hole]), false);
+  assert.equal(fieldRayBlocked(ray, [pane, hole, wall, costlyRoom]), true);
+  ray.far = 4;
+  assert.equal(fieldRayBlocked(ray, [pane, hole, wall]), false, 'a surface behind the target is not an occluder');
+  wall.layers.set(1); ray.far = 20;
+  assert.equal(fieldRayBlocked(ray, [wall]), false);
+  ray.layers.enable(1);
+  assert.equal(fieldRayBlocked(ray, [wall]), true, 'cutaway walls retain occlusion');
+  geometry.dispose(); solid.dispose(); clear.dispose(); mask.dispose();
+});
+
+test('HP candidate collection prunes hidden and actor subtrees before visiting their meshes', () => {
+  const scene = new THREE.Scene(), hidden = new THREE.Group(), avatar = new THREE.Group(), world = new THREE.Group();
+  hidden.visible = false; avatar.userData.networkAvatar = true;
+  const geometry = new THREE.BoxGeometry(), material = new THREE.MeshBasicMaterial();
+  const wall = new THREE.Mesh(geometry, material); world.add(wall);
+  // A getter provides behavioral evidence that neither excluded subtree is scanned.
+  for (const root of [hidden, avatar]) root.add(new THREE.Object3D());
+  for (const root of [hidden, avatar]) Object.defineProperty(root.children[0], 'visible', { get() { throw new Error('Excluded subtree was visited'); } });
+  scene.add(hidden, avatar, world);
+  assert.deepEqual(collectFieldOccluders(scene, null), [wall]);
+  geometry.dispose(); material.dispose();
+});
+
+test('offscreen and photo encounters skip world raycasts while a visible target still tests occlusion', () => {
+  const element = () => ({ style: {}, append() {}, remove() {}, setAttribute() {}, getContext: () => ({ fillRect() {}, fillText() {} }) });
+  const oldDocument = globalThis.document, oldWidth = globalThis.innerWidth, oldHeight = globalThis.innerHeight;
+  globalThis.document = { createElement: element, getElementById: () => true, body: element(), head: element() };
+  globalThis.innerWidth = 800; globalThis.innerHeight = 600;
+  let view;
+  try {
+    const simulation = make(42); advance(simulation, 9);
+    const event = simulation.snapshot().events[0]; assert.ok(event);
+    const camera = new THREE.PerspectiveCamera(55, 4 / 3, 0.1, 2000);
+    camera.position.set(0, 1.5, 0); camera.updateMatrixWorld(true);
+    view = createFieldEventView({ THREE, parent: new THREE.Scene(), camera, ground, rules: spec.events });
+    let traces = 0;
+    const update = (pose, options = {}) => view.update({ events: [{ ...event, ...pose }] }, { visible: true, walking: true, canSee() { traces++; return true; }, ...options });
+    update({ x: 0, y: 0, z: 30 }); assert.equal(traces, 0, 'behind camera');
+    update({ x: 1000, y: 0, z: -30 }); assert.equal(traces, 0, 'outside viewport');
+    update({ x: 0, y: 0, z: -30 }, { visible: false }); assert.equal(traces, 0, 'photo/hidden mode');
+    update({ x: 0, y: 0, z: -30 }); assert.equal(traces, 1, 'onscreen target remains occluded by the real world');
+  } finally {
+    view?.dispose(); globalThis.document = oldDocument; globalThis.innerWidth = oldWidth; globalThis.innerHeight = oldHeight;
+  }
 });

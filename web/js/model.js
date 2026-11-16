@@ -6,6 +6,7 @@
 // Открывает и закрывает их doors.js; у наружных проёмов userData.passage — чистый проход створки в плане.
 import * as THREE from 'three';
 import { outdoorAreas, areaBeyond } from './walk.js';
+import { compactMaterialGroups } from './material-groups.js';
 
 // Углы открытия по умолчанию: межкомнатные открыты, наружные (балконные, входная) закрыты
 const DOOR_OPEN = { interior: 85, exterior: 90 };
@@ -172,6 +173,7 @@ export function buildShell(plan, M) {
     const faceSlots = [0, 1, 2, 3, 4, 5].map(f => faceSlot(plan, p, f));
     const m = boxAt(p.x0, p.x1, p.y0, p.y1, p.z0, p.z1, faceSlots.map(s => M[s] ?? M.walls), { slot: 'walls' });
     m.userData.faceSlots = faceSlots; m.userData.cutaway = true; m.name = `wall_${p.kind}`;
+    compactMaterialGroups(m.geometry, m.material, faceSlots);
     g.add(m); walls.push(m);
   }
 

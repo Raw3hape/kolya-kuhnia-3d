@@ -117,9 +117,10 @@ export function createMultiplayerLobby({
     history.replaceState(history.state, '', url);
   }
   function say(message, error = false) { status.textContent = message; status.dataset.error = String(error); }
+  const memberSignature = state => JSON.stringify((state?.players || []).map(p => [p.id, p.name, p.avatar, p.score, p.held, p.id === state?.hostId]));
   function renderMembers() {
     const state = client.state, players = state?.players || [];
-    const signature = JSON.stringify(players.map(p => [p.id, p.name, p.avatar, p.score, p.held, p.id === state?.hostId]));
+    const signature = memberSignature(state);
     if (signature === lastMembers) return;
     lastMembers = signature; members.replaceChildren();
     const sorted = [...players].sort((a, b) => (b.score || 0) - (a.score || 0) || String(a.id).localeCompare(String(b.id)));
@@ -214,6 +215,9 @@ export function createMultiplayerLobby({
       if (event.error) statusError = event.error;
       else if (event.status === 'connected') { statusError = null; say('Все изменения игры синхронизируются.'); }
     }
+    // Movement snapshots do not change the lobby. Avoid replacing text nodes,
+    // hidden/disabled attributes and live-region text twenty times a second.
+    if (event.type === 'snapshot' && memberSignature(event.snapshot) === lastMembers) return;
     if (event.type !== 'event') refresh();
   });
   const onLaunch = () => open(), onCancel = () => { document.body.classList.remove('kmp-modal-open'); };

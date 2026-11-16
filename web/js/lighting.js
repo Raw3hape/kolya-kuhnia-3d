@@ -48,6 +48,7 @@ import { sunFor, sunTimes } from './site.js';
 import { outdoorAreas } from './walk.js';
 import { rasterBusy } from './render.js';
 import { assetUrl, track, retry, whenRoom, isRoomReady } from './loading.js';
+import { createFilteredSHGrid } from './filtered-sh-grid.js';
 
 // ---------- настройки ----------
 
@@ -304,7 +305,7 @@ function glslPars(Z) {
   const v4 = list => list.map(a => `vec4( ${a.map(glslFloat).join(', ')} )`).join(',\n\t');
   return /* glsl */`
 uniform sampler2D rlMaskTex;              // строка = тип источника, столбец = номер в массиве three, значение = биты зон
-uniform sampler2D rlGrid;                 // сетка SH: ячейка = 10 текселей (зона, 9 коэффициентов); ниже — средние зон
+uniform highp sampler2DArray rlFilteredGrid;
 uniform vec4 rlGridA;                     // x0, z0, 1/шаг, nx
 uniform vec4 rlGridB;                     // nz, первая строка средних, включено, 0
 uniform vec4 rlZoneInfo[ ${MAX_ZONE} ];   // x — зондов нет/есть, y — доля сырого IBL, z — принимаемые зоны (биты), w — ровный подсвет
@@ -333,26 +334,14 @@ float rlLightMask( const in int type, const in int idx ) {
 	return float( ( m >> rlZone ) & 1 );
 }
 void rlGatherSH( const in int zone, const in vec3 p, out vec3 sh[ 9 ] ) {
-	for ( int j = 0; j < 9; j ++ ) sh[ j ] = vec3( 0.0 );
-	int accept = int( rlZoneInfo[ zone ].z );
-	vec2 g = ( p.xz - rlGridA.xy ) * rlGridA.z - 0.5;
-	vec2 f = fract( g );
-	ivec2 c0 = ivec2( floor( g ) ), last = ivec2( int( rlGridA.w ) - 1, int( rlGridB.x ) - 1 );
-	float ws = 0.0;
-	for ( int k = 0; k < 4; k ++ ) {
-		ivec2 o = ivec2( k & 1, k >> 1 );
-		ivec2 c = clamp( c0 + o, ivec2( 0 ), last );
-		float w = ( o.x == 1 ? f.x : 1.0 - f.x ) * ( o.y == 1 ? f.y : 1.0 - f.y );
-		int cz = int( texelFetch( rlGrid, ivec2( c.x * 10, c.y ), 0 ).r );
-		if ( ( ( accept >> cz ) & 1 ) == 0 || w <= 0.0 ) continue;
-		ws += w;
-		for ( int j = 0; j < 9; j ++ ) sh[ j ] += w * texelFetch( rlGrid, ivec2( c.x * 10 + 1 + j, c.y ), 0 ).rgb;
-	}
-	if ( ws > 1e-4 ) {
-		for ( int j = 0; j < 9; j ++ ) sh[ j ] /= ws;
+	vec2 uv = ( p.xz - rlGridA.xy ) * rlGridA.z / vec2( rlGridA.w, rlGridB.x + 1.0 );
+	uv.y = clamp( uv.y, 0.5 / ( rlGridB.x + 1.0 ), ( rlGridB.x - 0.5 ) / ( rlGridB.x + 1.0 ) );
+	vec4 first = texture( rlFilteredGrid, vec3( uv, float( zone * 9 ) ) );
+	if ( first.a > 1e-4 ) {
+		sh[ 0 ] = first.rgb / first.a;
+		for ( int j = 1; j < 9; j ++ ) sh[ j ] = texture( rlFilteredGrid, vec3( uv, float( zone * 9 + j ) ) ).rgb / first.a;
 	} else {
-		int row = int( rlGridB.y ) + zone;
-		for ( int j = 0; j < 9; j ++ ) sh[ j ] = texelFetch( rlGrid, ivec2( 1 + j, row ), 0 ).rgb;
+		for ( int j = 0; j < 9; j ++ ) sh[ j ] = texelFetch( rlFilteredGrid, ivec3( 0, int( rlGridB.x ), zone * 9 + j ), 0 ).rgb;
 	}
 }
 `;
@@ -587,6 +576,10 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     t.needsUpdate = true; disposables.push(t); return t;
   };
   const gridShow = makeGrid(), gridBake = makeGrid();
+  const accepts = Z.zones.map(z => z.accept);
+  const filteredShow = createFilteredSHGrid({ THREE, width: gx, height: gz, accepts });
+  const filteredBake = createFilteredSHGrid({ THREE, width: gx, height: gz, accepts });
+  disposables.push(filteredShow.texture, filteredBake.texture);
   // зона каждой ячейки (на высоте 1 м); в проёмы ячейка попадает редко — это нормально
   const cellZone = new Int32Array(gx * gz);
   for (let j = 0; j < gz; j++) for (let i = 0; i < gx; i++) cellZone[j * gx + i] = Z.lookup(gridX0 + (i + 0.5) * CELL, 1.0, gridZ0 + (j + 0.5) * CELL);
@@ -600,6 +593,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     rlRect: lazyUniform(v4s(LAMP_MAX.rect * 4)),
     rlMaskTex: { value: maskTex },
     rlGrid: { value: gridShow },
+    rlFilteredGrid: { value: filteredShow.texture },
     rlGridA: { value: new THREE.Vector4(gridX0, gridZ0, 1 / CELL, gx) },
     rlGridB: { value: new THREE.Vector4(gz, gz, 0, 0) },
     rlLampCount: { value: new THREE.Vector3() },
@@ -607,6 +601,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
 
   // --- патч материалов (один раз на материал; клоны и новые материалы подхватываются в update)
   const patched = new WeakSet();
+  const patchedMaterials = new Set();
   const lightsBegin = patchedLightsBegin(THREE), pars = glslPars(Z);
   function inject(shader, mat) {
     Object.assign(shader.uniforms, U);
@@ -627,12 +622,19 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n' + GLSL_GI);
   }
   function patch(mat) {
-    if (!mat || patched.has(mat)) return;
+    if (!mat || patched.has(mat) || mat.userData?.ecoMaterial) return;
     patched.add(mat);
     if (!(mat.isMeshStandardMaterial || mat.isMeshLambertMaterial || mat.isMeshPhongMaterial) || mat.isShaderMaterial) return;
     const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey;
-    mat.onBeforeCompile = function (shader, r) { prev?.call(this, shader, r); inject(shader, this); };
-    mat.customProgramCacheKey = function () { return (prevKey === THREE.Material.prototype.customProgramCacheKey ? '' : prevKey.call(this)) + '|roomlight1'; };
+    mat.userData.roomLightingPatched = true;
+    mat.userData.roomLightingBatchSafe = prev === THREE.Material.prototype.onBeforeCompile && prevKey === THREE.Material.prototype.customProgramCacheKey;
+    mat.onBeforeCompile = function (shader, r) {
+      prev?.call(this, shader, r); inject(shader, this);
+      if (quality === 'eco') shader.fragmentShader = '#undef USE_NORMALMAP\n#undef USE_NORMALMAP_TANGENTSPACE\n#undef USE_NORMALMAP_OBJECTSPACE\n#undef USE_BUMPMAP\n#undef USE_ROUGHNESSMAP\n#undef USE_CLEARCOAT\n#undef USE_CLEARCOAT_NORMALMAP\n' + shader.fragmentShader;
+    };
+    mat.customProgramCacheKey = function () { return (prevKey === THREE.Material.prototype.customProgramCacheKey ? '' : prevKey.call(this)) + '|roomlight2|' + (quality === 'eco' ? 'flat' : 'detail'); };
+    patchedMaterials.add(mat);
+    mat.addEventListener('dispose', () => patchedMaterials.delete(mat));
     mat.needsUpdate = true;
   }
   function patchScene() {
@@ -856,10 +858,12 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     const bg = scene.background, rt = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate;
     const clearA = renderer.getClearAlpha(); renderer.getClearColor(savedClear);
     const grid = U.rlGrid.value;
+    const filteredGrid = U.rlFilteredGrid.value;
     scene.background = null;                  // небо в окне уже дают прямоугольники окон
     renderer.setClearColor(0x000000, 1);
     renderer.shadowMap.autoUpdate = false;
     U.rlGrid.value = gridBake;
+    U.rlFilteredGrid.value = filteredBake.texture;
     U.rlGridB.value.z = 1;
     atlas.scissorTest = true;
     renderer.setRenderTarget(atlas);
@@ -883,6 +887,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     } finally {
       if (hidden) for (const o of small) o.visible = true;
       U.rlGrid.value = grid;
+      U.rlFilteredGrid.value = filteredGrid;
       U.rlGridB.value.z = hasGI ? 1 : 0;
       scene.background = bg;
       renderer.setClearColor(savedClear, clearA);
@@ -900,6 +905,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       const d = gridBake.image.data;
       for (let i = 0; i < d.length; i++) if (i % 40 !== 0) d[i] = 0;
       gridBake.needsUpdate = true;
+      filteredBake.update(d);
     }
     // ждём новый пересчёт (старый всё равно выбросится) и фоновую сборку шейдеров (иначе соберутся здесь, с заморозкой)
     if (!bake || bake.reading || dirty || now < bakeRest || rasterBusy(renderer)) return;
@@ -915,11 +921,12 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       if (job !== bake || job.gen !== generation) return;
       for (let p = 0; p < nP; p++) projectProbe(p);
       fillGrid(gridBake.image.data); gridBake.needsUpdate = true;
+      filteredBake.update(gridBake.image.data);
       setLandingFill();
       job.reading = false; job.pass++; job.face = 0; job.full = true;
       if (job.pass >= (BOUNCES_BY[quality] ?? BOUNCES)) {
         bake = null;
-        if (!hasGI) { gridShow.image.data.set(gridBake.image.data); gridShow.needsUpdate = true; hasGI = true; U.rlGridB.value.z = 1; giActive = true; }
+        if (!hasGI) { gridShow.image.data.set(gridBake.image.data); gridShow.needsUpdate = true; filteredShow.update(gridShow.image.data); hasGI = true; U.rlGridB.value.z = 1; giActive = true; }
         else { target.set(gridBake.image.data); blending = true; }
         requestRender();
       }
@@ -938,6 +945,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     }
     gridShow.needsUpdate = true;
     if (maxDiff < 1e-4) { d.set(target); blending = false; }
+    filteredShow.update(d);
     return true;
   }
 
@@ -1066,7 +1074,9 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   // Качество задаёт бюджет и глубину пересчёта и размер панорамы; карты теней — в render.js (одно место)
   let quality = 'eco';
   function setQuality(q) {
+    const changed = (quality === 'eco') !== (q === 'eco');
     quality = q;
+    if (changed) for (const mat of patchedMaterials) mat.needsUpdate = true;
     const t = HDR_TIER[q] ?? 'full';
     wantTier = t;
     if (!isRoomReady() || t === hdrTier) return;   // до первого вида — маленькая, по качеству — после (whenRoom выше)
@@ -1081,6 +1091,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     for (const d of disposables) d.dispose?.();
     for (const e of Object.values(env)) { e.bg.dispose(); e.env.dispose(); }
     maskTex.dispose(); pmrem.dispose();
+    patchedMaterials.clear();
     gl.useProgram = useProgram;
   }
 

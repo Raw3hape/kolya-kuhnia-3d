@@ -31,15 +31,16 @@ export async function createHostAuthority({ room, plan, huntSpec, site, resolveS
     worker.onmessage = ({ data }) => {
       if (data.type === 'ready') { ready = true; clearTimeout(timeout); resolve(); }
       else if (data.type === 'error') { clearTimeout(timeout); if (ready) failAuthority(); else { worker.terminate(); reject(new Error(data.message)); } }
-      else if (data.type === 'packet') {
+      else if (data.type === 'packet' || data.type === 'broadcast') {
         const event = data.packet?.event;
-        if (data.peer === 'local' && event?.kind === 'shot' && resolveExternalShot) {
+        const peers = data.type === 'broadcast' ? data.peers : [data.peer];
+        if (peers.includes('local') && event?.kind === 'shot' && resolveExternalShot) {
           try {
             const results = resolveExternalShot(event);
             if (results?.length) worker.postMessage({ command: 'external', shotId: event.shotId, actorId: event.actorId, results });
           } catch (error) { console.warn('Shared target effect:', error.message); }
         }
-        send(data.peer, data.packet);
+        for (const peer of peers) send(peer, data.packet);
       }
     };
     worker.postMessage({ command: 'init', options: { roomId: room, plan, huntSpec, site,

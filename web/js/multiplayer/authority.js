@@ -62,7 +62,7 @@ export function rayBox(origin, direction, bounds, range = Infinity) {
   return { distance: near, point: origin.map((v, i) => q(v + direction[i] * near)), normal };
 }
 
-export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = () => performance.now(), seed = 1 }) {
+export function createRoomAuthority({ roomId, plan, huntSpec, site, send, sendMany, now = () => performance.now(), seed = 1 }) {
   const players = new Map(), links = new Map(), objects = new Map(), broken = new Set();
   const completedExternal = new Set(), killedExternal = new Set();
   const effectSizes = new Map(), pendingExternal = new Map();
@@ -106,7 +106,14 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
     return null;
   }
   const post = (link, packet) => { if (!disposed) send(link, packet); };
-  const broadcast = packet => { for (const p of active()) post(p.link, packet); };
+  // A Worker bridge can clone one shared state for the entire fanout. Ordinary
+  // transports retain the original per-recipient API and packet ordering.
+  const broadcast = packet => {
+    if (disposed) return;
+    const recipients = active().map(p => p.link);
+    if (sendMany) sendMany(recipients, packet);
+    else for (const link of recipients) post(link, packet);
+  };
   const result = (link, action, ok, error) => { if (action.requestId) post(link, { type: 'result', requestId: action.requestId, ok, ...(error ? { error } : {}) }); return ok; };
   const event = e => { const packet = { ...e, id: ++eventSeq, time, epoch }; broadcast({ type: 'event', event: packet }); return packet; };
   const animate = (p, kind, targetId, target, weapon = p.weapon) => {

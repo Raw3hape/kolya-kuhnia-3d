@@ -3,7 +3,7 @@ import { raySphere, rayAnimalPose } from './hunt-hitboxes.js';
 import { captureLocalWildlife, restoreLocalWildlife } from './hunt-session-state.js';
 import { createFieldEventSimulation } from './field-events-simulation.js';
 import { createFieldEventView } from './field-events-view.js';
-import { collectFieldOccluders } from './field-events-visibility.js';
+import { collectFieldOccluders, fieldRayBlocked } from './field-events-visibility.js';
 // Охота «как в тире» за балконом: кабаны (dziki) с поросятами (warchlaki) пасутся на поле и лугу под домом (больше всего —
 // в 40–150 м от балкона) и на газонах справа, у дорог и парковок; над полем низко тянутся клинья больших гусей, гуси
 // пасутся на поле, реже — стайки голубей и грачей, утки. Стреляют из оружия прогулки (viewmodel.js).
@@ -345,22 +345,19 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   let localWildlife = null;
   let encounters = null, encounterView = null;
   const encounterSurface = { albedo: new THREE.Color('#8c9795'), metal: true, solid: true, flesh: false };
-  const eventSight = new THREE.Raycaster(), sightDirection = new THREE.Vector3(), sightCache = new Map(), sightObjects = [];
+  const eventSight = new THREE.Raycaster(), sightDirection = new THREE.Vector3(), sightCache = new Map(), sightObjects = [], sightHits = [];
   eventSight.layers.enable(1); // Cutaway walls still occlude game information.
-  let sightClock = 0;
+  let sightClock = 0, sightObjectsAt = -1;
   function canSeeEncounter(point, id) {
     // An apartment camera must look through a real opening, even in cutaway mode.
     if (inFlat(camera.position) && !throughOpening(camera.position, point)) return false;
     const previous = sightCache.get(id);
     if (previous && sightClock - previous.at < 0.12 && previous.camera.distanceToSquared(camera.position) < 0.04) return previous.visible;
     sightDirection.copy(point).sub(camera.position);
-    eventSight.set(camera.position, sightDirection.clone().normalize()); eventSight.near = 0.03; eventSight.far = sightDirection.length() - 0.2;
-    collectFieldOccluders(scene, root, sightObjects);
-    const blocked = eventSight.intersectObjects(sightObjects, false).some(hit => {
-      const o = hit.object;
-      const m = Array.isArray(o.material) ? o.material[hit.face?.materialIndex || 0] : o.material;
-      return !!m && m.visible !== false && m.colorWrite !== false && !(m.transparent && m.opacity < 0.1);
-    });
+    const distance = sightDirection.length();
+    eventSight.set(camera.position, sightDirection.divideScalar(distance || 1)); eventSight.near = 0.03; eventSight.far = distance - 0.2;
+    if (sightObjectsAt !== sightClock) { collectFieldOccluders(scene, root, sightObjects); sightObjectsAt = sightClock; }
+    const blocked = fieldRayBlocked(eventSight, sightObjects, sightHits);
     sightCache.set(id, { at: sightClock, camera: camera.position.clone(), visible: !blocked });
     while (sightCache.size > 4) sightCache.delete(sightCache.keys().next().value);
     return !blocked;
@@ -916,6 +913,11 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     root.visible = v;
     return true;
   }
+  function syncWildlifeVisible(visible) {
+    const changed = boarMesh.visible !== visible || birdMesh.visible !== visible;
+    boarMesh.visible = blobMesh.visible = birdMesh.visible = visible;
+    return changed;
+  }
 
   // ---------- кадр ----------
 
@@ -938,7 +940,15 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
         a.flash = Math.max(0, a.flash - dt * 4);
       }
       time += dt;
-      syncVisible(); seen(getWalk?.()); writeBuffers(); wasSeen = true;
+      let need = syncVisible();
+      boundsOnly();
+      const visible = seen(getWalk?.());
+      need = syncWildlifeVisible(visible) || need;
+      wasSeen = visible;
+      // Authority keeps every animal alive. A guest looking at an interior
+      // needs no instance uploads or invisible, uncullable wildlife draw calls.
+      if (!visible) return need || eventFrame;
+      writeBuffers();
       return true;
     }
     const walk = getWalk?.();
@@ -947,6 +957,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     time += dt;
     acc += dt;
     const vis = !pipe?.photo && seen(walk);
+    need = syncWildlifeVisible(vis) || need;
     if (!vis) {
       wasSeen = false;
       if (acc >= COARSE) { step(acc, walk); acc = 0; boundsOnly(); }
@@ -1207,7 +1218,9 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       }
       networkTargets.set(a, pose);
     }
-    syncVisible(); seen(getWalk?.()); writeBuffers(); requestRender?.();
+    // Present once in the animation frame, not again at every snapshot receipt.
+    // Bounds stay current so newly arriving animals become visible immediately.
+    boundsOnly(); syncVisible();
   }
 
   function setEnabled(on) {

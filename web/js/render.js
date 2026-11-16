@@ -13,9 +13,8 @@
 //
 // Почему не замирает:
 // - Карты теней перерисовываются, только когда сдвинулся отбрасывающий тень меш или источник (refreshShadows), а не каждый кадр.
-// - Композер один на все качества (сцена → GTAO → свечение → вывод), качество только включает проходы и меняет
-//   размеры: программы материалов на всех качествах одни и те же (раньше «Быстрое» рисовало прямо на холст —
-//   +26 программ и ~0,9 с заморозки на переключении). MSAA только у цели сцены, не больше 4.
+// - Без AO/свечения eco/fast рисуют прямо на холст: без двух полноэкранных HDR-целей и прохода вывода.
+//   High/ultra используют композер; новые варианты программ при переключении собираются фоном.
 // - Новые и изменённые материалы, смена набора источников: шейдеры собираются фоном (KHR_parallel_shader_compile),
 //   до готовности держится прошлый кадр — без секундных заморозок на первой отрисовке.
 // - Фото: BVH сцены (≈1,2 млн треугольников, ~5 с) строится в Web Worker; трассировщик (≈1 ГБ памяти) освобождается
@@ -37,11 +36,13 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { createRasterBatches } from './raster-batches.js';
+import { createEcoMaterials } from './eco-materials.js';
 
 // px — бюджет пикселей кадра (плотность снижается до pr[0], если окно большое); pr — [мин, макс] плотности;
 // shadow — карта тени солнца (споты — вчетверо меньше); ao — выборки GTAO (0 — без AO); bloom — свечение.
 // eco («Эконом», макс. FPS): плотность ≤ 1, без AO и свечения, переотражения — один отскок.
-// Программы материалов на всех качествах те же — переключение без сборки шейдеров.
+// На eco материалы плоские; переключение вариантов программ собирается фоном.
 // Трассировка (фото-режим) включается и выключается только явно (enterPhoto/exitPhoto), само качество её не включает.
 export const QUALITY = {
   eco:   { px: 1.2e6, pr: [0.6, 1],  msaa: 0, shadow: 1024, ao: 0,  bloom: false },
@@ -79,6 +80,8 @@ export const rasterBusy = renderer => busy.has(renderer);
 // photoPixels — сколько пикселей трассировать (больше — растягивается): 1,5 Мп ≈ 1,5 прохода/с на M5 Pro
 export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 1024, autoExposure = true, photoPixels = 1.5e6, quality: startQuality = DEFAULT_QUALITY }) {
   const canvas = renderer.domElement;
+  const batches = createRasterBatches({ THREE, scene, renderer });
+  const eco = createEcoMaterials({ THREE, scene, renderer });
   renderer.debug.checkShaderErrors = false;   // ошибки шейдеров проверяет фоновая сборка (startCompile), без журнала на каждую
   let quality = 'high', q = QUALITY.high;
   let size = { w: 1, h: 1, dpr: 1 };
@@ -119,8 +122,16 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   }
 
   function drawRaster() {
-    composer.readBuffer = rtA; composer.writeBuffer = rtB;   // проходы меняют их местами — сцена всегда в rtA
-    composer.render();
+    const draw = () => {
+      if (!ao.enabled && !bloom.enabled) {
+        renderer.setRenderTarget(null);
+        renderer.render(scene, camera);
+        return;
+      }
+      composer.readBuffer = rtA; composer.writeBuffer = rtB;   // проходы меняют их местами — сцена всегда в rtA
+      composer.render();
+    };
+    return batches.draw(() => quality === 'eco' ? eco.draw(draw) : draw());
   }
 
   const frameGaps = [], offered = new Set();
@@ -146,7 +157,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     const pr = prOverride ?? Math.max(q.pr[0], Math.min(base, Math.sqrt(q.px / Math.max(1, size.w * size.h))));
     renderer.setPixelRatio(pr);
     renderer.setSize(size.w, size.h, false);
-    composer.setPixelRatio(pr); composer.setSize(size.w, size.h);
+    if (ao.enabled || bloom.enabled) { composer.setPixelRatio(pr); composer.setSize(size.w, size.h); }
+    else { composer.setPixelRatio(1); composer.setSize(1, 1); }
     // выключенные проходы не держат полноэкранных целей (AO — нормали, глубина и шум; свечение — цепочка мипов)
     if (!ao.enabled) ao.setSize(1, 1);
     if (!bloom.enabled) bloom.setSize(1, 1);
@@ -325,6 +337,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 
   function render() {
     if (document.hidden || lost) return;   // вкладка скрыта или WebGL сброшен — GPU не трогаем
+    if (!explicit) batches.update(camera);
+    if (!explicit && quality === 'eco') eco.update(camera);
     if (compiling()) return;               // шейдеры собираются фоном — на экране прошлый кадр
     const now = performance.now(), quiet = now - lastChange;
     const done = tracedSamples();
@@ -553,6 +567,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     exitPhoto();
     dropTracer();
     composer.passes.forEach(p => p.dispose()); composer.dispose();
+    batches.dispose();
+    eco.dispose();
     if (meter) { meter.rt.dispose(); meter.quad.dispose(); meter.quad.material.dispose(); meter = null; }
     canvas.removeEventListener('webglcontextlost', onLost);
     canvas.removeEventListener('webglcontextrestored', onRestored);
@@ -601,6 +617,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     whenDrawn() { rasterDirty = true; return new Promise(r => drawnWaiters.push(r)); },
     setOverlay(o) { overlay = o; rasterDirty = true; },   // см. overlay выше; null — снять
     get quality() { return quality; },
+    get batches() { return batches.stats; },
+    get eco() { return eco.stats; },
     get photo() { return explicit; },
     get samples() { return tracedSamples(); },
   };

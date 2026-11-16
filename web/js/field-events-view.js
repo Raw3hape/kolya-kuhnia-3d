@@ -178,7 +178,7 @@ export function createFieldEventView({ THREE: T, parent, camera, ground, rules }
     style.textContent = '.kfe-cue{position:fixed;z-index:23;left:50%;bottom:115px;transform:translateX(-50%);max-width:min(340px,80vw);padding:10px 16px;border:1px solid #d5c9a84d;border-radius:8px;background:#202c2ce8;color:#fff7df;text-align:center;pointer-events:none;font:12px/1.45 system-ui;box-shadow:0 4px 20px #0002}.kfe-cue b{display:block;font-size:14px;letter-spacing:.02em}.kfe-cue span{display:block;color:#e0dac7}.kfe-cue progress{display:block;width:100%;height:5px;margin:7px 0 1px;accent-color:#e3bd64}.kfe-health{position:fixed;z-index:4;transform:translate(-50%,-100%);padding:5px 8px;border-radius:5px;background:#1b292bd9;color:#fff7df;pointer-events:none;text-align:center;font:10px/1.25 system-ui;min-width:78px;box-shadow:0 2px 8px #0002}.kfe-health b,.kfe-health span{display:block}.kfe-health b{font-size:10px;letter-spacing:.04em}.kfe-health progress{width:100%;height:4px;display:block;margin-top:3px;accent-color:#8dc5b6}.kfe-health span{margin-top:2px}.kfe-cue[hidden],.kfe-cue progress[hidden],.kfe-health[hidden],.kfe-health [hidden]{display:none!important}@media(max-width:600px){.kfe-cue{bottom:152px;font-size:11px;padding:8px 12px}.kfe-cue b{font-size:13px}.kfe-health{font-size:9px;min-width:65px}}';
     document.head.append(style);
   }
-  const projected = new T.Vector3();
+  const projected = new T.Vector3(), sightPoint = new T.Vector3();
   function update(state, { visible = true, walking = false, dt = 1 / 60, network = false, canSee = () => true } = {}) {
     root.visible = visible; const live = new Set(), announcements = [];
     let aimed = null, best = 0.17, inView = false;
@@ -245,8 +245,12 @@ export function createFieldEventView({ THREE: T, parent, camera, ground, rules }
         const t = (e.age * 2 + i / 3) % 1, s = m.smoke[i]; s.visible = true;
         s.position.set(Math.sin(i * 5) * 0.7, 0.15 + t * 0.7, -1.5 - t * 2.5); s.scale.setScalar(0.25 + t * 0.7);
       }
-      projected.set(e.x, e.y + (e.kind === 'tractor' ? 3.8 : e.kind === 'police' ? 2.2 : 1.5), e.z);
-      const unobscured = canSee(projected, e.id); projected.project(camera);
+      sightPoint.set(e.x, e.y + (e.kind === 'tractor' ? 3.8 : e.kind === 'police' ? 2.2 : 1.5), e.z);
+      projected.copy(sightPoint).project(camera);
+      // Occlusion is the expensive step: never trace a hidden/photo scene or
+      // an encounter behind/off the camera. Keep the announcement's 1.2 margin.
+      const onScreen = visible && projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1.2 && Math.abs(projected.y) < 1.2;
+      const unobscured = onScreen && canSee(sightPoint, e.id);
       if (unobscured && projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1.1 && Math.abs(projected.y) < 1.1) inView = true;
       m.plate.hidden = !visible || e.dead || !unobscured || projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > 0.95 || Math.abs(projected.y) > 0.95 || fade < 0.5;
       if (!m.plate.hidden) {

@@ -267,10 +267,12 @@ export function create(L) {
   }
 
   function setLive(on) {
+    const changed = live !== on;
     live = on;
     if (on && open) build();
     if (!on && root) root.visible = false;
     else sync();
+    if (changed && !on) L.walk?.refreshObstacles?.();
   }
 
   function dispose() {
@@ -287,6 +289,7 @@ export function create(L) {
     if (!value) return;
     networkSnapshot = value;
     if (!network || network.authority) return;
+    let obstaclesChanged = open !== !!value.open;
     open = !!value.open;
     if (value.built && !built) build();
     if (!root) return;
@@ -299,12 +302,16 @@ export function create(L) {
     for (const pose of value.cast ?? []) {
       const m = cast.find(c => c.id === pose.id);
       if (!m) continue;
+      if (open && (m.x !== pose.x || m.z !== pose.z)) obstaclesChanged = true;
       m.x = pose.x; m.z = pose.z; m.busy = pose.busy; m.obj.position.set(pose.x, 0, pose.z); m.obj.rotation.y = pose.yaw;
       if (m.cur?.getClip()?.name !== pose.clip) play(m, pose.clip, { once: pose.clip !== 'Idle' });
       if (m.cur && Number.isFinite(pose.clipTime)) m.cur.time = pose.clipTime;
       m.mixer.update(0);
     }
-    L.walk?.refreshObstacles?.(); L.requestRender?.();
+    // Flicker, clip time, yaw and gestures do not change these circular blockers.
+    // Refresh only on an actual collision change; addCast/setLive handle loading.
+    if (obstaclesChanged) L.walk?.refreshObstacles?.();
+    L.requestRender?.();
   }
   return { update, colliders, setLive, dispose, preload, snapshot, applyNetworkSnapshot,
     setNetwork(value) { network = value || null; }, open: () => L.doors?.setOpen?.(entry.id, true),

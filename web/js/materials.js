@@ -30,8 +30,8 @@ const metaCache = new Map();    // id -> Promise<meta|null>
 let maxAniso = 8;
 
 // Размер по качеству: '512' | '1k' | 'full' (оригинал)
-const TIER_OF = { eco: '1k', fast: '1k', high: 'full', ultra: 'full' };
-let tier = '1k';
+const TIER_OF = { eco: '512', fast: '1k', high: 'full', ultra: 'full' };
+let tier = '512';
 // Список уровней и meta.json текстур сборка кладёт в страницу (loading.js assetIndex): без запросов; локально — файлы
 const sizes = assetIndex('sizes') ? Promise.resolve(assetIndex('sizes'))
   : fetch(assetUrl('textures/sizes.json')).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
@@ -95,10 +95,11 @@ async function tex(id, map, item, srgb, t, later, label) {
 async function loadMaps(it, t, later, label) {
   const maps = {};
   if (it.tex) {
-    [maps.map, maps.normalMap, maps.roughnessMap] = await Promise.all([
+    if (t === '512' && tier === '512') maps.map = await tex(it.tex, 'color', it, true, t, later, label);
+    else [maps.map, maps.normalMap, maps.roughnessMap] = await Promise.all([
       tex(it.tex, 'color', it, true, t, later, label), tex(it.tex, 'normal', it, false, t, later, label), tex(it.tex, 'rough', it, false, t, later, label),
     ]);
-  } else if (it.normal) {
+  } else if (it.normal && tier !== '512') {
     maps.normalMap = await tex(it.normal, 'normal', { size: it.size }, false, t, later, label);
   }
   return maps;
@@ -120,7 +121,8 @@ export async function applyItem(mat, item, extra = {}, opts = {}) {
   const same = mat.userData.itemKey === key;   // та же запись, другое качество: только поменять карты
   mat.userData.itemKey = key;
   if (!live.has(mat)) mat.addEventListener('dispose', () => live.delete(mat));
-  live.set(mat, { item, extra, opts });
+  const request = { item, extra, opts };
+  live.set(mat, request);
   const later = !!opts.later;
   if (later && !isRoomReady()) {   // не ждать: вызывающий (setState) не должен зависеть от фоновых материалов
     whenRoom.then(() => { if (mat.userData.itemKey === key) { mat.userData.itemKey = ''; applyItem(mat, item, extra, opts); } });
@@ -134,7 +136,7 @@ export async function applyItem(mat, item, extra = {}, opts = {}) {
       roughMul = meta.rough ?? 1;
     }
   }
-  const current = () => mat.userData.itemKey === key;
+  const current = () => live.get(mat) === request;
   const put = (maps, t) => {
     if (!current() || (t !== '512' && t !== tier)) {   // пока грузили, выбрали другое (или сменили качество)
       for (const m of Object.values(maps)) m?.dispose();

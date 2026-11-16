@@ -16,6 +16,8 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
   let appliedHunt = null, started = false, sendClock = 0, ambientClock = 0, geometryTimer = null, changeSerial = 0;
   let apartmentQueue = Promise.resolve(), previousState = null, sessionRole = null, lifecycle = 0, pendingApartments = 0, wasWalking = false, sentWeapon = null;
   let manifestDecor = null, manifestFurniture = null, manifestPass = -1, manifestPending = false;
+  let appliedAmbient = null, ambientModule = null;
+  let damageModule = null, damageEffects = null, damageBroken = null;
   const style = document.createElement('style');
   style.textContent = `body[data-multiplayer-role="guest"] :is(#tab-mat,#tab-kitchen,#tab-furniture,#tab-light,#pane-mat,#pane-kitchen,#pane-furniture,#pane-light),body[data-multiplayer-role="guest"] .mode[data-mode="design"],body[data-multiplayer-role="guest"] .mode[data-mode="photo"],body[data-multiplayer-role="guest"] #preset-row,body[data-multiplayer-role="guest"] #panel-head .head-row>:not(.hide-btn){display:none!important}body[data-multiplayer-state="reconnecting"] #scene{pointer-events:none}`;
   document.head.append(style);
@@ -111,6 +113,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     const m = getModules();
     if (epoch !== snapshot.epoch) {
       epoch = snapshot.epoch; seenEvents.clear(); m.viewmodel.clearHoles({ remote: true }); shots.clear();
+      damageModule = null;
     }
     if (revision !== snapshot.revision) {
       revision = snapshot.revision;
@@ -137,9 +140,19 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.tv.applyNetwork(snapshot.items?.phone ?? null); m.paper.applyNetwork(snapshot.items?.newspaper ?? null);
     const me = snapshot.players.find(p => p.id === client.id);
     m.seats?.applyNetwork?.(snapshot.seats || {}, me, { instant: !started });
-    m.viewmodel.reconcileNetworkDamage(snapshot.effects || [], snapshot.broken || []);
+    if (m.viewmodel !== damageModule || snapshot.effects !== damageEffects || snapshot.broken !== damageBroken) {
+      m.viewmodel.reconcileNetworkDamage(snapshot.effects || [], snapshot.broken || []);
+      damageModule = m.viewmodel; damageEffects = snapshot.effects; damageBroken = snapshot.broken;
+    }
     if (m.hunt) { if (appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; } m.hunt.applyNetworkSnapshot(snapshot.hunt, me?.score ?? 0); }
-    if (client.role !== 'host' && snapshot.ambient) m.life?.applyNetworkSnapshot?.(snapshot.ambient);
+    // The delta decoder retains unchanged fields by reference. The host samples
+    // ambient life at 10 Hz, so do not reapply it on every 20 Hz player frame:
+    // landing state also rebuilds movement obstacles and updates skeletal poses.
+    if (client.role !== 'host' && snapshot.ambient && m.life &&
+      (snapshot.ambient !== appliedAmbient || m.life !== ambientModule)) {
+      m.life.applyNetworkSnapshot?.(snapshot.ambient);
+      appliedAmbient = snapshot.ambient; ambientModule = m.life;
+    }
     if (me) {
       if (m.seats?.active || me.seat) started = false;
       else if (!started && !applying) {
@@ -174,7 +187,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
     } else if (event.kind === 'external-hit') {
       for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
-    } else if (event.kind === 'clear') { m.viewmodel.clearHoles({ remote: true }); shots.clear(); }
+    } else if (event.kind === 'clear') { m.viewmodel.clearHoles({ remote: true }); shots.clear(); damageModule = null; }
     else if (event.kind === 'door' && event.targetId) m.doors.applyNetwork({ ...lastSnapshot?.doors, [event.targetId]: event.open }, { instant: false });
     else if (event.kind === 'item' && event.targetId) { (event.targetId === 'phone' ? m.tv : m.paper).applyNetwork(event.owner); }
     else if (event.kind === 'interaction' && event.targetId) {
@@ -251,7 +264,8 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.hood?.setNetwork?.(null);
     m.seats?.setNetwork?.(null); m.viewmodel.setNetwork(null); m.hunt?.setNetwork(false); m.life?.setNetwork?.(null);
     for (const avatar of avatars.values()) { scene.remove(avatar.root); avatar.dispose(); } avatars.clear(); shots.clear();
-    samples.length = 0; inputs.length = 0; seenEvents.clear(); appliedHunt = null; epoch = revision = -1; started = false;
+    samples.length = 0; inputs.length = 0; seenEvents.clear(); appliedHunt = null; appliedAmbient = ambientModule = null; epoch = revision = -1; started = false;
+    damageModule = damageEffects = damageBroken = null;
     delete document.body.dataset.multiplayerRole;
     const restore = previousState; previousState = null; sessionRole = null; lastSnapshot = null;
     if (restore) apartmentQueue = apartmentQueue.catch(() => {}).then(() => applyState(restore)).catch(() => {});

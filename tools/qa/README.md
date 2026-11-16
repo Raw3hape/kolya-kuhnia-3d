@@ -1,5 +1,8 @@
 # Independent browser QA harnesses
 
+Performance comparison: [../../docs/performance.md](../../docs/performance.md).
+`performance-qa.mjs` runs a muted, bounded browser and records frame/CPU/GPU/draw measurements for solo, host and guest. `performance-server.py` shares assets between current code and an archived baseline. Keep reports under `output/playwright/`; inspect and remove screenshots after review.
+
 These run real production/local WebGL pages. They install nothing and use an existing Playwright package through `PLAYWRIGHT_MODULE` (package name or filesystem path). Set `QA_COMMIT` and `QA_DEPLOYMENT` to the release receipts and `QA_OUTPUT` to a fresh output directory so earlier evidence stays intact. Set `QA_URL` explicitly: the final harnesses default to production; the actor/observer harness defaults to local port8765.
 
 ## Final animated multiplayer / capacity
