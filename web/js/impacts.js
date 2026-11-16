@@ -336,7 +336,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   const beastSurf = s => {
     if (!s?.albedo) return FLESH;
     let v = surfCache.get(s);
-    if (!v) surfCache.set(s, v = { albedo: s.albedo, metal: !!s.metal, solid: s.solid !== false, flesh: true });
+    if (!v) surfCache.set(s, v = { albedo: s.albedo, metal: !!s.metal, solid: s.solid !== false, flesh: s.flesh !== false });
     return v;
   };
   const collect = o => {

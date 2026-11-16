@@ -8,8 +8,9 @@ export const spec = createRequire(import.meta.url)('../web/spec/hunt.json');
 
 const Sc = spec.score;
 // Самое дорогое попадание: самый ценный зверь × в голову × дальний выстрел × полная серия × на бегу
-const maxPerKill = Math.max(...Object.values(spec.species).map(s => s.points))
-  * Math.max(Sc.head, Sc.heart) * Sc.distance.max * Sc.combo.max * Sc.running;
+const maxPerKill = Math.max(Math.max(...Object.values(spec.species).map(s => s.points))
+  * Math.max(Sc.head, Sc.heart) * Sc.distance.max * Sc.combo.max * Sc.running,
+  ...Object.values(spec.events?.types ?? {}).map(s => s.points));
 export const LIMITS = {
   top: spec.leaderboard.online,                                  // сколько строк хранить и отдавать
   nameMax: spec.leaderboard.nameMax,
@@ -37,7 +38,8 @@ export function validate(body) {
   if (!int(score, 5, LIMITS.score) || score % 5) return { error: 'странный счёт' };
   if (score > kills * LIMITS.perKill) return { error: 'счёт не сходится с числом зверей' };
   if (!int(level, 1, LIMITS.level)) return { error: 'странный уровень' };
-  if (boars !== null && birds !== null && (!int(boars, 0, kills) || !int(birds, 0, kills) || boars + birds !== kills)) return { error: 'звери не сходятся' };
+  const targets = body.targets ?? 0;
+  if (boars !== null && birds !== null && (!int(boars, 0, kills) || !int(birds, 0, kills) || !int(targets, 0, kills) || boars + birds + targets !== kills)) return { error: 'звери не сходятся' };
   if (shots !== null && shots !== 0 && (!int(shots, kills, LIMITS.shots))) return { error: 'выстрелы не сходятся' };
   if (body.round != null && body.round !== spec.round) return { error: 'другая длина охоты' };
   return { entry: { name, score, kills, level, date: new Date().toISOString().slice(0, 10) } };

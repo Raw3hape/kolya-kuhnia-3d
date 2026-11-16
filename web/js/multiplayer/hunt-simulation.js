@@ -4,6 +4,7 @@ import { buildHuntRegions } from '../hunt-regions.js';
 import { rayAnimalPose } from '../hunt-hitboxes.js';
 import { seededRandom } from '../network-objects.js';
 import { WEAPON_RULES } from './rules.js';
+import { createFieldEventSimulation } from '../field-events-simulation.js';
 
 const TAU = Math.PI * 2;
 const BIRDS = ['pigeon', 'crow', 'duck', 'goose'];
@@ -19,6 +20,7 @@ export function createHuntSimulation({ spec, site, plan, seed = 1 }) {
   const home = plan.balcony ? [(plan.balcony.x0 + plan.balcony.x1) / 2, (plan.balcony.z0 + plan.balcony.z1) / 2] : [0, 0];
   const ground = -site.floorY, regions = buildHuntRegions(site, spec.region, home, random);
   if (!regions.length) throw new Error('No safe wildlife habitat in authored site');
+  const encounters = createFieldEventSimulation({ spec, region: regions.find(r => r.kind === 'field'), ground, seed: `${seed}:field` });
   const animals = [], combos = new Map();
   let time = 0, historyAt = -1;
 
@@ -120,6 +122,7 @@ export function createHuntSimulation({ spec, site, plan, seed = 1 }) {
     }
   }
   function step(dt) {
+    encounters.step(dt);
     for (let left = clamp(Number(dt) || 0, 0, 1); left > 1e-7;) { const h = Math.min(left, 1 / 60); advance(h); left -= h; }
   }
   function raycast(origin, direction, range = 800) {
@@ -141,7 +144,8 @@ export function createHuntSimulation({ spec, site, plan, seed = 1 }) {
       best = { animalId: a.id, distance: h.distance, zone: h.zone,
         point: origin.map((n, i) => n + d[i] * h.distance), normal: d.map(n => -n) };
     }
-    return best;
+    const encounter = encounters.raycast(origin, direction, range);
+    return encounter && (!best || encounter.distance < best.distance) ? encounter : best;
   }
   function hit({ origin, direction, weapon, range = 800, playerId = '' }) {
     const w = WEAPON_RULES[weapon];
@@ -149,6 +153,7 @@ export function createHuntSimulation({ spec, site, plan, seed = 1 }) {
     const h = raycast(origin, direction, Math.min(range, w.range));
     flee(origin);
     if (!h) return null;
+    if (h.event) return encounters.hit({ origin, direction, weapon, range });
     const a = animals.find(animal => animal.id === h.animalId);
     if (!a || a.dead) return null;
     const multiplier = h.zone === 'head' ? 2.5 : h.zone === 'heart' ? 2 : h.zone === 'legs' ? 0.7 : 1;
@@ -169,7 +174,7 @@ export function createHuntSimulation({ spec, site, plan, seed = 1 }) {
   function snapshot() {
     // The renderer needs millimetres/milliradians; authoritative motion and hits retain full precision.
     const poseValue = value => typeof value === 'number' ? Math.round(value * 1000) / 1000 : value;
-    return { time, animals: animals.map(a => Object.fromEntries(POSE_FIELDS.filter(k => a[k] !== undefined).map(k => [k, poseValue(a[k])]))) };
+    return { time, encounters: encounters.snapshot(), animals: animals.map(a => Object.fromEntries(POSE_FIELDS.filter(k => a[k] !== undefined).map(k => [k, poseValue(a[k])]))) };
   }
   function restore(state) {
     if (!state || !Array.isArray(state.animals) || state.animals.length > spec.boars.count + spec.birds.pool) return false;
@@ -186,6 +191,7 @@ export function createHuntSimulation({ spec, site, plan, seed = 1 }) {
       base.respawn = pick(pose.kind === 'boar' ? spec.boars.respawn : spec.birds.respawn);
       base.history = []; restored.push(base);
     }
+    if (state.encounters && !encounters.restore(state.encounters)) return false;
     time = Number(state.time) || 0; animals.splice(0, animals.length, ...restored); historyAt = -1; return true;
   }
   return { step, snapshot, restore, raycast, hit, noise: flee, get time() { return time; } };

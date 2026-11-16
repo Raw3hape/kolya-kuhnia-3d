@@ -1,6 +1,8 @@
 import { buildHuntRegions as buildRegions } from './hunt-regions.js';
 import { raySphere, rayAnimalPose } from './hunt-hitboxes.js';
 import { captureLocalWildlife, restoreLocalWildlife } from './hunt-session-state.js';
+import { createFieldEventSimulation } from './field-events-simulation.js';
+import { createFieldEventView } from './field-events-view.js';
 // Охота «как в тире» за балконом: кабаны (dziki) с поросятами (warchlaki) пасутся на поле и лугу под домом (больше всего —
 // в 40–150 м от балкона) и на газонах справа, у дорог и парковок; над полем низко тянутся клинья больших гусей, гуси
 // пасутся на поле, реже — стайки голубей и грачей, утки. Стреляют из оружия прогулки (viewmodel.js).
@@ -393,6 +395,29 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   let network = false, networkSnapshot = null, previousEnabled = enabled;
   const networkTargets = new Map(), networkFlock = { kind: 'local' };
   let localWildlife = null;
+  let encounters = null, encounterView = null;
+  const encounterSurface = { albedo: new THREE.Color('#8c9795'), metal: true, solid: true, flesh: false };
+  const eventSight = new THREE.Raycaster(), sightDirection = new THREE.Vector3(), sightCache = new Map();
+  eventSight.layers.enable(1); // Cutaway walls still occlude game information.
+  let sightClock = 0;
+  function canSeeEncounter(point, id) {
+    // An apartment camera must look through a real opening, even in cutaway mode.
+    if (inFlat(camera.position) && !throughOpening(camera.position, point)) return false;
+    const previous = sightCache.get(id);
+    if (previous && sightClock - previous.at < 0.12 && previous.camera.distanceToSquared(camera.position) < 0.04) return previous.visible;
+    sightDirection.copy(point).sub(camera.position);
+    eventSight.set(camera.position, sightDirection.clone().normalize()); eventSight.near = 0.03; eventSight.far = sightDirection.length() - 0.2;
+    const blocked = eventSight.intersectObjects(scene.children, true).some(hit => {
+      const o = hit.object, u = o.userData;
+      if (u?.glass || u?.passLight || u?.shadowOnly || u?.impact) return false;
+      for (let n = o; n; n = n.parent) if (!n.visible || n === root || n.userData?.networkEntity || n.userData?.networkEffect || n.userData?.viewmodel) return false;
+      const m = Array.isArray(o.material) ? o.material[hit.face?.materialIndex || 0] : o.material;
+      return !!m && m.visible !== false && m.colorWrite !== false && !(m.transparent && m.opacity < 0.1);
+    });
+    sightCache.set(id, { at: sightClock, camera: camera.position.clone(), visible: !blocked });
+    while (sightCache.size > 4) sightCache.delete(sightCache.keys().next().value);
+    return !blocked;
+  }
   let boarMesh = null, blobMesh = null, birdMesh = null;
   let boarMot, boarSt, birdMot, birdSt;
   const owned = [];   // что освобождать в dispose
@@ -425,7 +450,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   nameIn.addEventListener('keyup', e => e.stopPropagation());
 
   // --- раунд и счёт
-  const round = { on: false, t0: 0, score: 0, kills: 0, boars: 0, birds: 0, shots: 0 };
+  const round = { on: false, t0: 0, score: 0, kills: 0, boars: 0, birds: 0, targets: 0, shots: 0 };
   let streak = 0, lastKill = -1e9, shown = { score: -1, kills: -1, sec: -1, combo: -1, xp: -1, best: -1, on: null };
 
   // --- видимость
@@ -447,6 +472,8 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     ceiling = pl.ceiling ?? ceiling;
     exterior = pl.openings.filter(o => o.type === 'window' || /balcony/.test(o.id));
     build();
+    encounters = createFieldEventSimulation({ spec: S, region, ground, seed: Math.floor(Math.random() * 0xffffffff) });
+    encounterView = createFieldEventView({ THREE, parent: root, camera, ground, rules: S.events });
     ready = true;
     if (network && networkSnapshot) applyNetworkSnapshot(networkSnapshot);
     syncVisible();
@@ -967,6 +994,11 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
   function update(dt = 1 / 60) {
     if (!ready || disposed) return false;
+    sightClock += dt;
+    if (!network && enabled) encounters.step(dt);
+    const eventFrame = encounterView.update(network ? networkSnapshot?.encounters : encounters.snapshot(), {
+      visible: enabled && !pipe?.photo && !capturing && seen(getWalk?.()), walking: !!getWalk?.()?.active, dt, network,
+      canSee: canSeeEncounter });
     if (network) {
       hud.hidden = card.hidden = true;
       if (!networkSnapshot) return false;
@@ -992,19 +1024,19 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     if (!vis) {
       wasSeen = false;
       if (acc >= COARSE) { step(acc, walk); acc = 0; boundsOnly(); }
-      return need;
+      return need || eventFrame;
     }
     if (!round.on && !alarm) {
       // покой (пасутся, летят): шаг в кадре, который и так рисуется (камера сдвинулась), иначе редко — в прогулке
       // spec.idleFps и свой кадр, в облёте раз в COARSE и без своего кадра (рендер по требованию)
       const moved = camMoved(), walking = !!walk?.active;
-      if (!moved && acc < (walking ? 1 / S.idleFps : COARSE)) return need;
+      if (!moved && acc < (walking ? 1 / S.idleFps : COARSE)) return need || eventFrame;
       step(Math.min(acc, COARSE), walk); acc = 0;
       writeBuffers(); wasSeen = true;
-      return need || walking;
+      return need || walking || eventFrame;
     }
     // раунд, бегство, падение подстреленного: плавно (в облёте — не чаще spec.orbitFps)
-    if (!walk?.active && wasSeen && acc < 1 / S.orbitFps) return need;
+    if (!walk?.active && wasSeen && acc < 1 / S.orbitFps) return need || eventFrame;
     step(Math.min(acc, 0.1), walk); acc = 0;
     writeBuffers();
     wasSeen = true;
@@ -1093,6 +1125,22 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   // ближайшее на луче: звери охоты и чужие мишени (addTargets)
   function raycast(raycaster) {
     let best = raycastAnimals(raycaster);
+    if (enabled && !network && encounters) {
+      const origin = raycaster.ray.origin.toArray(), direction = raycaster.ray.direction.toArray();
+      const hit = encounters.raycast(origin, direction, Number.isFinite(raycaster.far) ? raycaster.far : 800);
+      if (hit && (!best || hit.distance < best.distance)) {
+        let used = false;
+        best = { ...hit, point: new THREE.Vector3(...hit.point), normal: new THREE.Vector3(...hit.normal),
+          object: encounterView.root, surface: encounterSurface,
+          hit(weapon) {
+            if (used || network) return null; used = true;
+            const result = encounters.hit({ origin, direction, weapon, range: raycaster.far });
+            if (result?.killed) api.award(result.points, new THREE.Vector3(...result.point), S.events.types[result.species].name);
+            else if (result) popup(new THREE.Vector3(...result.point), `${result.hp} / ${result.maxHp}`, 'прочность');
+            return result;
+          } };
+      }
+    }
     if (network) return best;
     for (const t of targets) { const h = t.raycast(raycaster); if (h && (!best || h.distance < best.distance)) best = h; }
     return best;
@@ -1177,7 +1225,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   // ---------- раунд, табло, итог ----------
 
   function startRound() {
-    Object.assign(round, { on: true, t0: performance.now(), score: 0, kills: 0, boars: 0, birds: 0, shots: 0 });
+    Object.assign(round, { on: true, t0: performance.now(), score: 0, kills: 0, boars: 0, birds: 0, targets: 0, shots: 0 });
     streak = 0; card.hidden = true;
     syncHud(true);
   }
@@ -1197,7 +1245,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     H.time.textContent = round.on ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'ждёт выстрела';
     H.time.classList.toggle('low', round.on && left <= 10);
     H.score.textContent = fmt(round.score);
-    H.kills.textContent = `кабаны ${round.boars} · птицы ${round.birds}`;
+    H.kills.textContent = `кабаны ${round.boars} · птицы ${round.birds}` + (round.targets ? ` · цели ${round.targets}` : '');
     const now = performance.now() / 1000, live = streak > 1 && now - lastKill < S.score.combo.window;
     H.combo.textContent = live ? `серия ×${streak}` : '';
     H.lv.textContent = `ур. ${lv.level}`;
@@ -1207,7 +1255,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function finishRound() {
     round.on = false;
     const p = shared.pref, L = S.leaderboard;
-    const entry = { name: p.name, score: round.score, kills: round.kills, boars: round.boars, birds: round.birds, shots: round.shots,
+    const entry = { name: p.name, score: round.score, kills: round.kills, boars: round.boars, birds: round.birds, targets: round.targets, shots: round.shots,
       level: levelOf(p.xp, S.levels).level, round: S.round, date: new Date().toISOString().slice(0, 10) };
     const record = entry.score > p.best;
     if (record) p.best = entry.score;
@@ -1226,7 +1274,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     card.querySelector('.kh-card-title').textContent = title;
     card.querySelector('.kh-card-score').textContent = entry ? `${fmt(entry.score)} очков` : '';
     card.querySelector('.kh-card-sub').textContent = entry
-      ? `кабаны ${entry.boars} · птицы ${entry.birds} · выстрелов ${entry.shots} · уровень ${entry.level}`
+      ? `кабаны ${entry.boars} · птицы ${entry.birds} · цели ${entry.targets || 0} · выстрелов ${entry.shots} · уровень ${entry.level}`
       : 'Имя видно в таблице рекордов.';
     nameIn.value = shared.pref.name;
     card.querySelector('.kh-save').textContent = entry ? 'Записать' : 'Сохранить';
@@ -1269,6 +1317,8 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function setNetwork(on) {
     const next = !!on;
     if (network === next) return;
+    encounterView?.update(null, { visible: false });
+    sightCache.clear();
     if (next) { previousEnabled = enabled; enabled = true; round.on = false; hud.hidden = card.hidden = true; }
     else {
       const clock = restoreLocalWildlife(localWildlife);
@@ -1318,6 +1368,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     disposed = true;
     localWildlife = null; networkSnapshot = null; networkTargets.clear();
     offLive?.();
+    encounterView?.dispose();
     scene.remove(root);
     for (const o of owned) o.dispose?.();
     for (const m of [boarMesh, blobMesh, birdMesh]) m?.dispose?.();
@@ -1330,14 +1381,14 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     applyNetworkHit(hit, { local = false } = {}) {
       if (!network || !local || !hit?.point) return;
       const p = new THREE.Vector3(...hit.point);
-      if (hit.points > 0) popup(p, `+${fmt(hit.points)}`, S?.species?.[hit.species]?.name ?? 'Попадание');
-      else popup(p, 'Попадание', hit.zone === 'head' ? 'в голову' : '');
+      if (hit.points > 0) popup(p, `+${fmt(hit.points)}`, S?.events?.types?.[hit.species]?.name ?? S?.species?.[hit.species]?.name ?? 'Попадание');
+      else popup(p, hit.event ? `${hit.hp} / ${hit.maxHp}` : 'Попадание', hit.event ? 'прочность' : hit.zone === 'head' ? 'в голову' : '');
     },
     award(points, point, title, sub = '') {
       if (network) return;
       if (points > 0 && S) {
         if (!round.on) startRound();
-        round.score += points; round.kills++;
+        round.score += points; round.kills++; round.targets++;
         shared.pref.xp += points; writePref();
         syncHud(true);
       }
@@ -1356,7 +1407,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
         level: S ? levelOf(p.xp, S.levels).level : 1, board: shared.status };
     },
     // для проверок из консоли: звери и их состояние
-    get debug() { return { boars, birds, flocks, groups, region, regions, home, box, finishRound, spawnPass }; },
+    get debug() { return { boars, birds, flocks, groups, region, regions, home, box, finishRound, spawnPass, encounters, encounterView }; },
   };
   shared.hunt = api;
   return api;
@@ -1365,6 +1416,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 // ---------- раздел панели ----------
 
 addHelp(
+  { mode: 'walk', topic: 'hunt', order: 83, text: 'на поле иногда появляются POLICJA, трактор с пирогом, дрон и самолёт. Дым — цель повреждена; добейте до взрыва. В комнате урон общий' },
   { mode: 'walk', topic: 'hunt', order: 80, text: 'охота: кабаны и птицы на поле за балконом. Выйти на балкон (дверь — E), 3 — автомат' },
   { mode: 'walk', topic: 'hunt', order: 81, text: 'раунд идёт с первого выстрела, счёт на табло справа сверху' },
   { mode: 'walk', topic: 'hunt', order: 82, text: 'в голову ×2, в сердце ×1,5; на бегу, влёт, издалека и сериями больше. Кабана в бок обычно с двух попаданий' },

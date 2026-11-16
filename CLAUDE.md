@@ -100,6 +100,9 @@
     `mirrors.js` — плоские отражения зеркал (`userData.mirror` или `mirror` в `spec/break.json`), бьются тоже.
     Всё только растр, до кнопки «Убрать следы и осколки». Вьюмодели — риги рук с оружием с poly.pizza (J-Toastie, AdamKokrito —
     CC-BY 3.0; Quaternius — CC0); подпись в `web/models/viewmodel/SOURCE.md` и в панели, сборка `tools/viewmodel/build.py`.
+  - Редкие события на поле: [docs/field-events.md](docs/field-events.md), правила `hunt.json.events`,
+    чистая симуляция `field-events-simulation.js`, геометрия/HP `field-events-view.js`.
+    Урон/груз/движение/очки общие через `hunt.encounters`, события без звука, HP не виден через стены.
   - `hunt.js` + `spec/hunt.json` — охота: кабаны на поле за балконом и на газонах справа, клинья гусей и стаи птиц, очки, раунды; таблица рекордов —
     `api/scores.js` (Vercel Blob `kolya-kuhnia-hunt`, переменная `BLOB_READ_WRITE_TOKEN`), без неё — только в браузере.
   - `life.js` — «Живой дом» (ядро: настройки, звук WebAudio, `seen`, загрузка GLB) и модули после первого вида:
