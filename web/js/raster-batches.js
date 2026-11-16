@@ -1,20 +1,23 @@
 // Raster-only proxies. The authored scene remains the gameplay/raycast/export
 // source of truth and is restored synchronously after every draw, including errors.
 import { warmRasterPrograms } from './shader-warmup.js';
+import { ECO_BATCH_KEYS, ECO_MAPS, ecoMaterialEligible, createEcoMaterial } from './eco-material-state.js';
 
-const SCAN_MS = 750, MAX_VERTICES = 1_500_000;
+const SCAN_MS = 750, MAX_VERTICES = 1_500_000, COMPILE_RETRY_MS = 250, MAX_COMPILE_ATTEMPTS = 4;
 
-export function createRasterBatches({ THREE, scene, renderer }) {
+export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }) {
   const supported = !!renderer.extensions?.has?.('WEBGL_multi_draw');
   const root = new THREE.Group(); root.name = 'raster_batches'; root.visible = false;
   root.matrixAutoUpdate = root.matrixWorldAutoUpdate = false; // proxy matrices are already in world coordinates.
   Object.assign(root.userData, { networkEntity: true, rasterOnly: true, noPick: true, noNetwork: true });
   const groups = new Map(), ids = new WeakMap();
-  const materialKeys = new WeakMap();
+  const materialKeys = new WeakMap(), geometryKeys = new WeakMap(), ecoHooks = new WeakMap();
   const geometryGuards = new WeakMap(), chainStates = new WeakMap(), opaqueStates = new WeakMap();
   const hidden = [], shown = [], collapsed = [];
-  let sources = [], serial = 0, lastScan = -Infinity, dirty = true, disposed = false, depth = 0;
+  let sources = [], descriptions = new Map(), serial = 0, lastScan = -Infinity, dirty = true, disposed = false, depth = 0;
   let vertices = 0, rebuilds = 0, camera = null, materialFrame = 0;
+  let describedCount = 0, reusedCount = 0;
+  let ecoMode = quality === 'eco', lost = false, compileEpoch = 0;
   const id = object => { if (!ids.has(object)) ids.set(object, ++serial); return ids.get(object); };
   const marked = o => {
     const u = o.userData || {};
@@ -59,11 +62,20 @@ export function createRasterBatches({ THREE, scene, renderer }) {
       if (parentState) parentState.collapseFrame = -1;
     }
   }
+  function attributeState(a) {
+    return { object: a, data: a.data, array: a.array, version: a.data?.version ?? a.version,
+      itemSize: a.itemSize, normalized: a.normalized, gpuType: a.gpuType, count: a.count, offset: a.offset, stride: a.data?.stride };
+  }
+  function attributeCurrent(a, state) {
+    return a === state.object && a.data === state.data && a.array === state.array && (a.data?.version ?? a.version) === state.version &&
+      a.itemSize === state.itemSize && a.normalized === state.normalized && a.gpuType === state.gpuType &&
+      a.count === state.count && a.offset === state.offset && a.data?.stride === state.stride;
+  }
   function geometryCurrent(state) {
     if (state.frame === materialFrame) return state.valid;
     state.frame = materialFrame;
     const g = state.geometry;
-    let valid = g.index === state.index && g.index?.version === state.indexVersion && g.drawRange.start === state.start &&
+    let valid = g.index === state.index && (!g.index || attributeCurrent(g.index, state.indexState)) && g.drawRange.start === state.start &&
       g.drawRange.count === state.count && g.groups.length === state.ranges.length;
     if (valid) {
       let count = 0; for (const key in g.attributes) count++;
@@ -74,8 +86,8 @@ export function createRasterBatches({ THREE, scene, renderer }) {
       if (group.start !== range[0] || group.count !== range[1] || group.materialIndex !== range[2]) { valid = false; break; }
     }
     if (valid) for (let i = 0; i < state.attributes.length; i++) {
-      const entry = state.attributes[i], a = entry[1];
-      if (g.attributes[entry[0]] !== a || (a.data?.version ?? a.version) !== entry[2]) { valid = false; break; }
+      const entry = state.attributes[i];
+      if (!attributeCurrent(g.attributes[entry[0]], entry[1])) { valid = false; break; }
     }
     if (valid) for (const key in g.morphAttributes) if (Object.hasOwn(g.morphAttributes, key)) { valid = false; break; }
     state.valid = valid; return valid;
@@ -83,9 +95,9 @@ export function createRasterBatches({ THREE, scene, renderer }) {
   function geometryGuard(g) {
     let state = geometryGuards.get(g);
     if (state && geometryCurrent(state)) return state;
-    state = { geometry: g, frame: -1, valid: false, index: g.index, indexVersion: g.index?.version,
+    state = { geometry: g, frame: -1, valid: false, index: g.index, indexState: g.index && attributeState(g.index),
       start: g.drawRange.start, count: g.drawRange.count, ranges: g.groups.map(p => [p.start, p.count, p.materialIndex]),
-      attributes: Object.entries(g.attributes).map(([key, a]) => [key, a, a.data?.version ?? a.version]) };
+      attributes: Object.entries(g.attributes).map(([key, a]) => [key, attributeState(a)]) };
     geometryGuards.set(g, state); return state;
   }
   const ignoredMaterialKeys = new Set(['id', 'uuid', 'name', 'version', 'userData', '_listeners', 'color', 'onBeforeCompile', 'customProgramCacheKey']);
@@ -142,28 +154,40 @@ export function createRasterBatches({ THREE, scene, renderer }) {
     if (cached?.frame === materialFrame) return cached.key;
     const defaultHooks = m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile && m.customProgramCacheKey === THREE.Material.prototype.customProgramCacheKey;
     const roomHooks = m.userData.roomLightingPatched && m.userData.roomLightingBatchSafe;
+    const flat = ecoMode && ecoMaterialEligible(THREE, m);
     let key = null;
     if (m.isMeshStandardMaterial && opaque(m) && m.color?.isColor && (defaultHooks || roomHooks) &&
       m.onBeforeRender === THREE.Material.prototype.onBeforeRender) {
-      const ownKeys = Object.keys(m);
-      if (cached?.checks && cached.hook === m.onBeforeCompile && cached.programKey === m.customProgramCacheKey && cached.roomHooks === !!roomHooks) {
+      const ownKeys = flat ? ECO_BATCH_KEYS : Object.keys(m);
+      if (cached?.checks && cached.flat === flat && cached.hook === m.onBeforeCompile && cached.programKey === m.customProgramCacheKey && cached.roomHooks === !!roomHooks) {
         let unchanged = ownKeys.length === cached.ownKeys.length;
         if (unchanged) for (let i=0;i<ownKeys.length;i++) if (ownKeys[i] !== cached.ownKeys[i]) { unchanged=false; break; }
         if (unchanged) for (const check of cached.checks) {
           const next = m[check.name], state = check.state;
           if (state.kind === 0 ? !Object.is(next, state.value) : !valueMatches(next, state)) { unchanged = false; break; }
         }
+        if (unchanged && flat) for (let i = 0; i < ECO_MAPS.length; i++) if ((m[ECO_MAPS[i]]?.channel ?? 0) !== cached.channels[i]) { unchanged = false; break; }
         if (unchanged) { cached.frame = materialFrame; return cached.key; }
       }
-      const values = [];
-      // Include every own BRDF/render/texture/define/clipping parameter. Only the
-      // diffuse multiplier is moved into the per-instance color texture.
+      const channels = flat ? ECO_MAPS.map(key => m[key]?.channel ?? 0) : null;
+      const values = [['representation', flat ? 'eco' : 'pbr']];
+      // PBR keeps its complete semantics. Eco groups only by the exact state of
+      // the Lambert representation it actually draws, never by discarded BRDFs.
       const checks = [];
       for (const name of ownKeys.slice().sort()) if (!ignoredMaterialKeys.has(name)) {
         values.push([name, semanticValue(m[name])]); checks.push({ name, state: captureValue(m[name]) });
       }
+      if (flat) {
+        values.push(['mapChannels', channels]);
+        let hooks = ecoHooks.get(m);
+        if (!hooks) { hooks = { hook: m.onBeforeCompile, key: m.customProgramCacheKey }; ecoHooks.set(m, hooks); }
+        // The safe room patch is equivalent across authored materials. A later
+        // ad-hoc hook replacement must not inherit that equivalence accidentally.
+        values.push(['hookOverride', hooks.hook === m.onBeforeCompile && hooks.key === m.customProgramCacheKey ? 0 :
+          `${id(m.onBeforeCompile)}:${id(m.customProgramCacheKey)}`]);
+      }
       values.push(['roomLighting', !!roomHooks]); key = JSON.stringify(values);
-      materialKeys.set(m, { frame: materialFrame, key, checks, ownKeys, hook: m.onBeforeCompile, programKey: m.customProgramCacheKey, roomHooks: !!roomHooks }); return key;
+      materialKeys.set(m, { frame: materialFrame, key, flat, channels, checks, ownKeys, hook: m.onBeforeCompile, programKey: m.customProgramCacheKey, roomHooks: !!roomHooks }); return key;
     }
     materialKeys.set(m, { frame: materialFrame, key }); return key;
   }
@@ -185,16 +209,25 @@ export function createRasterBatches({ THREE, scene, renderer }) {
     return !o.customDepthMaterial && !o.customDistanceMaterial;
   }
   function geometryKey(g) {
-    return Object.entries(g.attributes).sort(([a], [b]) => a.localeCompare(b)).map(([key, a]) =>
+    const cached = geometryKeys.get(g);
+    if (cached?.frame === materialFrame) return cached.key;
+    const key = Object.entries(g.attributes).sort(([a], [b]) => a.localeCompare(b)).map(([key, a]) =>
       `${key}:${a.itemSize}:${a.normalized}:${a.array.constructor.name}:${a.gpuType}`).join(',');
+    geometryKeys.set(g, { frame: materialFrame, key }); return key;
+  }
+  function attributeVersion(a) {
+    return `${id(a)}:${id(a.data || a)}:${id(a.array)}:${a.data?.version ?? a.version}:${a.itemSize}:${a.normalized}:${a.gpuType}:${a.count}:${a.offset}:${a.data?.stride}`;
   }
   function geometryVersion(g) {
-    let version = `${id(g)}:${g.index?.version ?? 0}:${g.drawRange.start}:${g.drawRange.count}`;
-    for (const [key, a] of Object.entries(g.attributes)) version += `:${key}:${id(a)}:${a.data?.version ?? a.version}`;
+    // Identity matters independently of version: replacing an index/attribute
+    // with another fresh version-zero buffer must rebuild copied GPU triangles.
+    let version = `${id(g)}:${g.index ? attributeVersion(g.index) : 'none'}:${g.drawRange.start}:${g.drawRange.count}`;
+    for (const [key, a] of Object.entries(g.attributes)) version += `:${key}:${attributeVersion(a)}`;
     for (const p of g.groups) version += `:${p.start},${p.count},${p.materialIndex}`;
     return version;
   }
   function describe(o) {
+    describedCount++;
     const g = o.geometry, size = g.index?.count ?? g.attributes.position.count;
     const start = Math.max(0, g.drawRange.start), end = Math.min(size, start + g.drawRange.count);
     const ranges = new Map();
@@ -206,21 +239,34 @@ export function createRasterBatches({ THREE, scene, renderer }) {
     };
     if (Array.isArray(o.material)) for (const p of g.groups) add(o.material[p.materialIndex], p.start, p.count);
     else add(o.material, start, end - start);
-    const source = { object: o, geometry: g, material: o.material, materials: Array.isArray(o.material) ? [...o.material] : null,
+    const source = { object: o, geometry: g, material: o.material, materials: Array.isArray(o.material) ? [...o.material] : null, ecoMode,
       version: geometryVersion(g), entries: [], matrix: new THREE.Matrix4(), matrixValid: false, matrixSafe: true,
       guard: geometryGuard(g), savedVisible: true,
       cast: o.castShadow, receive: o.receiveShadow, layers: o.layers.mask, order: o.renderOrder };
-    const layout = geometryKey(g);
+    const layout = source.layout = geometryKey(g);
     for (const [material, parts] of ranges) {
       const whole = parts.length === 1 && parts[0][0] === 0 && parts[0][1] === size;
       const indexed = !!g.index || !whole;
       const semantic = semanticKey(material);
       const key = `${semantic == null ? 'material:' + id(material) : 'semantic:' + semantic}|${layout}|${indexed}|${o.castShadow}|${o.receiveShadow}|${o.layers.mask}|${o.renderOrder}`;
-      source.entries.push({ source, material, semantic, parts, whole, indexed, key,
+      source.entries.push({ source, material, semantic, flat: ecoMode && ecoMaterialEligible(THREE, material), parts, whole, indexed, key,
         viewKey: `${source.version}|${parts.map(p => p.join(',')).join(';')}`,
         indexCount: indexed ? parts.reduce((n, p) => n + p[1], 0) : 0, draws: parts.length });
     }
     return source;
+  }
+  function descriptionCurrent(source, object) {
+    if (source.ecoMode !== ecoMode || object.geometry !== source.geometry || !geometryCurrent(source.guard) || geometryKey(object.geometry) !== source.layout ||
+      object.material !== source.material || object.castShadow !== source.cast || object.receiveShadow !== source.receive ||
+      object.layers.mask !== source.layers || object.renderOrder !== source.order) return false;
+    if (source.materials) {
+      if (object.material.length !== source.materials.length) return false;
+      for (let i = 0; i < source.materials.length; i++) if (object.material[i] !== source.materials[i]) return false;
+    }
+    // Uniform edits need not bump Material.version. Check the same complete
+    // semantics as the draw guard, including transitions to/from identity keys.
+    for (const entry of source.entries) if (semanticKey(entry.material) !== entry.semantic) return false;
+    return true;
   }
   function viewGeometry(entry) {
     const original = entry.source.geometry;
@@ -237,17 +283,26 @@ export function createRasterBatches({ THREE, scene, renderer }) {
   }
   function release(group) { group.dead = true; group.mesh.removeFromParent(); group.mesh.dispose(); if (group.ownedMaterial) group.mesh.material.dispose(); vertices -= group.vertices; }
   function compile(group) {
-    if (group.pending || group.ready || !camera || group.requiresLighting && !group.mesh.material.userData.roomLightingPatched) return;
+    if (lost || disposed || group.dead || group.pending || group.ready || group.failed || performance.now() < group.retryAt || !camera || group.requiresLighting && !group.mesh.material.userData.roomLightingPatched) return;
     group.pending = true;
-    const material = group.mesh.material, version = material.version;
+    const material = group.mesh.material, version = material.version, epoch = compileEpoch;
     // compile traverses hidden objects. Use the complete scene for its lights/GI.
     let promise;
     try { promise = warmRasterPrograms(renderer, group.mesh, camera, scene,
-      { cancelled: () => disposed || group.dead || material.version !== version }); }
-    catch { group.ready = false; group.pending = false; return; }
+      { cancelled: () => disposed || group.dead || lost || epoch !== compileEpoch || material.version !== version }); }
+    catch { group.ready = false; group.pending = false; group.failed = true; return; }
     Promise.resolve(promise).then(ready => {
-      if (!disposed && !group.dead && material.version === version) group.ready = ready === true;
-    }).catch(() => { if (!group.dead) group.ready = false; }).finally(() => { group.pending = false; });
+      if (!disposed && !group.dead && !lost && epoch === compileEpoch && material.version === version) {
+        group.ready = ready === true;
+        // false includes a transient currentProgram replacement by a GI/probe
+        // or raster compile, but also a real compile failure/timeout. Bound both
+        // retry rate and attempts so an unusable program cannot block startup.
+        group.compileFailures = ready === true ? 0 : group.compileFailures + 1;
+        group.failed = group.compileFailures >= MAX_COMPILE_ATTEMPTS;
+        group.retryAt = ready === true ? 0 : performance.now() + COMPILE_RETRY_MS;
+      }
+    }).catch(() => { if (!group.dead && epoch === compileEpoch) { group.ready = false; group.failed = true; } })
+      .finally(() => { if (epoch === compileEpoch) group.pending = false; });
   }
   function build(key, entries, signature) {
     const views = new Map(); let vertexCount = 0, indexCount = 0;
@@ -257,8 +312,10 @@ export function createRasterBatches({ THREE, scene, renderer }) {
     if (vertices + vertexCount > MAX_VERTICES) return null;
     const first = entries[0], o = first.source.object;
     const useColor = first.semantic != null, requiresLighting = useColor && !!first.material.userData.roomLightingPatched;
-    const material = useColor ? first.material.clone() : first.material;
-    if (useColor) {
+    // Eco owns a Lambert material from the outset. Merging distinct authored
+    // PBRs before a Lambert substitute is warm would render the wrong fallback.
+    const material = first.flat ? createEcoMaterial(THREE, first.material, true) : useColor ? first.material.clone() : first.material;
+    if (useColor && !first.flat) {
       material.color.setRGB(1, 1, 1);
       // Material.clone deliberately restores default hooks. Let lighting.patch
       // wrap the new material once on its next update, before compilation/use.
@@ -269,7 +326,7 @@ export function createRasterBatches({ THREE, scene, renderer }) {
     mesh.castShadow = o.castShadow; mesh.receiveShadow = o.receiveShadow; mesh.layers.mask = o.layers.mask; mesh.renderOrder = o.renderOrder;
     Object.assign(mesh.userData, { networkEntity: true, rasterOnly: true, noPick: true, noNetwork: true }); mesh.raycast = () => {};
     const group = { mesh, signature, entries, vertices: vertexCount, ready: false, pending: false, dead: false,
-      materialVersion: material.version, useColor, requiresLighting, ownedMaterial: useColor };
+      materialVersion: material.version, useColor, requiresLighting, ownedMaterial: useColor, ecoMode, flat: first.flat, retryAt: 0, compileFailures: 0 };
     try {
       for (const entry of entries) {
         let geometryId = views.get(entry.viewKey);
@@ -282,6 +339,10 @@ export function createRasterBatches({ THREE, scene, renderer }) {
         mesh.setMatrixAt(entry.instance, entry.source.object.matrixWorld);
         if (useColor) { mesh.setColorAt(entry.instance, entry.material.color); entry.lastColor = entry.material.color.clone(); }
       }
+      // r169 initializes combined BufferAttributes without copying gpuType.
+      // The group layout guarantees the same type for every source attribute.
+      for (const [key, attribute] of Object.entries(o.geometry.attributes)) if (attribute.gpuType !== undefined)
+        mesh.geometry.attributes[key].gpuType = attribute.gpuType;
     } catch { mesh.dispose(); if (useColor) material.dispose(); return null; }
     root.add(mesh); vertices += vertexCount; rebuilds++; compile(group); return group;
   }
@@ -289,15 +350,19 @@ export function createRasterBatches({ THREE, scene, renderer }) {
     materialFrame++;
     if (!root.parent) scene.add(root);
     scene.updateMatrixWorld();
-    const previous = new Map(sources.map(s => [s.object, s]));
+    const previous = descriptions;
+    descriptions = new Map();
     const next = [], candidates = new Map();
     function visit(o) {
       if (o === root || marked(o)) return;
       if (eligible(o)) {
-        const s = describe(o), before = previous.get(o);
-        if (before && before.geometry === s.geometry && before.version === s.version && before.material === s.material) {
+        const before = previous.get(o), reuse = before && descriptionCurrent(before, o);
+        const s = reuse ? before : describe(o);
+        if (reuse) reusedCount++;
+        else if (before && before.geometry === s.geometry && before.version === s.version && before.material === s.material) {
           s.matrix.copy(before.matrix); s.matrixValid = before.matrixValid; s.matrixSafe = before.matrixSafe;
         }
+        descriptions.set(o, s);
         if (s.entries.length) next.push(s);
       }
       for (const child of o.children) visit(child);
@@ -322,7 +387,7 @@ export function createRasterBatches({ THREE, scene, renderer }) {
         if (group) groups.set(key, group);
       } else {
         const before = group.entries;
-        group.entries = entries;
+        group.entries = entries; group.ecoMode = ecoMode;
         // Signature equality guarantees stable geometry/instance order.
         entries.forEach((e, i) => { e.group = group; e.instance = i; e.lastColor = before[i].lastColor; e.lastVisible = before[i].lastVisible; });
       }
@@ -335,13 +400,13 @@ export function createRasterBatches({ THREE, scene, renderer }) {
     if (dirty || performance.now() - lastScan >= SCAN_MS) discover();
     for (const group of groups.values()) {
       if (group.materialVersion !== group.mesh.material.version) {
-        group.materialVersion = group.mesh.material.version; group.ready = false; group.failed = false;
+        group.materialVersion = group.mesh.material.version; group.ready = false; group.failed = false; group.retryAt = group.compileFailures = 0;
       }
       if (!group.failed) compile(group);
     }
   }
   function draw(fn, options) {
-    if (disposed || !supported || depth || !sources.length) return fn();
+    if (disposed || lost || !supported || depth || !sources.length) return fn();
     hidden.length = shown.length = collapsed.length = 0;
     const auto = scene.matrixWorldAutoUpdate;
     materialFrame++;
@@ -371,7 +436,7 @@ export function createRasterBatches({ THREE, scene, renderer }) {
         let ready = valid, equivalent = true;
         for (let i = 0; i < source.entries.length; i++) {
           const e = source.entries[i];
-          if (!e.group?.ready || e.group.dead) ready = false;
+          if (!e.group?.ready || e.group.dead || e.group.ecoMode !== ecoMode) ready = false;
           if (e.semantic != null) {
             const cached = materialKeys.get(e.material);
             if ((cached?.frame === materialFrame ? cached.key : semanticKey(e.material)) !== e.semantic) equivalent = false;
@@ -391,7 +456,7 @@ export function createRasterBatches({ THREE, scene, renderer }) {
         if (replace) { source.savedVisible = o.visible; hidden.push(source); o.visible = false; }
       }
       for (let i = 0; i < hidden.length; i++) collapseParents(hidden[i].object.parent);
-      for (const group of groups.values()) if (group.ready) { shown.push(group.mesh); group.mesh.visible = true; }
+      for (const group of groups.values()) if (group.ready && group.ecoMode === ecoMode) { shown.push(group.mesh); group.mesh.visible = true; }
       root.visible = true;
       // Matrices are current (updated here or supplied by the caller); avoid a
       // second authored-hierarchy walk in renderer.render, including mirrors.
@@ -406,11 +471,29 @@ export function createRasterBatches({ THREE, scene, renderer }) {
       depth--;
     }
   }
+  function setQuality(name) {
+    const next = name === 'eco';
+    if (next === ecoMode) return;
+    ecoMode = next; materialFrame++; dirty = true;
+  }
+  function resetPrograms() {
+    compileEpoch++;
+    for (const group of groups.values()) {
+      group.ready = group.pending = group.failed = false;
+      group.retryAt = group.compileFailures = 0;
+      group.mesh.material.needsUpdate = true;
+    }
+  }
+  const onLost = () => { lost = true; resetPrograms(); }, onRestored = () => { lost = false; resetPrograms(); };
+  renderer.domElement?.addEventListener?.('webglcontextlost', onLost);
+  renderer.domElement?.addEventListener?.('webglcontextrestored', onRestored);
   return {
-    update, draw,
+    update, draw, setQuality,
     get stats() { return { supported, sources: sources.length, groups: groups.size, ready: [...groups.values()].filter(g => g.ready).length,
       failed: [...groups.values()].filter(g => g.failed).length,
-      vertices, maxVertices: MAX_VERTICES, rebuilds }; },
-    dispose() { if (disposed) return; disposed = true; for (const group of groups.values()) release(group); groups.clear(); sources = []; root.removeFromParent(); },
+      vertices, maxVertices: MAX_VERTICES, rebuilds, descriptions: describedCount, reusedDescriptions: reusedCount,
+      representation: ecoMode ? 'eco' : 'pbr', lambertGroups: [...groups.values()].filter(g => g.flat).length }; },
+    dispose() { if (disposed) return; disposed = true; compileEpoch++; for (const group of groups.values()) release(group); groups.clear(); sources = []; descriptions.clear(); root.removeFromParent();
+      renderer.domElement?.removeEventListener?.('webglcontextlost', onLost); renderer.domElement?.removeEventListener?.('webglcontextrestored', onRestored); },
   };
 }

@@ -156,6 +156,7 @@ export function createTicker({ THREE, scene, camera, renderer, pipe, requestRend
   // ---------- видимость ----------
   const frustum = new THREE.Frustum(), pv = new THREE.Matrix4(), sphere = new THREE.Sphere(), camPos = new THREE.Vector3(), _v = new THREE.Vector3();
   const ray = new THREE.Raycaster(), hits = [];
+  ray.firstHitOnly = true; // Visibility needs existence of a wall hit, not every triangle.
   let occluders = null, seen = false, lastLook = -1e9;
   const lastCam = new Float64Array(16);
   function getOccluders() {

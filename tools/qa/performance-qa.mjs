@@ -104,6 +104,32 @@ try {
   browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
   report.browser = browser.version();
   const host = await page();
+  if (process.env.QA_ROOMS === '1') {
+    const views = [
+      ['hall', 1.25, 4.85, 0], ['kitchen', 1.4, 2.2, Math.PI / 2], ['living', 4.7, 2.5, Math.PI / 2],
+      ['room2', 4.3, 5.5, -Math.PI / 2], ['room3', -1.3, 2.7, 0], ['bath', .8, 5.7, 0],
+      ['balcony', 4.2, -.6, 0], ['window', 3.7, 2, 0],
+      ['bath-mirror', .8, 5.7, Math.PI],
+    ].filter(view => !process.env.QA_ROOM || process.env.QA_ROOM.split(',').includes(view[0]));
+    if (!views.length) throw Error('Unknown QA_ROOM');
+    for (const [name, x, z, yaw] of views) {
+      await host.evaluate(p => __kitchen.walk.enter({ x: p.x, z: p.z }, p.yaw), { x, z, yaw });
+      await pause(700); await measure(host, name);
+      await host.screenshot({ path: path.join(output, report.label + '-' + name + '.png') });
+    }
+    report.identity = { url: host.url(), title: await host.title(), canvases: await host.locator('canvas').count() };
+    await host.keyboard.press('Digit2');
+    await host.waitForFunction(() => __kitchen.viewmodel.fireReady, null, { timeout: 30000 });
+    const before = await host.evaluate(() => __kitchen.viewmodel.ammo.mag);
+    await host.mouse.click(640, 360); await pause(400);
+    report.shot = await host.evaluate(before => ({ before, after: __kitchen.viewmodel.ammo.mag, ok: __kitchen.viewmodel.ammo.mag < before }), before);
+    if (!report.shot.ok) throw Error('Native shot did not consume ammunition');
+    const beforeWalk = await host.evaluate(() => __kitchen.walk.getNetworkPose());
+    await host.keyboard.down('KeyW'); await pause(500); await host.keyboard.up('KeyW');
+    report.walk = await host.evaluate(() => __kitchen.walk.getNetworkPose());
+    report.walkDistance = Math.hypot(report.walk.x - beforeWalk.x, report.walk.z - beforeWalk.z);
+    if (report.walkDistance < .03) throw Error('Native movement did not move the player');
+  } else {
   await measure(host, 'solo-hall');
   await host.screenshot({ path:path.join(output,report.label+'-hall.png') });
   await host.evaluate(() => __kitchen.walk.enter({x:3.7,z:2},0)); await pause(800);
@@ -149,5 +175,6 @@ try {
   report.finalState=await Promise.all([host,guest].map(p=>p.evaluate(()=>({connected:__kitchen.multiplayer.client.connected,players:__kitchen.multiplayer.client.state.players.length,status:__kitchen.multiplayer.client.status}))));
   if(!report.finalState.every(s=>s.connected&&s.players===2))throw new Error('Final multiplayer state lost a player');
   await host.evaluate(()=>__kitchen.multiplayer.client.leave());
+  }
 } catch (error) { report.failure = error.stack; console.error(error.stack); process.exitCode=1; }
 finally { clearTimeout(watchdog); await browser?.close(); report.cleanup=true; if(report.failure || report.errors.length) process.exitCode=1; save(); }

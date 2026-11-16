@@ -329,6 +329,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
     return occluders;
   }
   const ray = new THREE.Raycaster(), hits = [];
+  ray.firstHitOnly = true; // Visibility needs existence of a wall hit, not every triangle.
   function occluded(s, d) {
     ray.layers.mask = camera.layers.mask;
     ray.set(camPos, _v.subVectors(s.center, camPos).divideScalar(d));

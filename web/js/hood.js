@@ -127,6 +127,7 @@ export function createHood({ THREE, scene, camera, canvas, renderer, pipe, reque
     if (on) { hint.innerHTML = `<kbd>E</kbd> — ${LABEL[level]}`; btn.textContent = level === 3 ? 'Выключить' : level ? `Скорость ${level + 1}` : 'Вытяжка'; }
   }
   const ray = new THREE.Raycaster(); ray.layers.enableAll(); ray.far = REACH;
+  ray.firstHitOnly = true; // Hood targeting only needs existence of a surface hit.
   const lastCam = new Float64Array(16);
   function aim() {
     const was = target;

@@ -1,19 +1,12 @@
 // Scoped, precompiled Lambert substitutes for the explicitly flat eco preset.
 // Gameplay, path tracing, export and every other quality retain authored PBR.
 import { warmRasterPrograms } from './shader-warmup.js';
+import { acquireSceneIndex } from './scene-index.js';
+import { ECO_MAPS as MAPS, ECO_VALUES as VALUES, ECO_DEFINES as DEFINES, ecoMaterialEligible, createEcoMaterial } from './eco-material-state.js';
 const MAX_COMPILING = 4, DISCOVERY_MS = 350;
-const MAPS = ['map', 'alphaMap', 'emissiveMap', 'aoMap', 'lightMap'];
-const VALUES = ['vertexColors', 'side', 'shadowSide', 'opacity', 'alphaTest', 'alphaHash', 'alphaToCoverage',
-  'depthWrite', 'depthTest', 'depthFunc', 'colorWrite', 'blending', 'blendSrc', 'blendDst', 'blendEquation',
-  'blendSrcAlpha', 'blendDstAlpha', 'blendEquationAlpha', 'blendAlpha', 'premultipliedAlpha',
-  'stencilWrite', 'stencilWriteMask', 'stencilFunc', 'stencilRef', 'stencilFuncMask', 'stencilFail', 'stencilZFail', 'stencilZPass',
-  'polygonOffset', 'polygonOffsetFactor', 'polygonOffsetUnits', 'fog', 'dithering', 'toneMapped', 'precision',
-  'clippingPlanes', 'clipIntersection', 'clipShadows', 'visible', 'wireframe', 'wireframeLinewidth', 'flatShading',
-  'forceSinglePass', 'aoMapIntensity', 'lightMapIntensity', 'emissiveIntensity'];
-const DEFINES = ['vertexColors', 'side', 'shadowSide', 'alphaHash', 'alphaToCoverage', 'premultipliedAlpha',
-  'fog', 'dithering', 'toneMapped', 'precision', 'clipIntersection', 'clipShadows', 'wireframe', 'flatShading'];
 
 export function createEcoMaterials({ THREE, scene, renderer }) {
+  const index = acquireSceneIndex(scene), blockedChains = new WeakMap();
   const variants = new Map(), geometryLayouts = new WeakMap(), objectLayouts = new WeakMap(), queue = [], queued = new Set();
   const materialStates = new WeakMap(), replacementArrays = new WeakMap();
   const changedObjects = [], changedMaterials = [], drawStack = [];
@@ -26,6 +19,15 @@ export function createEcoMaterials({ THREE, scene, renderer }) {
     return u.glass || u.mirror || u.mirrorGlass || u.networkMirror || u.screen || u.tvScreen || u.shadowOnly ||
       u.context || u.viewmodel || u.networkAvatar || u.networkEffect || u.impact || u.shard;
   };
+  function chainBlocked(object) {
+    let state = blockedChains.get(object);
+    if (!state) { state = { frame: -1, blocked: false }; blockedChains.set(object, state); }
+    if (state.frame !== frame) {
+      state.blocked = blocked(object) || (object !== scene && (!object.parent || chainBlocked(object.parent)));
+      state.frame = frame;
+    }
+    return state.blocked;
+  }
   const meshCallbacks = THREE.Object3D.prototype, batchCallbacks = THREE.BatchedMesh.prototype;
   function objectOK(o) {
     if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || o.morphTargetInfluences?.length) return false;
@@ -34,9 +36,7 @@ export function createEcoMaterials({ THREE, scene, renderer }) {
     return o.onBeforeRender === callbacks.onBeforeRender && o.onAfterRender === callbacks.onAfterRender &&
       o.onBeforeShadow === callbacks.onBeforeShadow && o.onAfterShadow === callbacks.onAfterShadow;
   }
-  const materialOK = m => m?.isMeshStandardMaterial && !m.userData?.ecoMaterial && m.userData?.roomLightingBatchSafe &&
-    m.userData?.roomLightingPatched && !m.transparent && !(m.transmission > 0) && !(m.opacity < 1) &&
-    m.onBeforeRender === THREE.Material.prototype.onBeforeRender;
+  const materialOK = m => ecoMaterialEligible(THREE, m);
   function materialCurrent(m) {
     if (!m || typeof m !== 'object') return false;
     let state = materialStates.get(m);
@@ -100,9 +100,7 @@ export function createEcoMaterials({ THREE, scene, renderer }) {
   function get(original) {
     let record = variants.get(original);
     if (!record) {
-      const flat = new THREE.MeshLambertMaterial();
-      flat.name = `${original.name || 'material'}:eco`;
-      flat.userData = { ecoMaterial: true, roomLightingPatched: true, roomLightingBatchSafe: false };
+      const flat = createEcoMaterial(THREE, original);
       record = { flat, programs: new Map(), channels: [], version: -1, frame: -1, seen: frame, dead: false };
       variants.set(original, record);
     }
@@ -140,19 +138,17 @@ export function createEcoMaterials({ THREE, scene, renderer }) {
     if (!dirty && now - lastDiscovery < DISCOVERY_MS) { processQueue(); return; }
     dirty = false; lastDiscovery = now;
     const counts = new Map();
-    function visit(o) {
-      if (blocked(o)) return;
-      if (objectOK(o)) for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (materialOK(material)) prepare(get(material), o);
-      for (const child of o.children) visit(child);
-    }
     // Count the complete lighting layout before preparing any shader variants.
     knownLights = [];
-    scene.traverse(o => { if (o.isLight) {
+    for (const o of index.lights()) {
       const visible = lightVisible(o); knownLights.push({ object: o, visible, cast: o.castShadow, map: !!o.map });
       if (visible) { const key = `${o.type}:${!!o.castShadow}:${!!o.map}`; counts.set(key, (counts.get(key) || 0) + 1); }
-    } });
+    }
     lights = [...counts].sort().map(([key, count]) => `${key}:${count}`).join('|'); counts.clear();
-    visit(scene);
+    // The shared index already tracks async subtree loads/removals. Avoid two
+    // recursive full-scene walks; only renderable objects can need a variant.
+    for (const o of index.materialObjects) if (objectOK(o) && !chainBlocked(o))
+      for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (materialOK(material)) prepare(get(material), o);
     for (const [original, record] of variants) {
       if (record.seen !== frame) { record.dead = true; record.flat.dispose(); variants.delete(original); continue; }
       for (const [key, program] of record.programs) {
@@ -225,6 +221,6 @@ export function createEcoMaterials({ THREE, scene, renderer }) {
       return { materials: variants.size, programs, ready, failed, compiling }; },
     dispose() { if (disposed) return; disposed = true; compileEpoch++; compiling = 0; queue.length = 0; queued.clear();
       renderer.domElement?.removeEventListener?.('webglcontextlost', onLost); renderer.domElement?.removeEventListener?.('webglcontextrestored', onRestored);
-      for (const record of variants.values()) { record.dead = true; record.flat.dispose(); } variants.clear(); },
+      for (const record of variants.values()) { record.dead = true; record.flat.dispose(); } variants.clear(); index.release(); },
   };
 }

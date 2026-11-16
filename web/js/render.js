@@ -601,6 +601,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 
   function setQuality(name) {
     quality = QUALITY[name] ? name : DEFAULT_QUALITY;
+    batches.setQuality(quality);
     q = QUALITY[quality];
     configureComposer();
     renderer.shadowMap.needsUpdate = true;

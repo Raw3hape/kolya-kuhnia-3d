@@ -137,6 +137,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
 
   // ---------- видно ли точку ----------
   const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), sph = new THREE.Sphere(), los = new THREE.Raycaster();
+  los.firstHitOnly = true; // Occlusion only asks whether any architectural surface blocks sight.
   let frustumAt = -1, occluders = null;
   const tv = new THREE.Vector3(), td = new THREE.Vector3();
   function occl() {

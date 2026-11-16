@@ -62,6 +62,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
   const walls = buildColliders(plan).boxes;   // стены по плану (проёмы открыты): прицел не сажает сквозь стену
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const ray = new THREE.Raycaster(); ray.layers.enableAll();
+  ray.firstHitOnly = true; // Back/seat queries use the nearest eligible mesh surface.
 
   // ---------- места из сцены ----------
   // Место: { id, label, root (объект для прицела), hip: Vector3 (точка таза на сиденье), face (куда смотрит, 0 = +Z),

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../../web/vendor/three-0.169/build/three.module.js';
 import { createEcoMaterials } from '../../web/js/eco-materials.js';
 import { collectNetworkObjects } from '../../web/js/network-objects.js';
+import { ECO_MAPS, ECO_VALUES, createEcoMaterial } from '../../web/js/eco-material-state.js';
 
 const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
 function fixture(compile) {
@@ -19,6 +20,25 @@ function fixture(compile) {
   const eco = createEcoMaterials({ THREE, scene, renderer });
   return { scene, camera, geometry, material, a, b, calls, renderer, eco };
 }
+
+test('the shared eco representation preserves every retained map and render value for both objects and white batch bases', () => {
+  const source = new THREE.MeshPhysicalMaterial({ color: 0x77aa33, emissive: 0x210b06, clearcoat: 1, metalness: 1,
+    alphaHash: true, side: THREE.DoubleSide, depthWrite: false, stencilWrite: true, stencilRef: 3,
+    polygonOffset: true, polygonOffsetFactor: -2, emissiveIntensity: 2.5 });
+  for (const key of ECO_MAPS) source[key] = new THREE.Texture();
+  source.clippingPlanes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), 2)];
+  source.blendColor.setRGB(.4, .3, .2);
+  const flat = createEcoMaterial(THREE, source), batch = createEcoMaterial(THREE, source, true);
+  try {
+    for (const value of [flat, batch]) {
+      for (const key of [...ECO_MAPS, ...ECO_VALUES]) assert.equal(value[key], source[key], key);
+      assert.ok(value.emissive.equals(source.emissive)); assert.ok(value.blendColor.equals(source.blendColor));
+      assert.equal(value.onBeforeCompile, source.onBeforeCompile); assert.equal(value.customProgramCacheKey, source.customProgramCacheKey);
+      assert.equal(value.normalMap, null); assert.equal(value.envMap, null); assert.equal(value.userData.ecoMaterial, true);
+    }
+    assert.ok(flat.color.equals(source.color)); assert.deepEqual(batch.color.toArray(), [1, 1, 1]);
+  } finally { flat.dispose(); batch.dispose(); for (const key of ECO_MAPS) source[key].dispose(); source.dispose(); }
+});
 
 test('only precompiled Lambert variants draw; authored PBR, IDs, geometry and callbacks are restored on every exit', async () => {
   let resolve;
@@ -140,8 +160,33 @@ test('steady updates avoid structural scans while visible uniforms and late mate
     const late = f.material.clone(); late.onBeforeCompile = f.material.onBeforeCompile; late.customProgramCacheKey = f.material.customProgramCacheKey;
     f.b.material = late;
     f.eco.draw(() => assert.equal(f.b.material, late, 'a late source remains authored until its variant is warm'));
+    const firstPrograms = f.calls.length;
     f.eco.update(f.camera); await settle();
-    assert.ok(scans > firstScans, 'the unknown visible material requests one immediate discovery');
+    assert.ok(f.calls.length > firstPrograms, 'the unknown visible material requests immediate shader preparation');
+    assert.equal(scans, 0, 'shared indexing avoids full scene traversals even during discovery');
     f.eco.draw(() => assert.ok(f.b.material.isMeshLambertMaterial));
+  } finally { f.eco.dispose(); }
+});
+
+test('indexed discovery follows late hidden subtrees, reparented blocked ancestors and releases its listeners', async t => {
+  const f = fixture(); let now = performance.now(); t.mock.method(performance, 'now', () => now);
+  const group = new THREE.Group(), blocked = new THREE.Group(); blocked.userData.networkAvatar = true;
+  const late = new THREE.Mesh(f.geometry, f.material); group.visible = false;
+  f.scene.add(blocked); blocked.add(group); group.add(late);
+  try {
+    f.eco.update(f.camera); await settle();
+    const material = f.material.clone(); material.onBeforeCompile = f.material.onBeforeCompile; material.customProgramCacheKey = f.material.customProgramCacheKey;
+    late.material = material;
+    f.scene.add(group); now += 400; f.eco.update(f.camera); await settle();
+    group.visible = true;
+    f.eco.draw(() => assert.ok(late.material.isMeshLambertMaterial, 'a hidden late subtree warms before becoming visible'));
+    blocked.add(group); now += 400; f.eco.update(f.camera); await settle();
+    f.eco.draw(() => assert.equal(late.material, material, 'reparenting under an avatar preserves authored materials'));
+    group.removeFromParent(); now += 400; f.eco.update(f.camera);
+    assert.equal(f.eco.stats.materials, 1);
+    f.eco.dispose();
+    assert.equal(f.scene._listeners.childadded.length, 0);
+    assert.equal(late._listeners.childremoved.length, 0);
+    material.dispose();
   } finally { f.eco.dispose(); }
 });

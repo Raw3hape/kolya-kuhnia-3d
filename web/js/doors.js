@@ -114,6 +114,7 @@ export function initDoors({ THREE, camera, canvas, plan, doorsGroup, shell, walk
   function flash(text) { flashText = text; flashUntil = performance.now() + 1200; renderHint(); }
 
   const ray = new THREE.Raycaster(); ray.layers.enableAll(); ray.far = REACH;
+  ray.firstHitOnly = true; // Only the nearest surface per mesh can select a door.
   const dir = new THREE.Vector3();
   function aim() {
     camera.updateMatrixWorld();
