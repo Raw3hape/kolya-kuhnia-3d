@@ -147,6 +147,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     hud.hidden = !focused && !note;
     caption.textContent = note || (carrying ? 'Żabka · коробка в руках' : target === 'pizza' ? `Żabka Pizza · ${pizza.remaining} / ${spec.rules.slices} кусочков` : target === 'radio' ? 'Радио · музыка для всех' : washing ? 'Моемся · тёплая вода' : state.shower.owner ? 'Душ занят' : 'Тёплый душ');
     hint.textContent = note && !focused ? '' : carrying ? (placement ? 'Q — поставить здесь · X — вернуть' : 'Наведите на пол, стол или другую поверхность · X — вернуть') : target === 'pizza' ? (pizza.open ? 'ЛКМ — кусочек · E — закрыть · G — взять' : 'E — открыть · G — взять') : target === 'shower' || washing ? 'E — включить / закончить' : 'E — питание · выберите станцию и громкость';
+    if (coarse && focused) hint.textContent = carrying ? 'Наведите на поверхность и нажмите «Поставить»' : target === 'pizza' ? (pizza.open ? 'Угощайтесь! Пицца общая для всех' : 'Откройте коробку или возьмите её с собой') : target === 'radio' ? 'Выберите станцию и громкость' : 'Нажмите «Душ», чтобы включить или закончить';
     for (const [verb, button] of actionButtons) {
       button.hidden = !coarse || !live || !(carrying ? ['place', 'return'].includes(verb) : target === 'pizza' ? ['take', 'open', ...(pizza.open && pizza.remaining ? ['eat'] : [])].includes(verb) : (target === 'shower' || washing) && verb === 'shower');
       button.disabled = pending; if (verb === 'open') button.textContent = pizza?.open ? 'Закрыть' : 'Открыть';

@@ -60,12 +60,20 @@ export function createSocialModels({ THREE: T, scene, spec, locations }) {
   const screen = own(new T.MeshBasicMaterial({ color: '#77ebaf' })); box(radio, screen, [0, rh * 0.63, d / 2 + 0.006], [0.09, 0.045, 0.003]);
   box(radio, green, [0, rh * 0.24, d / 2 + 0.007], [0.027, 0.027, 0.016]);
   const courier = createAvatar({ slot: 2, name: spec.courier.label, host: false }); courier.root.position.fromArray(locations.courier);
-  courier.root.traverse(object => { if (object.material?.emissive) { object.material.emissive.set('#bcc6ad'); object.material.emissiveIntensity = 0.22; } });
+  // The landing has no daylight probes. Vertex colours remain readable there
+  // without adding another light/shader variant to the apartment renderer.
+  const courierMaterial = own(new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
+  courier.root.traverse(object => { if (object.isMesh && object.material?.vertexColors) object.material = courierMaterial; });
   courier.root.name = 'social_courier'; root.add(courier.root); label(courier.root, 'żabka', 0.28, 0.13, [0, 1.15, -0.143]);
   const bag = box(courier.root, green, [0, 1.05, 0.28], [0.45, 0.48, 0.32]); bag.name = 'delivery_bag';
   const showerGeometry = own(new T.BufferGeometry()), rain = new Float32Array(96 * 3);
   showerGeometry.setAttribute('position', new T.BufferAttribute(rain, 3));
-  const shower = new T.Points(showerGeometry, own(new T.PointsMaterial({ color: '#d8f5ff', size: 0.022, transparent: true, opacity: 0.65, depthWrite: false })));
+  const dropCanvas = document.createElement('canvas'); dropCanvas.width = dropCanvas.height = 64;
+  const dropContext = dropCanvas.getContext('2d'), dropGradient = dropContext.createLinearGradient(0, 0, 0, 64);
+  dropGradient.addColorStop(0, '#ffffff00'); dropGradient.addColorStop(.55, '#ffffffe0'); dropGradient.addColorStop(1, '#ffffff00');
+  dropContext.fillStyle = dropGradient; dropContext.beginPath(); dropContext.ellipse(32, 32, 5, 31, 0, 0, Math.PI * 2); dropContext.fill();
+  const dropTexture = own(new T.CanvasTexture(dropCanvas));
+  const shower = new T.Points(showerGeometry, own(new T.PointsMaterial({ map: dropTexture, color: '#d8f5ff', size: 0.045, transparent: true, opacity: 0.65, depthWrite: false, alphaTest: 0.015 })));
   shower.frustumCulled = false; root.add(shower);
   const bites = new T.InstancedMesh(slices[0].geometry, sliceMaterial, 10); bites.count = 0; bites.frustumCulled = false; root.add(bites);
   const dummy = new T.Object3D();
