@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createSnapshotEncoder, createSnapshotDecoder } from '../../web/js/multiplayer/snapshot-codec.js';
 import { createHuntSimulation } from '../../web/js/multiplayer/hunt-simulation.js';
+import { WEAPON_RULES } from '../../web/js/multiplayer/rules.js';
 const root = new URL('../../', import.meta.url);
 const json = path => JSON.parse(fs.readFileSync(new URL(path, root)));
 const bytes = packet => packet.data instanceof ArrayBuffer
@@ -11,9 +12,18 @@ const bytes = packet => packet.data instanceof ArrayBuffer
 function fixture() {
   const sim = createHuntSimulation({ spec: json('web/spec/hunt.json'), site: json('web/spec/site.json'), plan: json('web/spec/plan.generated.json'), seed: 'bandwidth' });
   let seq = 0;
-  const players = Array.from({ length: 10 }, (_, i) => ({ id: `player-${i}`, name: `Игрок ${i}`, avatar: i, x: 1 + i * 0.55, y: 0, z: 4.3, yaw: 0, pitch: 0, weapon: 'rifle', score: i * 100, held: null, ack: 0,
+  const players = Array.from({ length: 10 }, (_, i) => ({ id: `player-${i}`, name: `Игрок ${i}`, avatar: i, x: 1 + i * 0.55, y: 0, z: 4.3, yaw: 0, pitch: 0, weapon: ['pistol', 'rifle', 'bolt', 'shotgun'][i % 4], score: i * 100, kills: i, held: null, seat: null, seatY: null, ack: 0,
     ammo: { pistol: { mag: 12, reserve: 48 }, rifle: { mag: 30, reserve: 120 }, bolt: { mag: 5, reserve: 30 }, shotgun: { mag: 2, reserve: 24 } } }));
   let effects = [];
+  function playerFrame(p, index) {
+    const time = seq * 0.05, rule = WEAPON_RULES[p.weapon], reloading = index % 3 === 0;
+    const age = reloading ? time % rule.reload : time % Math.max(1 / rule.rate, rule.cycle || 0);
+    return { ...p, x: p.x + Math.sin(seq * 0.03) * 0.1, ack: seq,
+      lookYaw: p.yaw, pitch: Math.sin(time + index) * 0.4, vy: 0, verticalSpeed: 0, grounded: true,
+      aiming: index % 2 ? 1 : 0, reloading, reloadProgress: reloading ? age / rule.reload : 0,
+      shotAge: reloading ? null : age,
+      action: { kind: reloading ? 'reload' : 'fire', at: time - age, duration: reloading ? rule.reload : Math.max(0.15, rule.cycle || 0, 1 / rule.rate), targetId: p.weapon } };
+  }
   function effect(id, pellets = 1) {
     return { id, kind: 'shot', actorId: `player-${id % 10}`, shotId: `shot-${id}`, weapon: pellets === 9 ? 'shotgun' : 'rifle', origin: [1.2, 1.68, 4.3], direction: [0, 0, -1],
       rays: Array.from({ length: pellets }, (_, i) => ({ direction: [i * 0.001, i * 0.002, -1], effects: [{ objectId: `decor:room2.books/book-${id % 30}`, unitId: `decor:room2.books/unit-${id % 30}`, point: [1 + id * 0.01, 1.3, 3.5], normal: [0, 0, 1], kind: 'surface', breakable: 'paper' }] })), hits: [] };
@@ -24,7 +34,7 @@ function fixture() {
     snapshot() {
       sim.step(0.05); seq++;
       return { type: 'snapshot', seq, time: seq * 0.05, epoch: 0, hostId: 'player-0', revision: 1,
-        apartment: { floorA: 1, floorB: 3, sofa: 2, walls: 1 }, players: players.map(p => ({ ...p, x: p.x + Math.sin(seq * 0.03) * 0.1, ack: seq })), doors: { bath: false, balcony: true }, items: { phone: null, newspaper: null }, broken: ['book-1', 'glass-2'], effects: [...effects], hunt: sim.snapshot(), ambient: { water: { kitchen: false }, mice: [] } };
+        apartment: { floorA: 1, floorB: 3, sofa: 2, walls: 1 }, players: players.map(playerFrame), doors: { bath: false, balcony: true }, items: { phone: null, newspaper: null }, broken: ['book-1', 'glass-2'], effects: [...effects], hunt: sim.snapshot(), ambient: { water: { kitchen: false }, mice: [] } };
     },
   };
 }

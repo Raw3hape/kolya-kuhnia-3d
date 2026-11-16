@@ -115,3 +115,27 @@ Target remained local `127.0.0.1:8765`. One full touch context entered a host ro
 | 390×844, initial and returned | `(12,170,132,150.296875)` | `(20,620,114,114)` | Separate vertical areas |
 
 Screenshots at both landscape sizes were visually reviewed: map beside the joystick, firing controls clear. The two images were then deleted. Script and all precise rectangles are in `output/independent-qa/ux/map-fix-retest.mjs` and `map-fix-retest.json`; `map-fix-attempt1.json` preserves the tutorial setup interruption. Browser closed in `finally`, driver exited, own helpers returned to zero. Production smoke is a separate pending check after publication.
+
+## Production fix smoke — 2026-11-16, 10:22:02–10:22:38 UTC
+
+**PASS for the tested fixes after actual guest walk readiness.** Target: https://kolya-kuhnia-3d.vercel.app/. Deployment receipt supplied by root: **`dpl_7SJd8VdX9YwSsk5qcSbChnoXU1RT`**, READY, source **`b81ca6c14da36822bb3c1b9dd61f240d417c30bd`**. New animation work was still local and is **not** claimed as published or tested here.
+
+One isolated Chrome stack, at most two full WebGL pages; real native lobby Create/Join, copied invitation, guest 390×844 → 844×390 → 390×844, then real fire/aim/jump touches. Four-minute browser deadline, 90-second preparation/readiness allowance. Final successful run lasted 35.7 seconds.
+
+| Production check | Measured outcome |
+|---|---|
+| Cold host Create | **PASS, 4.057 s.** At 2 ms: client idle, **Готовим квартиру…**, cancellation visible. At 3.052 s: **Подключаемся…** / connecting. At 4.057 s: connected. |
+| Guest Join | **PASS.** Transport connected in 901 ms; apartment applying / walk-not-yet-active lasted another 1.710 s. The mobile rotation test waited for `walk.active && !multiplayer.applying`. |
+| Active walk → landscape | **PASS.** Panel closed; exact map `(148,171,132,150.296875)`, joystick `(20,212,114,114)`, fire `(748,230,76,76)`; map/joystick and map/fire intersection zero. Map inside viewport, fold hit-test reachable. |
+| Landscape touch actions | **PASS.** Magazine 30→29, shots 0→1, aim 0→1, jump peak 0.4293 m. |
+| Back to portrait, repeat | **PASS.** Magazine 29→28, shots 1→2, aim 1→0, jump peak 0.4272 m. |
+| Guest leave → five seconds solo | **PASS.** `active=false`, idle, role null; zero errors. |
+| Guest rejoin → five seconds | **PASS.** Transport 1.722 s; walk ready immediately; zero errors. |
+| Host leave → five seconds solo | **PASS.** Host idle, guest receives closed state; zero errors. |
+| Entire successful run | **Zero uncaught page errors, zero HTTP responses ≥400.** Third-party YouTube requests aborted during navigation; no game-asset or PeerJS failure explained a cold-create hang. |
+
+Cold-network evidence is retained with phase timing and exact pending URLs. At Create, HDR metadata `textures/hdri/day.json?v=91174df18f` and `/api/scores` were pending briefly; no request remained pending when transport entered connecting. This smoke did not reproduce UX-03's original production hang and did not impose the old 15-second cutoff.
+
+The first attempt exposed a separate readiness transition: a guest was transport-connected while the apartment was still applying (`walk=false`, background loading). Rotating at that moment opened the project-mode panel, and it remained over fire when walk subsequently began. Its result is preserved in `production-smoke-attempt1.json`. The successful smoke repeated with genuine walk readiness before rotating. Root subsequently prepared an additional **enter-walk/seat panel-close guard** locally; that guard and deliberately rotating **before** guest walk readiness require the final animation deployment retest and are not covered by source `b81ca6c` proof here.
+
+Script: `output/independent-qa/ux/production-smoke.mjs`. Final data, deployment/source receipt, errors and request timing: `production-smoke.json`. Landscape and returned portrait screenshots were visually reviewed; all four temporary production captures were deleted. Both attempts' browsers closed in `finally`, foreground drivers exited, exact process lookup empty, janitor --ram read. Root's local preview was left running for its avatar work.

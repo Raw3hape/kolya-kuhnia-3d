@@ -985,6 +985,9 @@ export function initUI(api) {
   addEventListener('resize', hudBottom);
   function syncHud() {
     const mode = currentMode();
+    // A guest can rotate while the host's apartment is still loading. Entering
+    // touch play must clear the panel opened by that earlier project layout.
+    if (document.body.dataset.mode !== mode && isTouch() && ['walk', 'seat'].includes(mode)) setPanelOpen(false, { remember: false });
     document.body.dataset.mode = mode;
     walkExit.querySelector('span').textContent = document.body.dataset.multiplayerRole === 'guest' ? 'Комната' : 'Выйти';
     for (const m of MODES) {

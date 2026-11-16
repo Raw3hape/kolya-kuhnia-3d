@@ -5,6 +5,7 @@ import { createHostAuthority } from './host.js';
 import { createAvatar } from './avatars.js';
 import { createShotRenderer } from './shots.js';
 import { NETWORK_RULES as R } from './rules.js';
+import { sampleAvatarAction, selectAvatarPresentation } from './action-contract.js';
 
 const angle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
@@ -84,7 +85,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     document.body.dataset.multiplayerRole = sessionRole;
     const m = getModules(); m.furnEditor?.disable(); m.seats?.stand?.();
     m.walk.setNetwork({ onInput(command) {
-      if (client.connected) inputs.push({ ...command, weapon: getModules().viewmodel.weapon });
+      if (client.connected) { const vm = getModules().viewmodel; inputs.push({ ...command, weapon: vm.weapon, aiming: vm.aiming }); }
       if (inputs.length > R.maxInputBatch) inputs.splice(0, inputs.length - R.maxInputBatch);
     }, players: () => (lastSnapshot?.players || []).filter(p => p.id !== client.id),
     canExit: () => client.role === 'host', canTeleport: () => false,
@@ -165,7 +166,9 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     seenEvents.add(event.id); if (seenEvents.size > 512) seenEvents.delete(seenEvents.values().next().value);
     const m = getModules();
     if (event.kind === 'shot') {
-      m.viewmodel.applyNetworkShot(event); shots.shot(event);
+      m.viewmodel.applyNetworkShot(event);
+      const muzzle = event.actorId !== client.id ? avatars.get(event.actorId)?.getMuzzleWorldPosition?.() : null;
+      shots.shot(event, { origin: muzzle?.toArray?.() });
       for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
     } else if (event.kind === 'external-hit') {
       for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
@@ -197,7 +200,13 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     syncWeapon(m.viewmodel.weapon);
     if (m.hunt && appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; if (lastSnapshot?.hunt) m.hunt.applyNetworkSnapshot(lastSnapshot.hunt); }
     sendClock += dt; ambientClock += dt;
-    if (sendClock >= 1 / R.inputHz) { sendClock %= 1 / R.inputHz; if (inputs.length && client.connected) client.send({ kind: 'inputs', inputs: inputs.splice(0) }); }
+    if (sendClock >= 1 / R.inputHz) {
+      sendClock %= 1 / R.inputHz;
+      if (inputs.length && client.connected) client.send({ kind: 'inputs', inputs: inputs.splice(0) });
+      const look = client.self?.seat && m.seats?.getNetworkPose?.();
+      if (look && client.connected && !applying && !document.body.classList.contains('kmp-modal-open'))
+        client.send({ kind: 'look', yaw: look.yaw, pitch: look.pitch, aiming: m.viewmodel.aiming });
+    }
     if (ambientClock > 0.1 && client.role === 'host') { ambientClock = 0; const ambient = m.life?.snapshot?.(); if (ambient) client.send({ kind: 'ambient', ambient }); }
     const t = performance.now() - R.interpolationMs;
     let b = samples.find(s => s.at >= t) || samples.at(-1), a = samples[Math.max(0, samples.indexOf(b) - 1)];
@@ -208,7 +217,19 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       const x = THREE.MathUtils.lerp(before.x, p.x, k), y = THREE.MathUtils.lerp(before.y, p.y, k), z = THREE.MathUtils.lerp(before.z, p.z, k);
       const speed = Math.min(3, Math.hypot(x - avatar.root.position.x, z - avatar.root.position.z) / Math.max(dt, 0.001));
       avatar.root.position.set(x, y, z); avatar.root.rotation.y = angle(before.yaw, p.yaw, k);
-      avatar.update({ dt, time: performance.now() / 1000, speed, weapon: p.weapon, aimPitch: p.pitch, held: p.held, seated: !!p.seat, seatY: p.seatY });
+      // Interpolate simulation time with the same samples as the body. A stopped
+      // connection can advance a pose by at most one interpolation window.
+      const sampleTime = Number.isFinite(b.snapshot.time) ? b.snapshot.time : 0;
+      const beforeTime = Number.isFinite(a?.snapshot.time) ? a.snapshot.time : sampleTime;
+      const roomTime = THREE.MathUtils.lerp(beforeTime, sampleTime, k) + Math.min(R.interpolationMs / 1000, Math.max(0, (t - b.at) / 1000));
+      const presentation = selectAvatarPresentation(before, p, roomTime, beforeTime, sampleTime), shown = presentation.player;
+      const verticalSpeed = THREE.MathUtils.lerp(before.verticalSpeed ?? before.vy ?? 0, p.verticalSpeed ?? p.vy ?? 0, k);
+      const visual = sampleAvatarAction({ ...shown, y, verticalSpeed, grounded: y <= 0.001 && verticalSpeed <= 0,
+        aiming: THREE.MathUtils.lerp(before.aiming || 0, p.aiming || 0, k) }, roomTime, presentation.snapshotTime);
+      const lookYaw = angle(before.lookYaw ?? before.yaw, p.lookYaw ?? p.yaw, k);
+      const aimYaw = Math.atan2(Math.sin(lookYaw - avatar.root.rotation.y), Math.cos(lookYaw - avatar.root.rotation.y));
+      avatar.update({ dt, ...visual, speed, weapon: shown.weapon, aimPitch: angle(before.pitch, p.pitch, k),
+        aimYaw, held: shown.held, seated: !!shown.seat, seatY: shown.seatY });
     }
     // Cheap generation checks only. A scene-wide mesh/bounds scan is done once after a real change.
     if (client.role === 'host' && started && !manifestPending && (m.decor !== manifestDecor || m.furniture !== manifestFurniture || m.decor?.pass !== manifestPass)) {

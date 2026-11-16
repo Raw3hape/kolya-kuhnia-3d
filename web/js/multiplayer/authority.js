@@ -3,6 +3,7 @@
 import { NETWORK_RULES as R, WEAPON_RULES, EXTERNAL_TARGET_RULES } from './rules.js';
 import { WALK, buildColliders, moveCircle, findFree, roomOf, isFree } from './collision.js';
 import { createHuntSimulation } from './hunt-simulation.js';
+import { makeAvatarAction } from './action-contract.js';
 
 const finite = Number.isFinite;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -108,6 +109,19 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
   const broadcast = packet => { for (const p of active()) post(p.link, packet); };
   const result = (link, action, ok, error) => { if (action.requestId) post(link, { type: 'result', requestId: action.requestId, ok, ...(error ? { error } : {}) }); return ok; };
   const event = e => { const packet = { ...e, id: ++eventSeq, time, epoch }; broadcast({ type: 'event', event: packet }); return packet; };
+  const animate = (p, kind, targetId, target, weapon = p.weapon) => {
+    p.action = makeAvatarAction(kind, time, { weapon, targetId, target });
+  };
+  function equip(p, weapon) {
+    if (!weaponOf(weapon)) return false;
+    const next = p.held ? 'none' : weapon;
+    if (next !== p.weapon) {
+      const previous = p.weapon; p.weapon = next;
+      if (next === 'none') { p.aiming = 0; animate(p, 'holster', previous, undefined, previous); }
+      else animate(p, 'draw', next);
+    }
+    return true;
+  }
 
   function normalizedInteraction(id, value) {
     if (!plain(value)) return null;
@@ -170,7 +184,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
     const bodies = obstacles(p);
     const candidate = findFree(plan, WALK.start, col, bodies);
     if (!candidate) return false;
-    Object.assign(p, { ...candidate, y: 0, vy: 0, yaw: WALK.start.yaw, pitch: 0, ack: 0, seat: null, eyeY: null }); return true;
+    Object.assign(p, { ...candidate, y: 0, vy: 0, yaw: WALK.start.yaw, lookYaw: WALK.start.yaw, pitch: 0, aiming: 0, action: null, ack: 0, seat: null, eyeY: null }); return true;
   }
 
   function connect(link, hello) {
@@ -198,12 +212,12 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
       const used = new Set(active().map(q => q.avatar)), slots = [...Array(R.maxPlayers).keys()].filter(n => !used.has(n));
       p = { id: token().slice(0, 16), token: token(), avatar: slots[Math.floor(Math.random() * slots.length)], name: nameOf(hello.name),
         link: null, score: 0, kills: 0, held: null, seat: null, eyeY: null, weapon: 'none', ack: 0, budget: R.inputBudget, lastSeen: now(),
-        ammo: Object.fromEntries(Object.entries(WEAPON_RULES).filter(([, w]) => w.mag).map(([id, w]) => [id, { mag: w.mag, reserve: w.reserve, shotAt: -Infinity, reloadAt: 0 }])), shotIds: new Set(), actions: 0 };
+        ammo: Object.fromEntries(Object.entries(WEAPON_RULES).filter(([, w]) => w.mag).map(([id, w]) => [id, { mag: w.mag, reserve: w.reserve, shotAt: -Infinity, reloadAt: 0 }])), shotIds: new Set(), requestIds: new Set(), actions: 0 };
       if (!spawn(p)) return post(link, { type: 'error', error: 'spawn_blocked' });
       players.set(p.id, p);
     }
     if (!hostId) hostId = p.id;
-    p.link = link; p.lastSeen = now(); p.budget = R.inputBudget; links.set(link, p.id);
+    p.link = link; p.lastSeen = now(); p.budget = R.inputBudget; p.requestIds.clear(); links.set(link, p.id);
     post(link, { type: 'welcome', id: p.id, token: p.token, room: roomId, hostId, snapshot: snapshot() });
     event({ kind: 'joined', actorId: p.id }); emitSnapshot();
   }
@@ -213,7 +227,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
     for (const id of Object.keys(items)) if (items[id] === p.id) items[id] = null;
     p.held = null; if (paper) advanceNewspaper();
   }
-  function releaseSeat(p) { for (const id of Object.keys(seats)) if (seats[id] === p.id) seats[id] = null; p.seat = null; p.eyeY = null; }
+  function releaseSeat(p) { for (const id of Object.keys(seats)) if (seats[id] === p.id) seats[id] = null; p.seat = null; p.eyeY = null; p.lookYaw = p.yaw; }
   function release(p) { releaseItems(p); releaseSeat(p); }
   function disconnect(link) {
     const p = players.get(links.get(link)); links.delete(link);
@@ -228,15 +242,17 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
       if (!plain(cmd) || !Number.isSafeInteger(cmd.seq) || cmd.seq <= p.ack || !['dt', 'dx', 'dz', 'yaw', 'pitch'].every(k => finite(cmd[k]))) continue;
       const dt = clamp(cmd.dt, 0, R.maxInputDt), allowed = Math.min(dt, p.budget);
       p.budget -= allowed; p.ack = cmd.seq;
-      p.yaw = cmd.yaw % (Math.PI * 2); p.pitch = clamp(cmd.pitch, -Math.PI / 2.05, Math.PI / 2.05);
+      p.lookYaw = cmd.yaw % (Math.PI * 2); if (!p.seat) p.yaw = p.lookYaw;
+      p.pitch = clamp(cmd.pitch, -Math.PI / 2.05, Math.PI / 2.05);
+      if (finite(cmd.aiming)) p.aiming = p.held ? 0 : clamp(cmd.aiming, 0, 1);
+      if (weaponOf(cmd.weapon)) equip(p, cmd.weapon);
       if (p.seat) continue;
       const length = Math.hypot(cmd.dx, cmd.dz), max = WALK.run * allowed;
       const k = length > max ? max / length : 1;
       const before = { x: p.x, z: p.z };
       moveCircle(p, cmd.dx * k, cmd.dz * k, col, obstacles(p));
       if (!roomOf(plan, p.x, p.z)) Object.assign(p, before);
-      if (cmd.jump && p.y < 0.001) p.vy = WALK.jump;
-      if (weaponOf(cmd.weapon)) p.weapon = p.held ? 'none' : cmd.weapon;
+      if (cmd.jump === true && p.y < 0.001 && p.vy <= 0) { p.vy = WALK.jump; animate(p, 'jump'); }
     }
     return true;
   }
@@ -254,8 +270,8 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
 
   function reload(p, weapon) {
     const w = weaponOf(weapon), a = Object.hasOwn(p.ammo, weapon) ? p.ammo[weapon] : null;
-    if (!w || !a || a.reloadAt || a.mag >= w.mag || a.reserve <= 0) return false;
-    a.reloadAt = time + w.reload; return true;
+    if (!w || !a || p.held || p.weapon !== weapon || a.reloadAt || a.mag >= w.mag || a.reserve <= 0) return false;
+    a.reloadAt = time + w.reload; animate(p, 'reload', weapon); return true;
   }
 
   function shoot(p, action, worldTrace, externalTrace) {
@@ -270,6 +286,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
       if (!plain(ray) || !vec(ray.direction) || Math.abs(Math.hypot(...ray.direction) - 1) > 0.01 || ray.direction.reduce((s, n, i) => s + n * action.direction[i], 0) < 0.96) return false;
     }
     a.mag--; a.shotAt = time; p.weapon = action.weapon; p.shotIds.add(action.shotId);
+    animate(p, 'fire', action.weapon);
     if (p.shotIds.size > 128) p.shotIds.delete(p.shotIds.values().next().value);
     const rays = [], hits = [];
     for (const [rayIndex, ray] of action.rays.entries()) {
@@ -342,12 +359,21 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
     if (packet.type === 'ping') return post(link, { type: 'pong', clientTime: packet.clientTime, time });
     if (packet.type !== 'action' || !plain(packet.action)) return;
     const action = packet.action;
+    if (typeof action.requestId === 'string' && action.requestId.length <= 128) {
+      if (p.requestIds.has(action.requestId)) return result(link, action, false, 'replayed_request');
+      p.requestIds.add(action.requestId);
+      if (p.requestIds.size > 256) p.requestIds.delete(p.requestIds.values().next().value);
+    }
     if (++p.actions > 120) return result(link, action, false, 'rate_limited');
     let ok = false;
     switch (action.kind || action.type) {
       case 'inputs': ok = applyInputs(p, action.inputs); break;
       case 'input': ok = applyInputs(p, [action]); break;
-      case 'weapon': if (weaponOf(action.weapon)) { p.weapon = p.held ? 'none' : action.weapon; ok = true; } break;
+      case 'look': if (p.seat && [action.yaw, action.pitch, action.aiming].every(finite)) {
+        p.lookYaw = action.yaw % (Math.PI * 2); p.pitch = clamp(action.pitch, -Math.PI / 2.05, Math.PI / 2.05);
+        p.aiming = p.held ? 0 : clamp(action.aiming, 0, 1); ok = true;
+      } break;
+      case 'weapon': ok = equip(p, action.weapon); break;
       case 'shoot': ok = shoot(p, action, worldTrace, externalTrace); break;
       case 'reload': ok = reload(p, action.weapon); break;
       case 'door': {
@@ -367,17 +393,21 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
             }
             return false;
           });
-          if (!blocked) { doors[action.id] = !!action.open; ok = true; event({ kind: 'door', actorId: p.id, targetId: action.id, open: !!action.open }); }
+          if (!blocked) {
+            if (doors[action.id] !== action.open) animate(p, 'use', action.id, [d.closed.ax, 1.1, d.closed.az]);
+            doors[action.id] = !!action.open; ok = true; event({ kind: 'door', actorId: p.id, targetId: action.id, open: !!action.open });
+          }
         } break;
       }
       case 'claim': {
         const item = itemMeta.find(i => i.id === action.id);
         if (item && !items[action.id] && distance(item.position, [p.x, p.y + 1.2, p.z]) < R.itemReach && !broken.has(item.objectId)) {
-          releaseItems(p); items[action.id] = p.id; p.held = action.id; p.weapon = 'none'; ok = true;
+          releaseItems(p); items[action.id] = p.id; p.held = action.id; p.weapon = 'none'; p.aiming = 0; ok = true;
+          animate(p, 'pickup', action.id, item.position);
           event({ kind: 'item', actorId: p.id, targetId: action.id, owner: p.id });
         } break;
       }
-      case 'release': if (items[action.id] === p.id) { items[action.id] = null; p.held = null; if (action.id === 'newspaper') advanceNewspaper(); ok = true; event({ kind: 'item', actorId: p.id, targetId: action.id, owner: null }); } break;
+      case 'release': if (items[action.id] === p.id) { items[action.id] = null; p.held = null; if (action.id === 'newspaper') advanceNewspaper(); ok = true; animate(p, 'drop', action.id, itemMeta.find(item => item.id === action.id)?.position); event({ kind: 'item', actorId: p.id, targetId: action.id, owner: null }); } break;
       case 'interaction': {
         if (typeof action.id !== 'string' || !Object.hasOwn(interactions, action.id)) break;
         const value = normalizedInteraction(action.id, action.value); if (!value) break;
@@ -391,16 +421,23 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
           if (action.expectedIndex !== undefined && action.expectedIndex !== interactions[action.id].index) break;
           if (action.automatic && action.id !== 'media:phone' && p.id !== hostId) break;
         }
+        if (!action.automatic && JSON.stringify(interactions[action.id]) !== JSON.stringify(value)) {
+          const itemId = action.id.startsWith('media:') ? action.id.slice(6) : action.id;
+          animate(p, action.id === 'newspaper' ? 'page' : 'use', itemId,
+            action.id === 'hood' ? interactionMeta.hoodPosition : itemMeta.find(item => item.id === itemId)?.position);
+        }
         interactions[action.id] = value; ok = true;
         event({ kind: 'interaction', actorId: p.id, targetId: action.id, value: copy(value) }); break;
       }
       case 'sit': {
         const seat = seatMeta.find(seat => seat.id === action.id);
+        if (seat && p.seat === seat.id) { ok = true; break; }
         if (seat && (!seats[seat.id] || seats[seat.id] === p.id) && Math.hypot(p.x - seat.position[0], p.z - seat.position[2]) <= R.itemReach &&
           roomOf(plan, seat.position[0], seat.position[2]) && !pathBlocked(p, { x: seat.position[0], z: seat.position[2] }) &&
           !others(p).some(other => Math.hypot(other.x - seat.position[0], other.z - seat.position[2]) < WALK.radius * 2)) {
           releaseSeat(p); seats[seat.id] = p.id; p.seat = seat.id; p.x = seat.position[0]; p.z = seat.position[2]; p.y = p.vy = 0;
-          p.eyeY = seat.eyeY; p.yaw = seat.yaw; p.weapon = 'none'; ok = true;
+          p.eyeY = seat.eyeY; p.yaw = p.lookYaw = seat.yaw; p.weapon = 'none'; p.aiming = 0; ok = true;
+          animate(p, 'sit', seat.id, seat.position);
           event({ kind: 'seat', actorId: p.id, targetId: seat.id, owner: p.id });
         } break;
       }
@@ -408,7 +445,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
         const seat = seatMeta.find(seat => seat.id === p.seat);
         if (seat) {
           const place = standPlace(p, seat);
-          if (place) { releaseSeat(p); p.x = place.x; p.z = place.z; p.y = p.vy = 0; ok = true; event({ kind: 'seat', actorId: p.id, targetId: seat.id, owner: null }); }
+          if (place) { if (finite(p.lookYaw)) p.yaw = p.lookYaw; releaseSeat(p); p.x = place.x; p.z = place.z; p.y = p.vy = 0; ok = true; animate(p, 'stand', seat.id, seat.position); event({ kind: 'seat', actorId: p.id, targetId: seat.id, owner: null }); }
         } break;
       }
       case 'apartment': ok = mutateApartment(p, action); break;
@@ -433,7 +470,12 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
   function snapshot() {
     return { type: 'snapshot', seq: ++seq, time, epoch, hostId, apartment, revision,
       players: active().map(p => ({ id: p.id, name: p.name, avatar: p.avatar, x: q(p.x), y: q(p.y), z: q(p.z),
-        yaw: q(p.yaw), pitch: q(p.pitch), vy: q(p.vy), weapon: p.weapon, score: p.score, kills: p.kills, held: p.held, seat: p.seat,
+        yaw: q(p.yaw), lookYaw: q(p.lookYaw ?? p.yaw), pitch: q(p.pitch), vy: q(p.vy), verticalSpeed: q(p.vy), grounded: p.y <= 0.001 && p.vy <= 0,
+        aiming: q(p.aiming || 0), action: p.action ? copy(p.action) : null,
+        reloading: !!p.ammo[p.weapon]?.reloadAt,
+        reloadProgress: p.ammo[p.weapon]?.reloadAt ? q(clamp(1 - (p.ammo[p.weapon].reloadAt - time) / WEAPON_RULES[p.weapon].reload, 0, 1)) : 0,
+        shotAge: finite(p.ammo[p.weapon]?.shotAt) ? q(Math.max(0, time - p.ammo[p.weapon].shotAt)) : null,
+        weapon: p.weapon, score: p.score, kills: p.kills, held: p.held, seat: p.seat,
         seatY: p.seat ? seatMeta.find(seat => seat.id === p.seat)?.position[1] ?? 0 : null, ack: p.ack,
         ammo: Object.fromEntries(Object.entries(p.ammo).map(([id, a]) => [id, { mag: a.mag, reserve: a.reserve, reloading: !!a.reloadAt }])) })),
       doors: { ...doors }, items: { ...items }, seats: { ...seats }, interactions: copy(interactions), broken: [...broken], effects: [...effects], hunt: hunt.snapshot(), ambient };
@@ -471,7 +513,10 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
       p.actions = Math.max(0, p.actions - dt * 100); p.budget = Math.min(R.inputBudget, p.budget + dt);
       if (p.link !== null && now() - p.lastSeen > R.timeoutMs) { disconnect(p.link); continue; }
       if (p.link === null && p.id !== hostId && now() - p.lastSeen > R.resumeMs) { players.delete(p.id); continue; }
-      if (p.y > 0 || p.vy > 0) { p.vy -= WALK.gravity * dt; p.y = Math.max(0, p.y + p.vy * dt); if (!p.y) p.vy = 0; }
+      if (p.y > 0 || p.vy > 0) {
+        p.vy -= WALK.gravity * dt; p.y = Math.max(0, p.y + p.vy * dt);
+        if (!p.y) { p.vy = 0; animate(p, 'land'); }
+      }
       for (const [weapon, a] of Object.entries(p.ammo)) if (a.reloadAt && time >= a.reloadAt) {
         const n = Math.min(WEAPON_RULES[weapon].mag - a.mag, a.reserve); a.mag += n; a.reserve -= n; a.reloadAt = 0;
       }

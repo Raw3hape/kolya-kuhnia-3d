@@ -475,6 +475,9 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     get active() { return mode !== 'off'; },
     get target() { const t = walk?.walking ? aimed() : null; return t ? { id: t.id, label: t.label } : null; },
     get current() { return mode === 'off' ? null : seat?.id ?? null; },
+    // Walking has its own sequenced movement stream. A seated view is a look
+    // intent only; the authority retains the seat position and body facing.
+    getNetworkPose() { return mode === 'seated' ? { yaw: base + rel, pitch } : null; },
     update, sitOn, stand, dispose, setNetwork, applyNetwork, networkSeats,
     list: () => getAnchors().map(({ id, label }) => ({ id, label })),
   };

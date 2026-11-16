@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRoomAuthority, sanitizeObjects } from '../web/js/multiplayer/authority.js';
-import { NETWORK_RULES as R } from '../web/js/multiplayer/rules.js';
+import { NETWORK_RULES as R, WEAPON_RULES } from '../web/js/multiplayer/rules.js';
 import { WALK } from '../web/js/multiplayer/collision.js';
+import { actionDuration, sampleAvatarAction, selectAvatarPresentation } from '../web/js/multiplayer/action-contract.js';
 
 const read = name => JSON.parse(readFileSync(new URL(`../web/spec/${name}.json`, import.meta.url)));
 const plan = read('plan.generated'), site = read('site'), huntSpec = read('hunt');
@@ -282,5 +283,196 @@ test('shared public media auto-next is host-only and stale end callbacks cannot 
   assert.deepEqual(f.room.snapshot().interactions['media:tv'], { index: 2, videoId: 'publicTri', playing: false });
   assert.equal(f.action('guest', { kind: 'interaction', id: 'media:unknown', value: { index: 0 } }).ok, false);
   assert.equal(f.action('guest', { kind: 'interaction', id: 'media:tv', value: { index: 0, playing: 'yes' } }).ok, false);
+  f.room.dispose();
+});
+
+const advance = (f, seconds) => { for (let left = seconds; left > 1e-8; left -= 0.05) f.tick(Math.min(left, 0.05)); };
+function visualShot(f, weapon, shotId) {
+  const p = f.player(f.host.id), direction = [0, 0, 1];
+  return { kind: 'shoot', weapon, shotId, origin: [p.x, p.y + WALK.height / 100 * WALK.eyeRatio, p.z], direction, rays: [{ direction }] };
+}
+
+test('avatar aiming is finite and clamped, including seated inputs; stale input cannot change it', () => {
+  const seat = { id: 'visual-chair', position: [WALK.start.x - 0.8, 0.45, WALK.start.z], yaw: 0, eyeY: 1.17, stand: [WALK.start.x, WALK.start.z] };
+  const f = fixture({ geometry: { seats: [seat] } });
+  const input = (seq, aiming, extra = {}) => f.action('local', { kind: 'input', seq, dt: 0.05, dx: 0, dz: 0, yaw: 0, pitch: 0, aiming, ...extra });
+  const original = f.player(f.host.id);
+  assert.equal(original.aiming, 0); assert.equal(original.action, null); assert.equal(original.shotAge, null);
+  assert.equal(original.grounded, true); assert.equal(original.verticalSpeed, 0);
+  input(1, 12); assert.equal(f.player(f.host.id).aiming, 1);
+  input(2, NaN); input(3, Infinity); assert.equal(f.player(f.host.id).aiming, 1);
+  input(3, 0); assert.equal(f.player(f.host.id).aiming, 1, 'replayed input cannot reset aim');
+  input(4, -4); assert.equal(f.player(f.host.id).aiming, 0);
+  assert.equal(f.action('local', { kind: 'sit', id: seat.id }).ok, true);
+  const sitting = f.player(f.host.id); assert.equal(sitting.action.kind, 'sit');
+  input(5, 0.65, { weapon: 'pistol', dx: 999, jump: true });
+  const aimed = f.player(f.host.id);
+  assert.equal(aimed.aiming, 0.65); assert.equal(aimed.x, sitting.x); assert.equal(aimed.z, sitting.z);
+  assert.equal(aimed.verticalSpeed, 0); assert.equal(aimed.action.kind, 'draw');
+  assert.equal(f.action('local', { kind: 'stand' }).ok, true); assert.equal(f.player(f.host.id).action.kind, 'stand');
+  f.room.dispose();
+});
+
+test('accepted equip and shot drive cues; duplicate equip, rejected shot and forged pose cannot restart them', () => {
+  const f = fixture();
+  assert.equal(f.action('local', { kind: 'weapon', weapon: 'bolt' }).ok, true);
+  const draw = f.player(f.host.id).action; assert.equal(draw.kind, 'draw'); assert.equal(draw.targetId, 'bolt');
+  f.tick(0.05); f.action('local', { kind: 'weapon', weapon: 'bolt' }); assert.deepEqual(f.player(f.host.id).action, draw);
+  const shot = visualShot(f, 'bolt', 'visual-bolt-1'); assert.equal(f.action('local', shot, { worldTrace: [[]] }).ok, true);
+  const fired = f.player(f.host.id); assert.equal(fired.action.kind, 'fire'); assert.equal(fired.action.duration, WEAPON_RULES.bolt.cycle); assert.equal(fired.shotAge, 0);
+  const cue = fired.action; assert.equal(f.action('local', shot).ok, false); assert.deepEqual(f.player(f.host.id).action, cue);
+  advance(f, 0.7); assert.equal(f.action('local', visualShot(f, 'bolt', 'too-early')).ok, false);
+  assert.deepEqual(f.player(f.host.id).action, cue);
+  advance(f, 0.1); assert.equal(f.action('local', visualShot(f, 'bolt', 'after-cycle'), { worldTrace: [[]] }).ok, true);
+  const current = f.player(f.host.id).action;
+  assert.equal(f.action('local', { kind: 'pose', action: { kind: 'reload', at: 999, duration: 999 }, aiming: 1 }).ok, false);
+  assert.deepEqual(f.player(f.host.id).action, current);
+  f.room.dispose();
+});
+
+test('reload progress and late-join state use room time; invalid reloads create no cue', () => {
+  const f = fixture({ geometry: { items: [{ id: 'phone', position: [WALK.start.x, 1.2, WALK.start.z] }] } });
+  assert.equal(f.action('local', { kind: 'reload', weapon: 'pistol' }).ok, false);
+  f.action('local', { kind: 'weapon', weapon: 'pistol' });
+  assert.equal(f.action('local', visualShot(f, 'pistol', 'visual-reload'), { worldTrace: [[]] }).ok, true);
+  f.action('local', { kind: 'weapon', weapon: 'rifle' });
+  const draw = f.player(f.host.id).action;
+  assert.equal(f.action('local', { kind: 'reload', weapon: 'pistol' }).ok, false); assert.deepEqual(f.player(f.host.id).action, draw);
+  f.action('local', { kind: 'weapon', weapon: 'pistol' });
+  assert.equal(f.action('local', { kind: 'reload', weapon: 'pistol' }).ok, true);
+  const reloading = f.player(f.host.id); assert.equal(reloading.reloading, true); assert.equal(reloading.reloadProgress, 0);
+  assert.equal(reloading.action.kind, 'reload'); assert.equal(reloading.action.duration, WEAPON_RULES.pistol.reload);
+  assert.equal(f.action('local', { kind: 'reload', weapon: 'pistol' }).ok, false);
+  advance(f, WEAPON_RULES.pistol.reload / 2);
+  const mid = f.player(f.host.id); assert(Math.abs(mid.reloadProgress - 0.5) < 0.002);
+  const late = f.join('visual-late').snapshot, remote = late.players.find(p => p.id === f.host.id);
+  assert.deepEqual(remote.action, mid.action); assert.equal(remote.reloading, true); assert.equal(remote.reloadProgress, mid.reloadProgress);
+  const pose = sampleAvatarAction(remote, late.time + 0.05, late.time);
+  assert.equal(pose.reloading, true); assert(pose.reloadProgress > mid.reloadProgress);
+  assert.equal(pose.action.kind, 'reload'); assert(Math.abs(pose.actionTime - (late.time - remote.action.at + 0.05)) < 1e-6);
+  advance(f, WEAPON_RULES.pistol.reload / 2 + 0.05);
+  const done = f.player(f.host.id); assert.equal(done.reloading, false); assert.equal(done.reloadProgress, 0); assert.equal(done.ammo.pistol.mag, WEAPON_RULES.pistol.mag);
+  const completionTime = f.room.snapshot().time;
+  const justBeforeEnd = sampleAvatarAction(done, completionTime - 0.1, completionTime);
+  assert.equal(justBeforeEnd.reloading, true, 'a completed next snapshot cannot finish the interpolated reload early');
+  assert(justBeforeEnd.reloadProgress > 0.9 && justBeforeEnd.reloadProgress < 1);
+  assert.equal(f.action('local', { kind: 'claim', id: 'phone' }).ok, true);
+  const pickup = f.player(f.host.id).action;
+  assert.equal(f.action('local', { kind: 'reload', weapon: 'pistol' }).ok, false); assert.deepEqual(f.player(f.host.id).action, pickup);
+  f.room.dispose();
+});
+
+test('pickup, drop, interaction and replayed requests retain only authoritative target cues', () => {
+  const f = fixture({ geometry: {
+    items: [{ id: 'newspaper', position: [WALK.start.x, 1.2, WALK.start.z] }],
+    interactionMeta: { newspaperPages: [3], hoodPosition: [WALK.start.x + 0.8, 1.5, WALK.start.z] },
+  } });
+  assert.equal(f.action('local', { kind: 'claim', id: 'newspaper' }).ok, true);
+  let p = f.player(f.host.id); assert.equal(p.action.kind, 'pickup'); assert.equal(p.action.targetId, 'newspaper'); assert(p.action.target.every(Number.isFinite));
+  assert.equal(f.action('local', { kind: 'interaction', id: 'newspaper', value: { issue: 0, page: 1 } }).ok, true);
+  p = f.player(f.host.id); assert.equal(p.action.kind, 'page'); assert.equal(p.action.targetId, 'newspaper');
+  assert.equal(f.action('local', { kind: 'release', id: 'newspaper' }).ok, true);
+  p = f.player(f.host.id); assert.equal(p.held, null); assert.equal(p.action.kind, 'drop'); assert.equal(p.action.targetId, 'newspaper');
+  assert.equal(sampleAvatarAction(p, f.room.snapshot().time).interaction.targetId, 'newspaper');
+  const request = { type: 'action', action: { kind: 'interaction', id: 'hood', value: { level: 1 }, requestId: 'same-hood-request' } };
+  f.room.receive('local', request); const used = f.player(f.host.id).action; assert.equal(used.kind, 'use'); assert.equal(used.targetId, 'hood');
+  f.tick(0.05); f.room.receive('local', { ...request, action: { ...request.action, value: { level: 2 } } });
+  assert.equal(f.last('local', 'result').error, 'replayed_request'); assert.equal(f.room.snapshot().interactions.hood.level, 1); assert.deepEqual(f.player(f.host.id).action, used);
+  f.action('local', { kind: 'interaction', id: 'hood', value: { level: 1 } }); assert.deepEqual(f.player(f.host.id).action, used, 'same accepted state does not replay reach');
+  f.room.dispose();
+});
+
+test('grounded jump and physical landing are timestamped; airborne/replayed jump cannot restart them', () => {
+  const f = fixture(), input = seq => ({ kind: 'input', seq, dt: 0.05, dx: 0, dz: 0, yaw: 0, pitch: 0, jump: true });
+  assert.equal(f.action('local', input(1)).ok, true);
+  const jumped = f.player(f.host.id); assert.equal(jumped.action.kind, 'jump'); assert.equal(jumped.grounded, false); assert(jumped.verticalSpeed > 0);
+  f.tick(0.05); const airborne = f.player(f.host.id);
+  f.action('local', input(1)); f.action('local', input(2)); assert.deepEqual(f.player(f.host.id).action, jumped.action); assert.equal(f.player(f.host.id).verticalSpeed, airborne.verticalSpeed);
+  const late = f.join('jump-observer').snapshot.players.find(p => p.id === f.host.id); assert.equal(late.action.kind, 'jump'); assert.equal(late.grounded, false);
+  advance(f, 1.2); const landed = f.player(f.host.id); assert.equal(landed.action.kind, 'land'); assert.equal(landed.grounded, true); assert.equal(landed.verticalSpeed, 0);
+  assert(landed.action.at > jumped.action.at);
+  const sampled = sampleAvatarAction(landed, f.room.snapshot().time); assert.equal(sampled.actionTime, landed.action.duration);
+  assert.equal(actionDuration('reload', 'bolt'), WEAPON_RULES.bolt.reload); assert.equal(actionDuration('fire', 'bolt'), WEAPON_RULES.bolt.cycle);
+  f.room.dispose();
+});
+
+test('accepted door and human media changes reach toward stable targets; automatic media has no human cue', () => {
+  const x = WALK.start.x + 1.2, z = WALK.start.z + 0.3;
+  const door = { id: 'visual-door', open: false, closed: { ax: x, az: z, bx: x + 0.8, bz: z, h: 0.02 }, opened: { ax: x, az: z, bx: x, bz: z + 0.8, h: 0.02 } };
+  const f = fixture({ geometry: { doors: { doors: [door] }, interactionMeta: { media: { tv: ['publicOne', 'publicTwo', 'publicTri'] }, hoodPosition: [WALK.start.x + 8, 1.5, WALK.start.z] } } });
+  assert.equal(f.action('local', { kind: 'door', id: door.id, open: true }).ok, true);
+  let cue = f.player(f.host.id).action; assert.equal(cue.kind, 'use'); assert.equal(cue.targetId, door.id); assert.deepEqual(cue.target, [x, 1.1, z]);
+  f.tick(0.05); f.action('local', { kind: 'door', id: door.id, open: true }); assert.deepEqual(f.player(f.host.id).action, cue);
+  assert.equal(f.action('local', { kind: 'interaction', id: 'hood', value: { level: 2 } }).ok, false); assert.deepEqual(f.player(f.host.id).action, cue);
+  assert.equal(f.action('local', { kind: 'interaction', id: 'media:tv', value: { index: 1 }, expectedIndex: 0 }).ok, true);
+  cue = f.player(f.host.id).action; assert.equal(cue.kind, 'use'); assert.equal(cue.targetId, 'tv');
+  f.tick(0.05); assert.equal(f.action('local', { kind: 'interaction', id: 'media:tv', value: { index: 2 }, expectedIndex: 1, automatic: true }).ok, true);
+  assert.equal(f.room.snapshot().interactions['media:tv'].index, 2); assert.deepEqual(f.player(f.host.id).action, cue, 'autoplay must not animate a person pressing a button');
+  f.room.dispose();
+});
+
+test('switching weapons cannot transfer a shot flash; sampler ignores future cues and preserves old snapshot defaults', () => {
+  const f = fixture();
+  f.action('local', { kind: 'weapon', weapon: 'rifle' }); f.action('local', visualShot(f, 'rifle', 'rifle-before-switch'), { worldTrace: [[]] });
+  assert.equal(sampleAvatarAction(f.player(f.host.id), f.room.snapshot().time).shooting, true);
+  f.action('local', { kind: 'weapon', weapon: 'pistol' }); const switched = f.player(f.host.id);
+  assert.equal(switched.shotAge, null); assert.equal(sampleAvatarAction(switched, f.room.snapshot().time).shooting, false);
+  const future = sampleAvatarAction({ weapon: 'bolt', action: { kind: 'fire', at: 2, duration: 0.8 }, shotAge: 0.1 }, 1.8, 2.1);
+  assert.equal(future.action, null); assert.equal(future.shotAge, null); assert.equal(future.shooting, false);
+  const old = sampleAvatarAction({ y: 0, vy: 0, weapon: 'pistol' }, NaN, Infinity);
+  assert.equal(old.time, 0); assert.equal(old.aiming, 0); assert.equal(old.grounded, true); assert.equal(old.reloading, false); assert.equal(old.action, null);
+  f.room.dispose();
+});
+
+test('observer discrete equipment state begins with its cue; late join samples current action immediately', () => {
+  const f = fixture({ geometry: { items: [{ id: 'phone', position: [WALK.start.x, 1.2, WALK.start.z] }] } });
+  f.action('local', { kind: 'weapon', weapon: 'pistol' });
+  const first = f.room.snapshot(), before = first.players.find(p => p.id === f.host.id);
+  f.tick(0.05); f.action('local', { kind: 'claim', id: 'phone' });
+  const second = f.room.snapshot(), after = second.players.find(p => p.id === f.host.id);
+  const early = selectAvatarPresentation(before, after, 0.025, first.time, second.time);
+  assert.equal(early.player.held, null); assert.equal(early.player.weapon, 'pistol'); assert.equal(early.snapshotTime, first.time);
+  const start = selectAvatarPresentation(before, after, after.action.at, first.time, second.time);
+  assert.equal(start.player.held, 'phone'); assert.equal(start.player.weapon, 'none');
+  const action = sampleAvatarAction(start.player, after.action.at, start.snapshotTime);
+  assert.equal(action.action.kind, 'pickup'); assert.equal(action.actionTime, 0);
+  const late = selectAvatarPresentation(after, after, second.time, second.time, second.time);
+  assert.equal(late.player.held, 'phone'); assert.equal(sampleAvatarAction(late.player, second.time, late.snapshotTime).action.kind, 'pickup');
+  f.room.dispose();
+});
+
+test('seated look changes finite head aim only, cannot move/equip/jump or forge an action, and resets on stand', () => {
+  const seat = { id: 'look-chair', position: [WALK.start.x - 0.8, 0.45, WALK.start.z], yaw: 0.2, eyeY: 1.17, stand: [WALK.start.x, WALK.start.z] };
+  const f = fixture({ geometry: { seats: [seat] } });
+  assert.equal(f.action('local', { kind: 'look', yaw: 1, pitch: 0, aiming: 1 }).ok, false);
+  assert.equal(f.action('local', { kind: 'sit', id: seat.id }).ok, true);
+  const before = f.player(f.host.id);
+  assert.equal(f.action('local', { kind: 'look', yaw: 0.8, pitch: 0.3, aiming: 5, dx: 999, dz: 999, jump: true, weapon: 'rifle', action: { kind: 'fire', at: 999 } }).ok, true);
+  const looked = f.player(f.host.id);
+  assert.equal(looked.lookYaw, 0.8); assert.equal(looked.yaw, before.yaw); assert.equal(looked.pitch, 0.3); assert.equal(looked.aiming, 1);
+  assert.deepEqual([looked.x, looked.y, looked.z, looked.verticalSpeed, looked.weapon], [before.x, before.y, before.z, before.verticalSpeed, before.weapon]);
+  assert.deepEqual(looked.action, before.action);
+  for (const bad of [{ yaw: NaN, pitch: 0, aiming: 0 }, { yaw: 0, pitch: Infinity, aiming: 0 }, { yaw: 0, pitch: 0, aiming: NaN }])
+    assert.equal(f.action('local', { kind: 'look', ...bad }).ok, false);
+  assert.deepEqual(f.player(f.host.id), looked);
+  assert.equal(f.action('local', { kind: 'stand' }).ok, true);
+  const stood = f.player(f.host.id);
+  assert.equal(stood.yaw, looked.lookYaw, 'standing continues toward the seated viewing direction');
+  assert.equal(stood.lookYaw, stood.yaw); assert.equal(stood.pitch, looked.pitch);
+  f.action('local', { kind: 'input', seq: 1, dt: 0.05, dx: 0, dz: 0, yaw: 0.4, pitch: 0.1, aiming: 0 });
+  const walking = f.player(f.host.id); assert.equal(walking.lookYaw, 0.4); assert.equal(walking.yaw, 0.4);
+  f.room.dispose();
+});
+
+test('weapon-none emits one holster cue with departing gear for late observers', () => {
+  const f = fixture();
+  f.action('local', { kind: 'weapon', weapon: 'bolt' }); f.tick(0.05);
+  assert.equal(f.action('local', { kind: 'weapon', weapon: 'none' }).ok, true);
+  const holstered = f.player(f.host.id); assert.equal(holstered.weapon, 'none'); assert.equal(holstered.shotAge, null);
+  assert.deepEqual(holstered.action, { kind: 'holster', at: 0.05, duration: 0.35, targetId: 'bolt' });
+  const late = f.join('holster-observer').snapshot, remote = late.players.find(p => p.id === f.host.id);
+  assert.equal(remote.weapon, 'none'); assert.equal(remote.action.targetId, 'bolt'); assert.equal(sampleAvatarAction(remote, late.time).action.kind, 'holster');
+  f.tick(0.05); f.action('local', { kind: 'weapon', weapon: 'none' }); assert.deepEqual(f.player(f.host.id).action, holstered.action);
+  advance(f, 0.4); const done = sampleAvatarAction(f.player(f.host.id), f.room.snapshot().time); assert.equal(done.actionTime, 0.35);
   f.room.dispose();
 });

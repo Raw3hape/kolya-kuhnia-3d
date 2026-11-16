@@ -4,6 +4,8 @@
 // update({ dt,time,speed,weapon='none',aimPitch=0,held=null,shooting=false,seated=false,seatY }) animates visuals only.
 // Slot allocation/identity/collision belong to the room authority, never to this renderer adapter.
 import * as THREE from 'three';
+import { AVATAR_RIG as R, WEAPON_PRESENTATION as W } from './avatar-rig.js';
+import { solveAvatarPose } from './avatar-pose.js';
 
 export const AVATAR_ROSTER = Object.freeze([
   { id: 'sailor', label: 'Морской свитер', shirt: '#e4e3d8', accent: '#263e59', pants: '#293641', skin: '#d5a47e', hair: '#322b28', style: 'stripes', head: 'crop' },
@@ -60,15 +62,6 @@ function torso(material, d) {
   const b = builder(material), broad = ['chef', 'neighbour'].includes(d.id) ? 1.06 : d.id === 'cyclist' ? 0.93 : 1;
   b.box([0.38 * broad, 0.53, 0.23], d.shirt, [0, 1.135, 0]);
   b.box([0.32, 0.17, 0.24], d.pants, [0, 0.83, 0]);
-  b.cylinder(0.061, 0.07, 0.1, d.skin, [0, 1.435, 0]);
-  b.ball(0.155, d.skin, [0, 1.605, -0.008], [0.88, 1.1, 0.87]);
-  b.box([0.04, 0.045, 0.036], d.skin, [0, 1.59, -0.145]);
-  for (const x of [-0.052, 0.052]) {
-    b.box([0.024, 0.017, 0.012], INK, [x, 1.635, -0.134]);
-    b.ball(0.028, d.skin, [Math.sign(x) * 0.139, 1.61, 0], [0.5, 1, 0.7]);
-  }
-  b.box([0.045, 0.009, 0.009], '#87594e', [0, 1.55, -0.134]);
-  b.ball(0.151, d.hair, [0, 1.696, 0.012], [0.91, 0.58, 0.87]);
   if (d.style === 'stripes') {
     for (let i = 0; i < 4; i++) b.box([0.385, 0.037, 0.012], d.accent, [0, 0.98 + i * 0.105, -0.12]);
   } else if (d.style === 'overalls') {
@@ -104,6 +97,22 @@ function torso(material, d) {
     b.box([0.13, 0.15, 0.012], '#d6c8a5', [0, 1.2, -0.123], [0, 0, 0.15]);
     b.box([0.065, 0.07, 0.014], d.accent, [0, 1.2, -0.132], [0, 0, 0.15]);
   }
+  return b.build();
+}
+
+function headMesh(material, d) {
+  const b = builder(material);
+  b.cylinder(0.061, 0.07, 0.1, d.skin, [0, 1.435, 0]);
+  b.ball(0.155, d.skin, [0, 1.605, -0.008], [0.88, 1.1, 0.87]);
+  b.box([0.04, 0.045, 0.036], d.skin, [0, 1.59, -0.145]);
+  for (const x of [-0.052, 0.052]) {
+    b.box([0.037, 0.023, 0.012], WHITE, [x, 1.635, -0.133]);
+    b.box([0.015, 0.019, 0.015], INK, [x, 1.635, -0.142]);
+    b.box([0.042, 0.009, 0.014], d.hair, [x, 1.665, -0.128]);
+    b.ball(0.028, d.skin, [Math.sign(x) * 0.139, 1.61, 0], [0.5, 1, 0.7]);
+  }
+  b.box([0.045, 0.009, 0.009], '#87594e', [0, 1.55, -0.134]);
+  b.ball(0.151, d.hair, [0, 1.696, 0.012], [0.91, 0.58, 0.87]);
   if (d.head === 'cap') {
     b.ball(0.157, d.accent, [0, 1.711, 0.006], [0.96, 0.55, 0.94]);
     b.box([0.23, 0.021, 0.16], d.accent, [0, 1.719, -0.105]);
@@ -133,52 +142,6 @@ function torso(material, d) {
   return b.build();
 }
 
-function limb(material, d, arm, side) {
-  const pivot = new THREE.Group(), b = builder(material);
-  if (arm) {
-    pivot.position.set(side * 0.17, 1.37, 0);
-    const sleeve = d.style === 'tee' ? 0.17 : 0.29;
-    b.box([0.125, sleeve, 0.16], d.shirt, [0, -sleeve / 2, 0]);
-    b.box([0.09, 0.48 - sleeve, 0.105], d.skin, [0, -(0.48 + sleeve) / 2, 0]);
-    b.ball(0.06, d.skin, [0, -0.5, 0], [0.8, 1.05, 0.85]);
-  } else {
-    pivot.position.set(side * 0.103, 0.83, 0);
-    const width = d.id === 'skater' ? 0.17 : 0.14;
-    b.box([width, 0.7, 0.17], d.pants, [0, -0.35, 0]);
-    b.box([width + 0.015, 0.1, 0.26], ['sailor', 'skater', 'cyclist'].includes(d.id) ? WHITE : '#3c3832', [0, -0.775, -0.04]);
-    b.box([width + 0.016, 0.023, 0.262], '#b6b2a6', [0, -0.818, -0.04]);
-  }
-  pivot.add(b.build());
-  return pivot;
-}
-
-function equipment(material, weapon, held) {
-  const b = builder(material), group = new THREE.Group();
-  if (held) {
-    if (String(held).includes('phone')) {
-      b.box([0.075, 0.145, 0.014], INK);
-      b.box([0.063, 0.125, 0.004], '#a3c4bd', [0, 0, -0.01]);
-      group.position.set(0.12, 1.2, -0.39);
-    } else {
-      b.box([0.31, 0.36, 0.01], '#dedbcc');
-      for (let i = 0; i < 6; i++) b.box([0.24, 0.008, 0.013], '#797a73', [0, 0.12 - i * 0.044, -0.008]);
-      group.position.set(0, 1.16, -0.42);
-    }
-  } else if (weapon !== 'none') {
-    const pistol = weapon === 'pistol', length = pistol ? 0.21 : weapon === 'bolt' ? 0.64 : 0.5;
-    b.box([0.055, 0.075, length], '#383c3d', [0, 0, -length / 2]);
-    b.box([0.047, 0.12, 0.065], '#5c4d3e', [0, -0.085, -0.035], [-0.2, 0, 0]);
-    if (!pistol) {
-      b.box([0.07, 0.1, 0.17], '#66513d', [0, -0.016, 0.075]);
-      if (weapon === 'rifle') b.box([0.045, 0.14, 0.07], '#292d30', [0, -0.1, -0.17], [-0.2, 0, 0]);
-      if (weapon === 'bolt') b.cylinder(0.022, 0.022, 0.15, INK, [0, 0.08, -0.2], [Math.PI / 2, 0, 0]);
-      if (weapon === 'shotgun') b.box([0.085, 0.04, 0.33], '#6a6d68', [0, 0.016, -0.3]);
-    }
-    group.position.set(0.16, 1.16, -0.42);
-  } else return group;
-  group.add(b.build());
-  return group;
-}
 
 function nameplate() {
   if (typeof document === 'undefined') return null;
@@ -212,57 +175,189 @@ function nameplate() {
   };
 }
 
-export function createAvatar({ slot = 0, name = '', host = false, layer = 0 } = {}) {
-  const index = Number.isInteger(slot) && slot >= 0 && slot < AVATAR_ROSTER.length ? slot : 0;
-  const d = AVATAR_ROSTER[index], root = new THREE.Group();
-  root.name = `player_${d.id}`; root.userData.rasterOnly = true;
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.91, flatShading: true });
-  const body = torso(material, d), leftLeg = limb(material, d, false, -1), rightLeg = limb(material, d, false, 1);
-  const leftArm = limb(material, d, true, -1), rightArm = limb(material, d, true, 1);
-  root.add(body, leftLeg, rightLeg, leftArm, rightArm);
-  const plate = nameplate();
-  if (plate) { root.add(plate.sprite); plate.write(name, host); }
-  let gear = null, gearKey = '', gait = 0, disposed = false, motion = 0;
-  function setLayer(object) {
-    object.traverse(o => { o.layers.set(layer); o.userData.rasterOnly = true; });
+function joint(name, position = [0, 0, 0]) {
+  const group = new THREE.Group(); group.name = name; group.position.set(...position); return group;
+}
+function armChain(material, d, side) {
+  const label = side < 0 ? 'left' : 'right', shoulder = joint(`${label}_shoulder`, [side * R.shoulderX, R.shoulderY - R.hipY, 0]);
+  const elbow = joint(`${label}_elbow`, [0, -R.upperArm, 0]), wrist = joint(`${label}_wrist`, [0, -R.forearm, 0]);
+  const upper = builder(material), lower = builder(material), hand = builder(material);
+  const tee = d.style === 'tee', sleeve = tee ? 0.17 : R.upperArm;
+  upper.box([0.10, sleeve, 0.135], d.shirt, [0, -sleeve / 2, 0]);
+  if (tee) upper.box([0.087, R.upperArm - sleeve, 0.105], d.skin, [0, -(R.upperArm + sleeve) / 2, 0]);
+  upper.ball(0.052, tee ? d.skin : d.shirt, [0, -R.upperArm, 0], [0.95, 1, 1]);
+  if (!tee) {
+    lower.box([0.09, 0.095, 0.11], d.shirt, [0, -0.0475, 0]);
+    lower.box([0.096, 0.025, 0.116], d.accent, [0, -0.095, 0]);
   }
-  setLayer(root);
-  function update({ dt = 0, time = 0, speed = 0, weapon = 'none', aimPitch = 0, held = null, shooting = false, seated = false, seatY = 0.45 } = {}) {
-    if (disposed) return;
-    const stepDt = clamp(Number.isFinite(dt) ? dt : 0, 0, 0.1), walking = clamp(Number.isFinite(speed) ? speed : 0, 0, 4);
-    motion = THREE.MathUtils.damp(motion, walking, 14, stepDt);
-    gait += stepDt * (3.5 + motion * 3.5);
-    const stride = Math.sin(gait) * Math.min(0.53, motion * 0.2);
-    const seatOffset = seated ? clamp(Number.isFinite(seatY) ? seatY : 0.45, 0.2, 1.2) - 0.83 : 0;
-    leftLeg.position.y = rightLeg.position.y = 0.83 + seatOffset;
-    leftArm.position.y = rightArm.position.y = 1.37 + seatOffset;
-    leftLeg.rotation.x = seated ? 0.98 : stride; rightLeg.rotation.x = seated ? 0.98 : -stride;
-    const armed = weapon !== 'none' || !!held;
-    leftArm.rotation.x = held && String(held).includes('phone') ? 0 : armed ? 1.03 + aimPitch * 0.4 : -stride * 0.65;
-    rightArm.rotation.x = armed ? 1.12 + aimPitch * 0.4 : stride * 0.65;
-    leftArm.rotation.z = armed && !held ? 0.55 : 0.04; rightArm.rotation.z = -0.04;
-    body.position.y = seatOffset + (seated ? 0 : Math.abs(Math.sin(gait * 2)) * Math.min(0.012, motion * 0.004));
-    const nextKey = `${weapon}|${held || ''}`;
-    if (nextKey !== gearKey) {
-      if (gear) { gear.removeFromParent(); gear.traverse(o => o.geometry?.dispose()); }
-      gear = equipment(material, weapon, held); gearKey = nextKey;
-      gear.userData.baseY = gear.position.y;
-      setLayer(gear); root.add(gear);
+  const skinLength = tee ? R.forearm : R.forearm - 0.105;
+  lower.box([0.075, skinLength, 0.09], d.skin, [0, -(R.forearm - skinLength / 2), 0]);
+  hand.box([0.073, 0.075, 0.045], d.skin, [0, -0.024, 0]);
+  for (let i = 0; i < 4; i++) hand.box([0.014, 0.039, 0.035], d.skin, [-0.024 + i * 0.016, -0.075, -0.006]);
+  hand.box([0.027, 0.045, 0.035], d.skin, [-side * 0.042, -0.025, -0.018], [0.3, 0, -side * 0.4]);
+  const a = upper.build(), b = lower.build(), c = hand.build(); a.name = `${label}_upper_arm_mesh`; b.name = `${label}_forearm_mesh`; c.name = `${label}_hand`;
+  shoulder.add(a, elbow); elbow.add(b, wrist); wrist.add(c);
+  return { shoulder, elbow, wrist };
+}
+function legChain(material, d, side) {
+  const label = side < 0 ? 'left' : 'right', hip = joint(`${label}_hip`, [side * R.hipX, R.hipY, 0]);
+  const knee = joint(`${label}_knee`, [0, -R.upperLeg, 0]), ankle = joint(`${label}_ankle`, [0, -R.lowerLeg, 0]);
+  const width = d.id === 'skater' ? 0.17 : 0.14, upper = builder(material), lower = builder(material), boot = builder(material);
+  upper.box([width, R.upperLeg, 0.17], d.pants, [0, -R.upperLeg / 2, 0]);
+  upper.ball(width * 0.48, d.pants, [0, -R.upperLeg, 0], [1, 0.8, 1.02]);
+  lower.box([width * 0.93, R.lowerLeg, 0.15], d.pants, [0, -R.lowerLeg / 2, 0]);
+  lower.box([width * 0.97, 0.027, 0.16], d.accent, [0, -R.lowerLeg + 0.015, 0]);
+  const shoe = ['sailor', 'skater', 'cyclist'].includes(d.id) ? WHITE : '#3c3832';
+  boot.box([width + 0.014, 0.095, 0.255], shoe, [0, -0.06, -0.043]);
+  boot.box([width + 0.017, 0.018, 0.26], '#b6b2a6', [0, -0.111, -0.043]);
+  for (let i = 0; i < 3; i++) boot.box([width * 0.55, 0.006, 0.012], shoe === WHITE ? d.accent : '#c7bdab', [0, -0.009, -0.016 - i * 0.025]);
+  hip.add(upper.build(), knee); knee.add(lower.build(), ankle); ankle.add(boot.build());
+  return { hip, knee, ankle };
+}
+
+function createGear(kind, material, flashMaterial, screenMaterial) {
+  const root = joint(`avatar_${Object.hasOwn(W, kind) ? 'weapon' : kind}`), b = builder(material);
+  let muzzle = null, flash = null, magazine = null, bolt = null, barrels = null, page = null;
+  if (kind === 'phone') {
+    b.box([0.078, 0.15, 0.014], INK, [0, 0.04, 0]);
+    b.box([0.083, 0.155, 0.008], '#4c5558', [0, 0.04, -0.004]);
+    b.ball(0.011, '#171d20', [-0.023, 0.094, -0.015]);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(0.064, 0.125, 0.003), screenMaterial);
+    screen.name = 'avatar_phone_screen'; screen.position.set(0, 0.04, 0.009); root.add(screen);
+    b.box([0.024, 0.004, 0.002], WHITE, [0, -0.012, 0.012]);
+    b.box([0.023, 0.006, 0.002], INK, [0, 0.098, 0.012]); root.add(b.build());
+  } else if (kind === 'newspaper') {
+    root.position.set(-0.20, 0.035, -0.014);
+    b.box([0.40, 0.285, 0.012], '#dedbcc', [0, 0.035, 0]);
+    b.box([0.006, 0.29, 0.016], '#bbb5a2', [0, 0.035, 0]);
+    for (const side of [-1, 1]) {
+      b.box([0.16, 0.024, 0.014], '#525b56', [side * 0.10, 0.142, 0.002]);
+      b.box([0.07, 0.063, 0.014], side < 0 ? '#71938c' : '#b88a62', [side * 0.065, 0.075, 0.002]);
+      for (let i = 0; i < 7; i++) b.box([0.16, 0.005, 0.014], '#838277', [side * 0.10, 0.012 - i * 0.017, 0.002]);
     }
-    if (gear) { gear.position.y = gear.userData.baseY + seatOffset; gear.rotation.x = clamp(aimPitch, -1.2, 1.2) + (shooting ? -0.06 : 0); }
-    if (plate) plate.sprite.position.y = 2.08 + seatOffset + Math.sin(time * 1.5) * 0.004;
+    root.add(b.build()); page = joint('newspaper_page', [0, 0.035, 0.012]);
+    const leaf = builder(material); leaf.box([0.195, 0.278, 0.005], '#ece7d8', [0.10, 0, 0]);
+    for (let i = 0; i < 8; i++) leaf.box([0.16, 0.004, 0.007], '#7e7f76', [0.10, 0.105 - i * 0.027, 0]);
+    page.add(leaf.build()); root.add(page); page.visible = false;
+  } else {
+    const pistol = kind === 'pistol', profile = W[kind], length = profile.length - (pistol ? 0.09 : 0.16);
+    b.box([0.062, 0.085, pistol ? 0.16 : 0.22], '#363d40', [0, 0.045, -0.065]);
+    b.box([0.045, 0.115, 0.06], '#66503b', [0, -0.035, 0.008], [-0.18, 0, 0]);
+    b.box([0.025, 0.009, 0.04], '#959d98', [0, 0.092, -0.075]);
+    if (!pistol) {
+      b.box([0.065, 0.10, 0.18], '#66513d', [0, 0.018, 0.115]);
+      b.box([0.06, 0.07, 0.14], '#655742', [0, 0.025, -0.18]);
+    }
+    if (kind === 'bolt') { b.cylinder(0.025, 0.025, 0.17, INK, [0, 0.123, -0.095], [Math.PI / 2, 0, 0]); }
+    if (kind === 'rifle') { b.box([0.038, 0.018, 0.08], INK, [0, 0.117, -0.06]); }
+    root.add(b.build());
+    barrels = joint('weapon_barrel', [0, 0.045, pistol ? -0.07 : -0.12]);
+    const barrel = builder(material);
+    if (kind === 'shotgun') {
+      for (const x of [-0.018, 0.018]) barrel.cylinder(0.014, 0.014, length, '#707773', [x, 0, -length / 2], [Math.PI / 2, 0, 0]);
+    } else barrel.cylinder(pistol ? 0.015 : 0.011, pistol ? 0.015 : 0.011, length, '#65706d', [0, 0, -length / 2], [Math.PI / 2, 0, 0]);
+    barrel.box([0.018, 0.025, 0.015], INK, [0, 0.02, -length + 0.025]); barrels.add(barrel.build()); root.add(barrels);
+    if (kind === 'rifle' || pistol) {
+      const mag = builder(material); mag.box([0.038, pistol ? 0.09 : 0.14, 0.065], '#333b40', [0, 0, 0]);
+      magazine = mag.build(); magazine.name = 'weapon_magazine'; magazine.position.set(0, pistol ? -0.085 : -0.095, pistol ? 0.01 : -0.09); root.add(magazine);
+    }
+    if (kind === 'bolt') {
+      bolt = joint('weapon_bolt', [0.044, 0.073, -0.015]);
+      const lever = builder(material); lever.box([0.05, 0.014, 0.014], '#9b9d91', [0.018, 0, 0]); lever.ball(0.018, INK, [0.05, -0.01, 0]); bolt.add(lever.build()); root.add(bolt);
+    }
+    muzzle = joint('avatar_muzzle', [0, 0, -length]); barrels.add(muzzle);
+    flash = new THREE.Mesh(new THREE.ConeGeometry(0.036, 0.12, 6), flashMaterial);
+    flash.name = 'muzzle_flash'; flash.rotation.x = -Math.PI / 2; flash.position.z = -0.055; flash.visible = false; muzzle.add(flash);
   }
+  const grip = joint('avatar_prop_grip', root.position.clone().negate().toArray()); root.add(grip);
+  return { root, kind, muzzle, flash, magazine, bolt, barrels, page, grip };
+}
+
+export function createAvatar({ slot = 0, name = '', host = false, layer = 0 } = {}) {
+  const index = Number.isInteger(slot) && slot >= 0 && slot < AVATAR_ROSTER.length ? slot : 0, d = AVATAR_ROSTER[index];
+  const root = joint(`player_${d.id}`), rig = joint('avatar_rig'), body = joint('avatar_body', [0, R.hipY, 0]);
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.91, flatShading: true });
+  const flashMaterial = new THREE.MeshBasicMaterial({ color: '#ffda84', transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
+  const screenMaterial = new THREE.MeshBasicMaterial({ color: '#85b8bc', toneMapped: false });
+  const torsoMesh = torso(material, d); torsoMesh.position.y = -R.hipY; body.add(torsoMesh);
+  const head = joint('avatar_head', [0, R.neckY - R.hipY, 0]), face = headMesh(material, d); face.position.y = -R.neckY; head.add(face); body.add(head);
+  const leftArm = armChain(material, d, -1), rightArm = armChain(material, d, 1);
+  const leftLeg = legChain(material, d, -1), rightLeg = legChain(material, d, 1);
+  body.add(leftArm.shoulder, rightArm.shoulder); rig.add(body, leftLeg.hip, rightLeg.hip); root.add(rig);
+  const gearSocket = joint('avatar_gear'); rightArm.wrist.add(gearSocket);
+  const spare = builder(material); spare.box([0.036, 0.12, 0.055], '#333b40', [0, -0.06, 0]);
+  const spareMagazine = spare.build(); spareMagazine.name = 'reload_magazine_in_hand'; spareMagazine.visible = false; leftArm.wrist.add(spareMagazine);
+  const plate = nameplate(); if (plate) { root.add(plate.sprite); plate.write(name, host); }
+  const gearCache = new Map(), down = new THREE.Vector3(0, -1, 0), direction = new THREE.Vector3();
+  const lowerWorld = new THREE.Quaternion(), handWorld = new THREE.Quaternion(), euler = new THREE.Euler(), target = new THREE.Vector3();
+  let currentGear = null, pose = null, disposed = false, lastSeatY = 0.45;
+  function setLayer(object) { object.traverse(o => { o.layers.set(layer); o.userData.rasterOnly = true; }); }
+  setLayer(root);
+  function applyArm(chain, points, rotation) {
+    direction.fromArray(points.elbow).sub(target.fromArray(points.shoulder)).normalize();
+    chain.shoulder.quaternion.setFromUnitVectors(down, direction);
+    direction.fromArray(points.wrist).sub(target.fromArray(points.elbow)).normalize(); lowerWorld.setFromUnitVectors(down, direction);
+    chain.elbow.quaternion.copy(chain.shoulder.quaternion).invert().multiply(lowerWorld);
+    handWorld.setFromEuler(euler.set(...rotation, 'XYZ'));
+    chain.wrist.quaternion.copy(lowerWorld).invert().multiply(handWorld);
+  }
+  function update(input = {}) {
+    if (disposed) return;
+    const state = { ...input };
+    if (state.seated && Number.isFinite(state.seatY)) lastSeatY = state.seatY;
+    if (!Number.isFinite(state.seatY)) state.seatY = lastSeatY;
+    const interaction = state.interaction || state.action;
+    if (Array.isArray(interaction?.target) && interaction.target.length === 3) {
+      root.updateWorldMatrix(true, false); target.fromArray(interaction.target); root.worldToLocal(target);
+      target.y -= state.seated ? lastSeatY - R.hipY : 0; state.interactionTarget = target.toArray();
+    }
+    pose = solveAvatarPose(state, index);
+    rig.position.y = pose.body.y; body.rotation.set(pose.body.pitch, 0, pose.body.roll);
+    head.rotation.set(pose.head.pitch, pose.head.yaw, -pose.body.roll * 0.3);
+    for (const [chain, value] of [[leftLeg, pose.legs.left], [rightLeg, pose.legs.right]]) {
+      chain.hip.rotation.x = value.hip; chain.knee.rotation.x = value.knee; chain.ankle.rotation.x = value.ankle;
+    }
+    applyArm(leftArm, pose.arms.left, pose.hands.left); applyArm(rightArm, pose.arms.right, pose.hands.right);
+    const kind = pose.gear.kind;
+    if (currentGear?.kind !== kind) {
+      currentGear?.root.removeFromParent(); currentGear = null;
+      if (kind !== 'none') {
+        if (!gearCache.has(kind)) { const gear = createGear(kind, material, flashMaterial, screenMaterial); setLayer(gear.root); gearCache.set(kind, gear); }
+        currentGear = gearCache.get(kind); gearSocket.add(currentGear.root);
+      }
+    }
+    if (currentGear) {
+      currentGear.root.visible = pose.gear.visible; gearSocket.scale.setScalar(pose.gear.scale);
+      if (currentGear.flash) currentGear.flash.visible = pose.gear.muzzle;
+      if (currentGear.magazine) currentGear.magazine.visible = pose.gear.magazine < 0.2;
+      if (currentGear.barrels) currentGear.barrels.rotation.x = -pose.gear.breakOpen * 0.65;
+      if (currentGear.bolt) { currentGear.bolt.position.z = -0.015 + pose.gear.bolt * 0.075; currentGear.bolt.rotation.z = -pose.gear.bolt * 0.8; }
+      if (currentGear.page) { currentGear.page.visible = pose.gear.page > 0.001 && pose.gear.page < 0.999; currentGear.page.rotation.y = -Math.PI * pose.gear.page; }
+    }
+    spareMagazine.visible = !!currentGear?.magazine && pose.gear.magazine >= 0.15;
+    if (plate) plate.sprite.position.y = 2.08 + pose.body.y;
+  }
+  update();
   return {
     root, height: 1.8, slot: index, definition: d,
-    setIdentity({ name: nextName = name, host: nextHost = host } = {}) {
-      name = nextName; host = nextHost; plate?.write(name, host);
-    },
+    setIdentity({ name: nextName = name, host: nextHost = host } = {}) { name = nextName; host = nextHost; plate?.write(name, host); },
     update,
+    getMuzzleWorldPosition(out = new THREE.Vector3()) {
+      if (!currentGear?.muzzle || !currentGear.root.visible) return null;
+      root.updateMatrixWorld(true); return currentGear.muzzle.getWorldPosition(out);
+    },
+    get animation() {
+      return { pose: pose ? structuredClone(pose) : null, gear: currentGear?.kind || 'none',
+        parent: currentGear?.root.parent?.parent?.name || null,
+        joints: [head, leftArm.shoulder, leftArm.elbow, leftArm.wrist, rightArm.shoulder, rightArm.elbow, rightArm.wrist,
+          leftLeg.hip, leftLeg.knee, leftLeg.ankle, rightLeg.hip, rightLeg.knee, rightLeg.ankle].map(j => ({ name: j.name, rotation: j.quaternion.toArray(), position: j.position.toArray() })) };
+    },
     dispose() {
-      if (disposed) return;
-      disposed = true; root.removeFromParent();
+      if (disposed) return; disposed = true; root.removeFromParent();
+      currentGear?.root.removeFromParent();
       root.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
-      material.dispose();
+      for (const gear of gearCache.values()) gear.root.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); gearCache.clear();
+      material.dispose(); flashMaterial.dispose(); screenMaterial.dispose();
       if (plate) { plate.sprite.material.map.dispose(); plate.sprite.material.dispose(); }
     },
   };
