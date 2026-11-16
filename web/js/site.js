@@ -856,8 +856,11 @@ export function buildContext(site, THREE, opts = {}) {
     // Землю видно только издали, из окон и с балкона: до первого вида 256 px, после него — 512 (tools/make_web_assets.py);
     // при подмене — dispose: three держит на видеокарте место ровно под 256, новый размер заливается заново
     const small = `${TEX_DIR}256/${name}.jpg`, full = `${TEX_DIR}512/${name}.jpg`;
-    const t = texLoader.load(assetUrl(small));
-    pending.push(track(new Promise(res => { t.image ? res() : (t.onUpdate = () => { t.onUpdate = null; res(); }); }), { label: LABEL, url: small }));
+    let t;
+    // Readiness is an image-load boundary. GPU upload only happens for visible
+    // textures, and an image error must not block roomReady()/deferred models.
+    const loaded = new Promise(resolve => { t = texLoader.load(assetUrl(small), resolve, undefined, resolve); });
+    pending.push(track(loaded, { label: LABEL, url: small }));
     later.push(afterRoom(() => track(new Promise(res => texLoader.load(assetUrl(full), big => { t.dispose(); t.image = big.image; t.needsUpdate = true; res(); }, undefined, res)), { label: LABEL, url: full })));
     t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
     t.repeat.set(1 / TEX_M[name], 1 / TEX_M[name]);

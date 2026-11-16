@@ -1317,7 +1317,7 @@ export function initUI(api) {
   // --- открытие панели: справа на компьютере, шторка снизу уже 800 px
   const mq = matchMedia('(max-width: 800px)');
   let open = false;
-  function setPanelOpen(v) {
+  function setPanelOpen(v, { remember = true } = {}) {
     open = v;
     panel.classList.toggle('open', v);
     document.body.classList.toggle('panel-open', v && !mq.matches);
@@ -1326,9 +1326,12 @@ export function initUI(api) {
     toggleBtn.hidden = v || mq.matches;
     head.inert = body.inert = !v;
     if (!v) { closePop(false); hideTip(); }
-    if (!mq.matches) { prefs.panel = v; savePrefs(); }
+    if (remember && !mq.matches) { prefs.panel = v; savePrefs(); }
   }
-  mq.addEventListener('change', () => setPanelOpen(!mq.matches && prefs.panel !== false));
+  mq.addEventListener('change', () => {
+    const touchPlay = isTouch() && ['walk', 'seat'].includes(currentMode());
+    setPanelOpen(!touchPlay && !mq.matches && prefs.panel !== false, { remember: false });
+  });
   // шторка: тап по ручке — открыть/закрыть, потянуть — то же жестом
   let drag = null, dragged = false;
   grab.addEventListener('pointerdown', e => { drag = { y: e.clientY, moved: false }; grab.setPointerCapture(e.pointerId); });

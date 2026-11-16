@@ -11,3 +11,4 @@ dist/
 .env*
 node_modules/
 output/playwright/
+output/independent-qa/

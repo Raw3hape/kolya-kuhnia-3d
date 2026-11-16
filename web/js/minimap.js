@@ -115,6 +115,14 @@ const MAP_CSS = `
 .km-dot { fill: var(--kw-accent); stroke: var(--kw-sheet); stroke-width: 0.07; }
 .km-cam.out { opacity: 0.55; }
 @media (max-width: 800px) { .km { width: 130px; } .km-head { height: 24px; } .km-fold { width: 24px; height: 24px; } }
+/* Short touch screens have no vertical room between the title and joystick.
+   Put the compact map beside the movement pad instead of underneath it. */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  #kw-dock { left: max(148px, calc(env(safe-area-inset-left, 0px) + 140px)); }
+  .km { width: 130px; }
+  .km-head { height: 24px; }
+  .km-fold { width: 24px; height: 24px; }
+}
 @media (prefers-reduced-motion: reduce) { .km-fold svg, .km-room { transition: none; } }
 `;
 

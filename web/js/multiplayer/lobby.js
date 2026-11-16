@@ -3,6 +3,7 @@
 // -> { open({room?}), close(), refresh(), dispose() }. Call open({room}) for an invitation.
 import { AVATAR_ROSTER } from './avatars.js';
 import { cleanPlayerName } from './client.js';
+import { prepareRoom } from './room-preparation.js';
 
 const NAME_KEY = 'kitchen.multiplayer.name';
 const STYLE_ID = 'kmp-lobby-style';
@@ -101,6 +102,7 @@ export function createMultiplayerLobby({
   const status = el('p', 'kmp-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   dialog.append(head, description, form, roomView, status); document.body.append(dialog);
   let invitation = null, busy = false, disposed = false, lastMembers = '', returnFocus = null, statusError = null, operation = 0;
+  let preparation = null, phase = null;
 
   function invitationURL() {
     return client.inviteUrl;
@@ -142,8 +144,8 @@ export function createMultiplayerLobby({
     title.textContent = inRoom ? 'Вместе в квартире' : joining ? 'Вы приглашены' : 'Пригласить друзей';
     description.textContent = inRoom ? (client.role === 'host' ? 'Вы — хозяин. Квартира настроена по-вашему.' : 'Устраивайтесь. Квартира такая, какой её сделал хозяин.') : joining ? 'Придумайте имя, и можно заходить.' : 'До 10 игроков. Ваши материалы и мебель увидят все гости.';
     form.hidden = inRoom; roomView.hidden = !inRoom;
-    submit.textContent = busy ? 'Подключаемся…' : joining ? 'Войти в квартиру' : 'Создать комнату';
-    submit.disabled = busy; nameInput.disabled = busy; solo.hidden = !joining && !statusError;
+    submit.textContent = busy ? phase === 'preparing' ? 'Готовим квартиру…' : 'Подключаемся…' : joining ? 'Войти в квартиру' : 'Создать комнату';
+    submit.disabled = busy; nameInput.disabled = busy; solo.hidden = !busy && !joining && !statusError;
     permissions.textContent = joining ? 'Квартиру настраивает хозяин. Вы можете гулять, брать оружие и играть вместе.' : 'Квартиру настраиваете вы. Гости могут гулять, брать оружие и играть вместе.';
     invite.disabled = !connected;
     if (inRoom) {
@@ -171,7 +173,8 @@ export function createMultiplayerLobby({
     if (returnFocus?.isConnected && returnFocus !== document.body) returnFocus.focus();
   }
   function leave() {
-    operation++; client.leave(); invitation = null; statusError = null; busy = false; lastMembers = ''; updateURL(null); close(); refresh(); onLeft();
+    operation++; preparation?.abort(); preparation = null; phase = null;
+    client.leave(); invitation = null; statusError = null; busy = false; lastMembers = ''; updateURL(null); close(); refresh(); onLeft();
   }
   async function join(event) {
     event.preventDefault();
@@ -179,20 +182,26 @@ export function createMultiplayerLobby({
     const name = cleanPlayerName(nameInput.value);
     if (!name) { say('Введите ваше имя.', true); nameInput.focus(); return; }
     const serial = ++operation;
-    busy = true; statusError = null; say('Подключаемся…'); refresh(); saveName(name);
+    const controller = preparation = new AbortController();
+    busy = true; phase = invitation ? 'connecting' : 'preparing'; statusError = null;
+    say(invitation ? 'Подключаемся…' : 'Готовим квартиру: загружаем мебель и предметы…'); refresh(); saveName(name);
     try {
       let welcome;
       if (invitation) welcome = await client.join({ room: invitation, name });
       else {
-        const apartment = await getApartment(), collision = await getCollision(), world = await getRoomState();
+        const room = await prepareRoom(async () => {
+          const apartment = await getApartment(), collision = await getCollision(), world = await getRoomState();
+          return { apartment, collision, ...world };
+        }, { signal: controller.signal });
         if (disposed || operation !== serial) return;
-        welcome = await client.create({ name, apartment, collision, ...world });
+        phase = 'connecting'; say('Подключаемся…'); refresh();
+        welcome = await client.create({ name, ...room });
       }
       if (disposed || operation !== serial) return;
       updateURL(client.room); say('Вы в комнате. Пригласите друзей по ссылке.'); await onJoined(welcome);
       if (invitation) close();
     } catch (error) { if (!disposed && operation === serial) { statusError = error; say(error.message || 'Не удалось подключиться. Попробуйте ещё раз.', true); } }
-    finally { if (operation === serial) { busy = false; refresh(); } }
+    finally { if (operation === serial) { preparation = null; phase = null; busy = false; refresh(); } }
   }
   async function share() {
     if (!client.room) return;
@@ -226,7 +235,8 @@ export function createMultiplayerLobby({
   return {
     open, close, refresh,
     dispose() {
-      disposed = true; operation++; unsubscribe(); close(); dialog.remove(); launch.remove();
+      disposed = true; operation++; preparation?.abort(); preparation = null;
+      unsubscribe(); close(); dialog.remove(); launch.remove();
     },
   };
 }

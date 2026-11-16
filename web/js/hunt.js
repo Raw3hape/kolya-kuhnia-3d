@@ -1,5 +1,6 @@
 import { buildHuntRegions as buildRegions } from './hunt-regions.js';
 import { raySphere, rayAnimalPose } from './hunt-hitboxes.js';
+import { captureLocalWildlife, restoreLocalWildlife } from './hunt-session-state.js';
 // Охота «как в тире» за балконом: кабаны (dziki) с поросятами (warchlaki) пасутся на поле и лугу под домом (больше всего —
 // в 40–150 м от балкона) и на газонах справа, у дорог и парковок; над полем низко тянутся клинья больших гусей, гуси
 // пасутся на поле, реже — стайки голубей и грачей, утки. Стреляют из оружия прогулки (viewmodel.js).
@@ -391,6 +392,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   const boars = [], groups = [], birds = [], flocks = [];
   let network = false, networkSnapshot = null, previousEnabled = enabled;
   const networkTargets = new Map(), networkFlock = { kind: 'local' };
+  let localWildlife = null;
   let boarMesh = null, blobMesh = null, birdMesh = null;
   let boarMot, boarSt, birdMot, birdSt;
   const owned = [];   // что освобождать в dispose
@@ -1268,7 +1270,12 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     const next = !!on;
     if (network === next) return;
     if (next) { previousEnabled = enabled; enabled = true; round.on = false; hud.hidden = card.hidden = true; }
-    else { enabled = previousEnabled; networkSnapshot = null; networkTargets.clear(); }
+    else {
+      const clock = restoreLocalWildlife(localWildlife);
+      if (clock) { time = clock.time; acc = clock.acc; alarm = clock.alarm; wasSeen = clock.wasSeen; }
+      localWildlife = null;
+      enabled = previousEnabled; networkSnapshot = null; networkTargets.clear();
+    }
     network = next;
     syncVisible(); requestRender?.();
   }
@@ -1277,6 +1284,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     if (!snapshot || !Array.isArray(snapshot.animals)) return;
     networkSnapshot = snapshot;
     if (!network || !ready) return;
+    localWildlife ??= captureLocalWildlife([...boars, ...birds], { time, acc, alarm, wasSeen });
     time = Number(snapshot.time) || 0;
     networkTargets.clear();
     for (const a of [...boars, ...birds]) a.active = false;
@@ -1308,6 +1316,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
   function dispose() {
     disposed = true;
+    localWildlife = null; networkSnapshot = null; networkTargets.clear();
     offLive?.();
     scene.remove(root);
     for (const o of owned) o.dispose?.();
