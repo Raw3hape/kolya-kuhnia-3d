@@ -1,6 +1,6 @@
 // Transport-independent room authority. Only the creator runs this module.
 // No renderer, DOM, account, remote database or client-supplied scores.
-import { NETWORK_RULES as R, WEAPON_RULES, EXTERNAL_TARGET_RULES } from './rules.js';
+import { NETWORK_RULES as R, WEAPON_RULES, EXTERNAL_TARGET_RULES, refillMagazine } from './rules.js';
 import { WALK, buildColliders, moveCircle, findFree, roomOf, isFree } from './collision.js';
 import { createHuntSimulation } from './hunt-simulation.js';
 import { makeAvatarAction } from './action-contract.js';
@@ -270,7 +270,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
 
   function reload(p, weapon) {
     const w = weaponOf(weapon), a = Object.hasOwn(p.ammo, weapon) ? p.ammo[weapon] : null;
-    if (!w || !a || p.held || p.weapon !== weapon || a.reloadAt || a.mag >= w.mag || a.reserve <= 0) return false;
+    if (!w || !a || p.held || p.weapon !== weapon || a.reloadAt || a.mag >= w.mag || !w.infiniteReserve && a.reserve <= 0) return false;
     a.reloadAt = time + w.reload; animate(p, 'reload', weapon); return true;
   }
 
@@ -518,7 +518,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, send, now = 
         if (!p.y) { p.vy = 0; animate(p, 'land'); }
       }
       for (const [weapon, a] of Object.entries(p.ammo)) if (a.reloadAt && time >= a.reloadAt) {
-        const n = Math.min(WEAPON_RULES[weapon].mag - a.mag, a.reserve); a.mag += n; a.reserve -= n; a.reloadAt = 0;
+        refillMagazine(a, WEAPON_RULES[weapon]); a.reloadAt = 0;
       }
     }
     if (snapshotClock >= 1 / R.snapshotHz) { snapshotClock %= 1 / R.snapshotHz; emitSnapshot(); }

@@ -568,7 +568,7 @@ walk = initWalk({ THREE, camera, controls, canvas, plan, requestRender, getObsta
 // Двери открываются взглядом + E / кликом (doors.js); руки с оружием в прогулке (viewmodel.js)
 doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, walk, requestRender, onChange: () => { cutaway.rebuild(); lighting.invalidate(); } });   // дверь открыта или закрыта — свет из соседних зон пересчитать
 // Охота: кабаны и птицы на поле за балконом, очки и таблица рекордов (hunt.js, spec/hunt.json)
-// после первого вида (LOAD): звери, их спека и таблица рекордов не нужны первому кадру; до этого getHunt() — null
+// после первого вида (LOAD): звери и их спецификация не нужны первому кадру; до этого getHunt() — null
 afterRoom(() => { hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site }); });
 viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getWalk: () => walk, getHunt: () => hunt });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
@@ -639,7 +639,10 @@ Promise.all([lighting.ready, furn?.ready, decor?.near, context.ready].map(p => p
     wait();
   }); })
   .then(() => { mark('gi'); return pipe.whenDrawn(); })
-  .then(() => { roomReady(); ui.ready(); });
+  .then(() => {
+    if (!walk.active && !seats?.active && !multiplayer?.client?.connected) walk.enter();
+    roomReady(); ui.ready();
+  });
 window.addEventListener('hashchange', () => { const s = decode(location.hash); if (s) setState(s, { push: false }); });
 
 // Для автоматических проверок из консоли

@@ -7,16 +7,16 @@ import { collectFieldOccluders } from './field-events-visibility.js';
 // Охота «как в тире» за балконом: кабаны (dziki) с поросятами (warchlaki) пасутся на поле и лугу под домом (больше всего —
 // в 40–150 м от балкона) и на газонах справа, у дорог и парковок; над полем низко тянутся клинья больших гусей, гуси
 // пасутся на поле, реже — стайки голубей и грачей, утки. Стреляют из оружия прогулки (viewmodel.js).
-// Очки, серии, опыт и уровни, раунд «охота» на spec.round секунд с первого выстрела, таблица рекордов: своя в браузере
-// и общая онлайн (api/scores.js, Vercel Blob), если она отвечает. Настройка браузера, в код варианта не входит.
+// Очки и серии за текущую игру, без таймера, модальных итогов и запросов таблицы рекордов.
+// Настройка браузера, в код варианта не входит. api/scores.js сохранён для старых клиентов.
 //
 // createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState, getWalk, plan?, site? })
 //   plan/site — уже загруженные plan.generated.json и site.json (иначе модуль загрузит их сам)
 //   -> { update(dt) -> bool   true — нужен кадр (звери видны и двигаются); звать каждый кадр;
 //        raycast(raycaster) -> { distance, point, normal, object, hit(weaponId, damage) } | null   ближайший зверь на луче;
 //        noise(point, loudness = 1)   выстрел: звери слышат (кабаны настораживаются и бегут, птицы взлетают);
-//        stats, enabled, setEnabled(on), openName(), dispose(),
-//        award(points, point, title, sub)   очки за чужую мишень (мыши, mice.js): в раунд, опыт и всплывашку; 0 — только надпись }
+//        stats, enabled, setEnabled(on), dispose(),
+//        award(points, point, title, sub)   очки за чужую мишень (мыши, mice.js): в текущий счёт, опыт и всплывашку; 0 — только надпись }
 // addTargets({ raycast(raycaster) -> { distance, point, normal, object, hit(weaponId, damage) } | null }) -> снять()
 //   другие мишени для оружия (мыши и монстры «Живого дома», life.js): raycast() охоты отдаёт ближайшее из зверей и их.
 //   Работают и при выключенной охоте.
@@ -58,7 +58,7 @@ const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if
 // ---------- профиль игрока и таблица (общие для охоты и панели) ----------
 
 const DEF_PREF = { on: true, name: '', xp: 0, best: 0, last: null, board: [] };
-const shared = { pref: readPref(), spec: null, online: null, status: 'local', hunt: null };
+const shared = { pref: readPref(), hunt: null };
 const targets = new Set();   // addTargets: чужие мишени (life.js)
 export function addTargets(t) { targets.add(t); return () => targets.delete(t); }
 export function raycastExternalTargets(raycaster) {
@@ -77,7 +77,7 @@ export function cleanName(s, max = 24) {
 }
 let specPromise = null;
 function loadSpec() {
-  return specPromise ??= fetch(SPEC_URL).then(r => r.json()).then(s => { shared.spec = s; refreshUI(); fetchBoard(); return s; });
+  return specPromise ??= fetch(SPEC_URL).then(r => r.json());
 }
 // Уровень по опыту: на уровень n нужно base · (n − 1)^pow очков всего
 export function levelOf(xp, L) {
@@ -85,59 +85,6 @@ export function levelOf(xp, L) {
   const a = L.base * Math.pow(n - 1, L.pow), b = L.base * Math.pow(n, L.pow);
   return { level: n, progress: (xp - a) / (b - a), next: Math.ceil(b - xp) };
 }
-async function fetchBoard() {
-  const url = shared.spec?.leaderboard?.url;
-  if (!url) { shared.status = 'local'; refreshUI(); return; }
-  try {
-    const r = await fetch(url, { headers: { accept: 'application/json' } });
-    const j = r.ok ? await r.json() : null;
-    if (!Array.isArray(j?.top)) throw new Error('нет таблицы');
-    shared.online = j.top; shared.status = 'online';
-  } catch { shared.status = 'local'; }
-  refreshUI();
-}
-async function submitBoard(entry) {
-  const url = shared.spec?.leaderboard?.url;
-  if (!url || !entry.name) return null;
-  try {
-    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(entry) });
-    const j = await r.json().catch(() => null);
-    if (Array.isArray(j?.top)) { shared.online = j.top; shared.status = 'online'; }
-    refreshUI();
-    return r.ok ? { rank: j?.rank ?? null, best: j?.best ?? null } : { error: j?.error || `ошибка ${r.status}` };
-  } catch { shared.status = 'local'; refreshUI(); return null; }
-}
-function boardLines() {
-  const L = shared.spec?.leaderboard, n = L?.show ?? 10;
-  const online = shared.status === 'online' && shared.online;
-  const list = online ? shared.online : shared.pref.board;
-  const head = online ? 'Онлайн-таблица' : 'Только на этом устройстве';
-  if (!list?.length) return `${head}\nПока пусто: первая охота — и вы в таблице.`;
-  return [head, ...list.slice(0, n).map((e, i) => `${i + 1}. ${e.name || 'Без имени'} — ${fmt(e.score)} · ${e.kills} шт.`)].join('\n');
-}
-
-// ---------- панель: живые строки без перестройки раздела ----------
-
-const UI_KEYS = {
-  huntMe: () => {
-    const p = shared.pref, L = shared.spec?.levels;
-    const lv = L ? ` · уровень ${levelOf(p.xp, L).level}` : '';
-    return `Игрок: ${p.name || 'без имени'}${lv} · лучший ${fmt(p.best)}`;
-  },
-  huntLast: () => {
-    const l = shared.pref.last;
-    return l ? `Последняя охота: ${fmt(l.score)} очков · кабаны ${l.boars} · птицы ${l.birds}` : '';
-  },
-  huntBoard: boardLines,
-};
-function refreshUI() {
-  if (typeof document === 'undefined') return;
-  for (const [k, fn] of Object.entries(UI_KEYS)) {
-    const el = document.getElementById(`ctl-${k}`)?.querySelector('.ro-text');
-    if (el) el.textContent = fn();
-  }
-}
-
 // ---------- геометрия: кабан (модель 1.5 м, холка ~0.9 м, морда +Z, копыта y = 0) ----------
 
 // Части: 0 туловище и голова (вес головы aW по шее), 1 голова целиком (уши), 2 хвост, 3..10 ноги (верх, низ: ПЛ, ПП, ЗЛ, ЗП), 11 клыки
@@ -422,36 +369,16 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   let boarMot, boarSt, birdMot, birdSt;
   const owned = [];   // что освобождать в dispose
 
-  // --- DOM: табло, всплывающие очки, итог охоты
+  // --- DOM: табло и всплывающие очки
   injectStyle();
-  const hud = el('div', 'kh-hud kw-float', document.body, `
-    <div class="kh-row"><b>Охота</b><span class="kh-time"></span></div>
-    <div class="kh-score">0</div>
-    <div class="kh-row kh-sub"><span class="kh-kills"></span><span class="kh-combo"></span></div>
-    <div class="kh-row kh-lvl"><span class="kh-lv"></span><i class="kh-bar"><b></b></i><span class="kh-best"></span></div>`);
+  const hud = el('div', 'kh-hud kw-float', document.body,
+    '<div class="kh-row"><b>Очки</b></div><div class="kh-score">0</div>');
   hud.hidden = true;
-  const $ = s => hud.querySelector(s);
-  const H = { time: $('.kh-time'), score: $('.kh-score'), kills: $('.kh-kills'), combo: $('.kh-combo'), lv: $('.kh-lv'), bar: $('.kh-bar b'), best: $('.kh-best') };
+  const scoreValue = hud.querySelector('.kh-score');
   const pops = Array.from({ length: 6 }, () => { const p = el('div', 'kh-pop kw-float', document.body); p.hidden = true; return p; });
-  let popI = 0;
-  const card = el('div', 'kh-card kw-float', document.body, `
-    <div class="kh-card-title"></div>
-    <div class="kh-card-score"></div>
-    <div class="kh-card-sub"></div>
-    <label class="kh-card-label">Имя в таблице<input class="kh-name" maxlength="24" autocomplete="nickname" spellcheck="false" placeholder="Например, Коля"></label>
-    <div class="kh-card-status" aria-live="polite"></div>
-    <div class="kh-card-btns"><button type="button" class="kh-btn kh-save">Записать</button><button type="button" class="kh-btn kh-close">Закрыть</button></div>`);
-  card.hidden = true; card.setAttribute('role', 'dialog'); card.setAttribute('aria-label', 'Итог охоты');
-  const nameIn = card.querySelector('.kh-name'), cardStatus = card.querySelector('.kh-card-status');
-  let cardEntry = null;   // результат, который можно записать под именем
-  card.querySelector('.kh-close').addEventListener('click', () => { card.hidden = true; });
-  card.querySelector('.kh-save').addEventListener('click', saveName);
-  nameIn.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') saveName(); if (e.key === 'Escape') card.hidden = true; });
-  nameIn.addEventListener('keyup', e => e.stopPropagation());
-
-  // --- раунд и счёт
-  const round = { on: false, t0: 0, score: 0, kills: 0, boars: 0, birds: 0, targets: 0, shots: 0 };
-  let streak = 0, lastKill = -1e9, shown = { score: -1, kills: -1, sec: -1, combo: -1, xp: -1, best: -1, on: null };
+  let popI = 0, networkScore = 0, displayedScore = -1;
+  const session = { score: 0, kills: 0, boars: 0, birds: 0, targets: 0, shots: 0 };
+  let streak = 0, lastKill = -1e9;
 
   // --- видимость
   const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), box = new THREE.Box3(), cull = new THREE.Sphere(), samples = Array.from({ length: 9 }, () => new THREE.Vector3());
@@ -995,12 +922,12 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function update(dt = 1 / 60) {
     if (!ready || disposed) return false;
     sightClock += dt;
+    syncHud();
     if (!network && enabled) encounters.step(dt);
     const eventFrame = encounterView.update(network ? networkSnapshot?.encounters : encounters.snapshot(), {
       visible: enabled && !pipe?.photo && !capturing, walking: !!getWalk?.()?.active, dt, network,
       canSee: canSeeEncounter });
     if (network) {
-      hud.hidden = card.hidden = true;
       if (!networkSnapshot) return false;
       const k = 1 - Math.exp(-18 * Math.min(0.1, dt));
       for (const [a, target] of networkTargets) {
@@ -1016,7 +943,6 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     }
     const walk = getWalk?.();
     let need = syncVisible();
-    updateRound(walk);
     if (!enabled) return need;
     time += dt;
     acc += dt;
@@ -1026,7 +952,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       if (acc >= COARSE) { step(acc, walk); acc = 0; boundsOnly(); }
       return need || eventFrame;
     }
-    if (!round.on && !alarm) {
+    if (!alarm) {
       // покой (пасутся, летят): шаг в кадре, который и так рисуется (камера сдвинулась), иначе редко — в прогулке
       // spec.idleFps и свой кадр, в облёте раз в COARSE и без своего кадра (рендер по требованию)
       const moved = camMoved(), walking = !!walk?.active;
@@ -1069,8 +995,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function noise(point, loudness = 1) {
     if (network) return;
     if (!ready || !enabled) return;
-    if (getWalk?.()?.active && !round.on) startRound();
-    if (round.on) round.shots++;
+    session.shots++;
     const B = S.boars, px = point.x, pz = point.z;
     for (const b of boars) {
       if (!b.active || b.dead) continue;
@@ -1192,7 +1117,6 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
   function applyHit(a, bird, zone, weaponId, damage, point, dist) {
     if (!a.active || a.dead) return null;
-    if (!round.on) startRound();
     const Sc = S.score;
     const dmg = (damage ?? S.damage[weaponId] ?? S.damage.default) * (zone === 'head' ? 2.5 : zone === 'heart' ? 2 : zone === 'legs' ? 0.7 : 1);
     a.flash = 1;
@@ -1213,94 +1137,22 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     streak = now - lastKill < Sc.combo.window ? streak + 1 : 1; lastKill = now;
     const comboK = Math.min(Sc.combo.max, 1 + Sc.combo.step * (streak - 1));
     const pts = Math.round(base * zoneK * distK * comboK * (moving ? Sc.running : 1) / 5) * 5;
-    round.score += pts; round.kills++; if (bird) round.birds++; else round.boars++;
+    session.score += pts; session.kills++; if (bird) session.birds++; else session.boars++;
     shared.pref.xp += pts; writePref();
     const tags = [zone === 'head' ? 'в голову' : zone === 'heart' ? 'в сердце' : null, `${Math.round(dist)} м`,
       moving ? (bird ? 'влёт' : 'на бегу') : null, streak > 1 ? `серия ×${comboK.toFixed(2).replace(/\.?0+$/, '')}` : null].filter(Boolean);
     popup(point, `+${fmt(pts)}`, `${S.species[key].name} · ${tags.join(' · ')}`);
-    syncHud(true);
+    syncHud();
     return { killed: true, points: pts, zone };
   }
 
-  // ---------- раунд, табло, итог ----------
+  // A continuous session score: no deadline, result modal or leaderboard requests.
+  function syncHud() {
+    hud.hidden = !enabled || !getWalk?.()?.active || !!pipe?.photo || capturing;
+    const points = network ? networkScore : session.score;
+    if (points !== displayedScore) { scoreValue.textContent = fmt(points); displayedScore = points; }
+  }
 
-  function startRound() {
-    Object.assign(round, { on: true, t0: performance.now(), score: 0, kills: 0, boars: 0, birds: 0, targets: 0, shots: 0 });
-    streak = 0; card.hidden = true;
-    syncHud(true);
-  }
-  function updateRound(walk) {
-    const show = !!walk?.active && enabled;
-    if (show !== shown.on) { shown.on = show; hud.hidden = !show; if (show) syncHud(true); }
-    if (!round.on) return;
-    const left = S.round - (performance.now() - round.t0) / 1000;
-    if (left <= 0) { finishRound(); return; }
-    if (show && Math.ceil(left) !== shown.sec) syncHud(false);
-  }
-  function syncHud(force) {
-    if (hud.hidden && !force) return;
-    const p = shared.pref, lv = levelOf(p.xp, S.levels);
-    const left = round.on ? Math.max(0, Math.ceil(S.round - (performance.now() - round.t0) / 1000)) : S.round;
-    shown.sec = left;
-    H.time.textContent = round.on ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'ждёт выстрела';
-    H.time.classList.toggle('low', round.on && left <= 10);
-    H.score.textContent = fmt(round.score);
-    H.kills.textContent = `кабаны ${round.boars} · птицы ${round.birds}` + (round.targets ? ` · цели ${round.targets}` : '');
-    const now = performance.now() / 1000, live = streak > 1 && now - lastKill < S.score.combo.window;
-    H.combo.textContent = live ? `серия ×${streak}` : '';
-    H.lv.textContent = `ур. ${lv.level}`;
-    H.bar.style.width = `${(lv.progress * 100).toFixed(1)}%`;
-    H.best.textContent = `лучший ${fmt(Math.max(p.best, round.score))}`;
-  }
-  function finishRound() {
-    round.on = false;
-    const p = shared.pref, L = S.leaderboard;
-    const entry = { name: p.name, score: round.score, kills: round.kills, boars: round.boars, birds: round.birds, targets: round.targets, shots: round.shots,
-      level: levelOf(p.xp, S.levels).level, round: S.round, date: new Date().toISOString().slice(0, 10) };
-    const record = entry.score > p.best;
-    if (record) p.best = entry.score;
-    p.last = { score: entry.score, boars: entry.boars, birds: entry.birds, kills: entry.kills };
-    if (entry.score > 0) {
-      p.board.push({ name: entry.name, score: entry.score, kills: entry.kills, level: entry.level, date: entry.date });
-      p.board.sort((a, b) => b.score - a.score); p.board.length = Math.min(p.board.length, L.local);
-    }
-    writePref(); refreshUI(); syncHud(true);
-    if (entry.score <= 0 && entry.kills === 0) return;   // ни одного попадания — без карточки
-    cardEntry = entry;
-    showCard(record ? 'Новый рекорд!' : 'Охота окончена', entry);
-    if (entry.name) postEntry(entry);
-  }
-  function showCard(title, entry) {
-    card.querySelector('.kh-card-title').textContent = title;
-    card.querySelector('.kh-card-score').textContent = entry ? `${fmt(entry.score)} очков` : '';
-    card.querySelector('.kh-card-sub').textContent = entry
-      ? `кабаны ${entry.boars} · птицы ${entry.birds} · цели ${entry.targets || 0} · выстрелов ${entry.shots} · уровень ${entry.level}`
-      : 'Имя видно в таблице рекордов.';
-    nameIn.value = shared.pref.name;
-    card.querySelector('.kh-save').textContent = entry ? 'Записать' : 'Сохранить';
-    cardStatus.textContent = entry && !shared.pref.name ? 'Впишите имя, чтобы попасть в общую таблицу.' : '';
-    card.hidden = false;
-    try { if (document.pointerLockElement) document.exitPointerLock(); } catch { /* не критично */ }
-    if (!shared.pref.name || !entry) setTimeout(() => nameIn.focus(), 50);
-  }
-  async function postEntry(entry) {
-    if (!S.leaderboard.url) { cardStatus.textContent = 'Записано на этом устройстве.'; return; }
-    cardStatus.textContent = 'Записываю…';
-    const res = await submitBoard(entry);
-    if (!res) cardStatus.textContent = 'Онлайн-таблица недоступна: записано на этом устройстве.';
-    else if (res.error) cardStatus.textContent = `Не записалось: ${res.error}`;
-    else { entry.posted = true; cardStatus.textContent = res.rank ? `В общей таблице: ${res.rank}-е место.` : 'Записано в общую таблицу.'; }
-  }
-  function saveName() {
-    const name = cleanName(nameIn.value, S?.leaderboard?.nameMax);
-    if (!name) { cardStatus.textContent = 'Имя пустое.'; nameIn.focus(); return; }
-    const p = shared.pref, prev = p.name;
-    p.name = name;
-    for (const e of p.board) if (!e.name) e.name = name;   // безымянные результаты этого устройства — под новым именем
-    writePref(); refreshUI();
-    if (cardEntry && cardEntry.score > 0 && !cardEntry.posted) { cardEntry.name = name; postEntry(cardEntry); }
-    else { cardStatus.textContent = prev && prev !== name ? 'Имя сменено.' : 'Сохранено.'; if (!cardEntry) setTimeout(() => { card.hidden = true; }, 700); }
-  }
   function popup(point, big, small) {
     const v = tmpP.copy(point).project(camera);
     if (v.z > 1) return;
@@ -1319,7 +1171,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     if (network === next) return;
     encounterView?.update(null, { visible: false });
     sightCache.clear();
-    if (next) { previousEnabled = enabled; enabled = true; round.on = false; hud.hidden = card.hidden = true; }
+    if (next) { previousEnabled = enabled; enabled = true; networkScore = 0; hud.hidden = true; }
     else {
       const clock = restoreLocalWildlife(localWildlife);
       if (clock) { time = clock.time; acc = clock.acc; alarm = clock.alarm; wasSeen = clock.wasSeen; }
@@ -1330,7 +1182,8 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     syncVisible(); requestRender?.();
   }
 
-  function applyNetworkSnapshot(snapshot) {
+  function applyNetworkSnapshot(snapshot, playerScore) {
+    if (Number.isFinite(playerScore)) networkScore = Math.max(0, playerScore);
     if (!snapshot || !Array.isArray(snapshot.animals)) return;
     networkSnapshot = snapshot;
     if (!network || !ready) return;
@@ -1360,7 +1213,6 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function setEnabled(on) {
     if (network) return;
     enabled = !!on; shared.pref.on = enabled; writePref();
-    if (!enabled) { round.on = false; card.hidden = true; }
     syncVisible(); requestRender?.();
   }
 
@@ -1372,7 +1224,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     scene.remove(root);
     for (const o of owned) o.dispose?.();
     for (const m of [boarMesh, blobMesh, birdMesh]) m?.dispose?.();
-    hud.remove(); card.remove(); pops.forEach(p => p.remove());
+    hud.remove(); pops.forEach(p => p.remove());
     if (shared.hunt === api) shared.hunt = null;
   }
 
@@ -1387,27 +1239,24 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     award(points, point, title, sub = '') {
       if (network) return;
       if (points > 0 && S) {
-        if (!round.on) startRound();
-        round.score += points; round.kills++; round.targets++;
+        session.score += points; session.kills++; session.targets++;
         shared.pref.xp += points; writePref();
-        syncHud(true);
+        syncHud();
       }
       if (point) popup(point, points > 0 ? `+${fmt(points)}` : title, points > 0 ? [title, sub].filter(Boolean).join(' · ') : sub);
     },
-    openName: () => { cardEntry = null; showCard('Имя игрока', null); },
     get enabled() { return enabled; },
     get stats() {
       let boarsAlive = 0, birdsAlive = 0;
       for (const b of boars) if (b.active && !b.dead) boarsAlive++;
       for (const b of birds) if (b.active && !b.dead) birdsAlive++;
       const p = shared.pref;
-      return { ready, visible: root.visible && wasSeen, round: round.on ? Math.max(0, S.round - (performance.now() - round.t0) / 1000) : 0,
-        score: round.score, kills: round.kills, boars: round.boars, birds: round.birds, shots: round.shots,
+      return { ready, visible: root.visible && wasSeen, score: network ? networkScore : session.score, kills: session.kills, boars: session.boars, birds: session.birds, shots: session.shots,
         alive: { boars: boarsAlive, birds: birdsAlive, flocks: flocks.length }, xp: p.xp, best: p.best,
-        level: S ? levelOf(p.xp, S.levels).level : 1, board: shared.status };
+        level: S ? levelOf(p.xp, S.levels).level : 1 };
     },
     // для проверок из консоли: звери и их состояние
-    get debug() { return { boars, birds, flocks, groups, region, regions, home, box, finishRound, spawnPass, encounters, encounterView }; },
+    get debug() { return { boars, birds, flocks, groups, region, regions, home, box, spawnPass, encounters, encounterView }; },
   };
   shared.hunt = api;
   return api;
@@ -1418,30 +1267,19 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 addHelp(
   { mode: 'walk', topic: 'hunt', order: 83, text: 'на поле иногда появляются POLICJA, трактор с пирогом, дрон и самолёт. Дым — цель повреждена; добейте до взрыва. В комнате урон общий' },
   { mode: 'walk', topic: 'hunt', order: 80, text: 'охота: кабаны и птицы на поле за балконом. Выйти на балкон (дверь — E), 3 — автомат' },
-  { mode: 'walk', topic: 'hunt', order: 81, text: 'раунд идёт с первого выстрела, счёт на табло справа сверху' },
+  { mode: 'walk', topic: 'hunt', order: 81, text: 'очки за текущую игру — справа сверху. Без таймера и окон рекордов' },
   { mode: 'walk', topic: 'hunt', order: 82, text: 'в голову ×2, в сердце ×1,5; на бегу, влёт, издалека и сериями больше. Кабана в бок обычно с двух попаданий' },
 );
 
 export function registerHuntUI(addSection, getHunt) {
-  loadSpec().catch(() => {});
-  const resetMine = () => {
-    if (!confirm('Стереть результаты и уровень на этом устройстве? Онлайн-таблица останется.')) return;
-    Object.assign(shared.pref, { xp: 0, best: 0, last: null, board: [] });
-    writePref(); refreshUI();
-  };
   addSection({
     id: 'hunt', tab: 'live', title: 'Охота', order: 40, feature: 'walk',
-    summary: () => (shared.pref.best ? `лучший ${fmt(shared.pref.best)}` : ''),
+    summary: () => 'Очки за текущую игру',
     controls: [
-      { type: 'toggle', key: 'huntOn', label: 'Кабаны и птицы за балконом',
+      { type: 'toggle', key: 'huntOn', label: 'Кабаны, птицы и пасхалки за балконом',
         get: () => getHunt()?.enabled ?? shared.pref.on !== false,
         set: v => { const h = getHunt(); if (h) h.setEnabled(v); else { shared.pref.on = !!v; writePref(); } } },
-      { type: 'readout', key: 'huntMe', style: 'dims', value: UI_KEYS.huntMe,
-        link: { label: 'Имя', run: () => getHunt()?.openName() } },
-      { type: 'readout', key: 'huntLast', style: 'hint', value: UI_KEYS.huntLast },
-      { type: 'readout', key: 'huntBoard', style: 'keys', value: UI_KEYS.huntBoard },
-      { type: 'button', key: 'huntRefresh', label: 'Обновить таблицу', run: () => fetchBoard() },
-      { type: 'button', key: 'huntReset', label: 'Сбросить мои', run: resetMine },
+      { type: 'readout', key: 'huntSession', style: 'hint', value: () => 'Очки накапливаются за текущую игру. Таймера и окна рекордов нет.' },
       { type: 'help', topic: 'hunt' },
     ],
   });
@@ -1467,45 +1305,23 @@ function injectStyle() {
 // Токены --kw-* даёт .kw-float (minimap.js). Табло — справа сверху свободной части холста (панель справа не закрывает).
 const HUNT_CSS = `
 .kh-hud { position: fixed; z-index: 5; top: calc(64px + env(safe-area-inset-top, 0px)); right: max(14px, env(safe-area-inset-right, 0px));
-  width: 196px; box-sizing: border-box; padding: 9px 11px 10px; border: 1px solid var(--kw-line); border-radius: 4px; background: var(--kw-sheet);
+  min-width: 100px; box-sizing: border-box; padding: 9px 11px 10px; border: 1px solid var(--kw-line); border-radius: 4px; background: var(--kw-sheet);
   color: var(--kw-ink); box-shadow: var(--kw-shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   font: 12px/1.35 var(--f-body, "Inter", Arial, sans-serif); pointer-events: none; font-variant-numeric: tabular-nums; }
 body.panel-open .kh-hud { top: calc(14px + env(safe-area-inset-top, 0px)); right: calc(var(--panel-w, 376px) + 28px); }   /* закрытая панель — кнопка «Панель» сверху справа, табло под ней */
 .kh-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .kh-row b { font: 600 11px/1 var(--f-display, inherit); letter-spacing: 0.07em; text-transform: uppercase; color: var(--kw-muted); }
-.kh-time { font: 500 12px/1 var(--f-data, ui-monospace, Menlo, monospace); color: var(--kw-muted); }
-.kh-time.low { color: #c8462c; }
 .kh-score { font: 600 26px/1.15 var(--f-display, inherit); margin: 3px 0 1px; }
-.kh-sub { color: var(--kw-muted); }
-.kh-combo { color: var(--kw-accent); font-weight: 600; }
-.kh-lvl { margin-top: 6px; align-items: center; color: var(--kw-muted); font-size: 11px; }
-.kh-bar { flex: 1; height: 3px; border-radius: 2px; background: var(--kw-line); overflow: hidden; position: relative; }
-.kh-bar b { position: absolute; inset: 0 auto 0 0; background: var(--kw-accent); }
 .kh-pop { position: fixed; z-index: 6; transform: translate(-50%, -100%); pointer-events: none; text-align: center; white-space: nowrap;
   color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.65), 0 0 10px rgba(0,0,0,0.35); font: 12px/1.25 var(--f-body, "Inter", Arial, sans-serif); }
 .kh-pop b { display: block; font: 700 22px/1.1 var(--f-display, inherit); color: #ffd36b; }
 .kh-pop.go { animation: khPop 1.5s cubic-bezier(.2,.7,.3,1) forwards; }
 @keyframes khPop { 0% { opacity: 0; transform: translate(-50%, -70%) scale(0.8); } 12% { opacity: 1; transform: translate(-50%, -100%) scale(1.05); }
   70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -190%) scale(1); } }
-.kh-card { position: fixed; z-index: 8; left: calc(50% - var(--shift, 0px)); top: 50%; transform: translate(-50%, -50%); width: min(320px, calc(100vw - 32px));
-  box-sizing: border-box; padding: 16px 16px 14px; border: 1px solid var(--kw-line); border-radius: 6px; background: var(--kw-sheet); color: var(--kw-ink);
-  box-shadow: var(--kw-shadow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); font: 13px/1.4 var(--f-body, "Inter", Arial, sans-serif); }
-.kh-card-title { font: 600 11px/1 var(--f-display, inherit); letter-spacing: 0.07em; text-transform: uppercase; color: var(--kw-muted); }
-.kh-card-score { font: 600 30px/1.2 var(--f-display, inherit); margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
-.kh-card-score:empty { display: none; }
-.kh-card-sub { color: var(--kw-muted); font-size: 12px; }
-.kh-card-label { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; font-size: 12px; color: var(--kw-muted); }
-.kh-name { font: 14px/1.2 var(--f-body, inherit); color: var(--kw-ink); background: transparent; border: 1px solid var(--kw-line); border-radius: 4px; padding: 8px 9px; }
-.kh-name:focus { outline: 2px solid var(--kw-accent); outline-offset: 0; border-color: transparent; }
-.kh-card-status { min-height: 1.4em; margin-top: 8px; font-size: 12px; color: var(--kw-muted); }
-.kh-card-btns { display: flex; gap: 6px; margin-top: 8px; }
-.kh-btn { flex: 1; border: 1px solid var(--kw-line); background: transparent; color: var(--kw-ink); font: 500 13px/1 var(--f-body, inherit); padding: 9px 10px; border-radius: 4px; cursor: pointer; }
-.kh-btn.kh-save { background: var(--kw-accent); color: var(--kw-accent-ink); border-color: var(--kw-accent); }
-.kh-btn:focus-visible { outline: 2px solid var(--kw-accent); outline-offset: 2px; }
-.kh-hud[hidden], .kh-pop[hidden], .kh-card[hidden] { display: none; }
+.kh-hud[hidden], .kh-pop[hidden] { display: none; }
 @media (max-width: 760px) {
   body.panel-open .kh-hud { right: max(14px, env(safe-area-inset-right, 0px)); }
-  .kh-hud { width: 168px; top: var(--kw-dock-top, calc(120px + env(safe-area-inset-top, 0px))); }   /* под карточкой заголовка, справа от плана */
+  .kh-hud { width: 112px; top: var(--kw-dock-top, calc(120px + env(safe-area-inset-top, 0px))); }   /* под карточкой заголовка, справа от плана */
   body:has(#panel.open) .kh-hud { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .kh-pop.go { animation-duration: 0.01s; } }

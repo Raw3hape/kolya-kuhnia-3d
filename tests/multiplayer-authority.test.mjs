@@ -292,6 +292,31 @@ function visualShot(f, weapon, shotId) {
   return { kind: 'shoot', weapon, shotId, origin: [p.x, p.y + WALK.height / 100 * WALK.eyeRatio, p.z], direction, rays: [{ direction }] };
 }
 
+test('host and guest can reload every weapon beyond the original finite supply', () => {
+  for (const actor of ['local', 'guest']) for (const [weapon, rule] of Object.entries(WEAPON_RULES)) {
+    if (!rule.mag) continue;
+    const f = fixture(); const guest = f.join('guest'); const id = actor === 'local' ? f.host.id : guest.id;
+    assert.equal(f.action(actor, { kind: 'weapon', weapon }).ok, true);
+    const cycles = Math.ceil(rule.reserve / rule.mag) + 2;
+    for (let cycle = 0; cycle < cycles; cycle++) {
+      for (let bullet = 0; bullet < rule.mag; bullet++) {
+        f.room.receive('local', { type: 'ping' }); f.room.receive('guest', { type: 'ping' });
+        advance(f, Math.max(1 / rule.rate, rule.cycle || 0) + 0.03);
+        const p = f.player(id), direction = [0, 0, 1];
+        assert.equal(f.action(actor, { kind: 'shoot', weapon, shotId: `${weapon}-${cycle}-${bullet}`,
+          origin: [p.x, p.y + WALK.height / 100 * WALK.eyeRatio, p.z], direction, rays: [{ direction }] }, { worldTrace: [[]] }).ok, true);
+      }
+      assert.equal(f.player(id).ammo[weapon].mag, 0);
+      assert.equal(f.action(actor, { kind: 'reload', weapon }).ok, true);
+      f.room.receive('local', { type: 'ping' }); f.room.receive('guest', { type: 'ping' }); advance(f, rule.reload + 0.05);
+      assert.equal(f.player(id).ammo[weapon].mag, rule.mag);
+      assert.equal(f.player(id).ammo[weapon].reserve, rule.reserve);
+    }
+    const later = f.join('late-observer'); assert.equal(later.snapshot.players.find(p => p.id === id).ammo[weapon].mag, rule.mag);
+    f.room.dispose();
+  }
+});
+
 test('avatar aiming is finite and clamped, including seated inputs; stale input cannot change it', () => {
   const seat = { id: 'visual-chair', position: [WALK.start.x - 0.8, 0.45, WALK.start.z], yaw: 0, eyeY: 1.17, stand: [WALK.start.x, WALK.start.z] };
   const f = fixture({ geometry: { seats: [seat] } });

@@ -29,7 +29,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { createImpacts } from './impacts.js';
-import { WEAPON_RULES } from './multiplayer/rules.js';
+import { WEAPON_RULES, refillMagazine } from './multiplayer/rules.js';
 import { addHelp } from './help.js';
 
 addHelp(
@@ -402,10 +402,9 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   }
   function reload() {
     const w = W(), a = ammo[w.id];
-    if (!shown || act || !a || a.mag >= w.mag || a.reserve <= 0) return false;
+    if (!shown || act || !a || a.mag >= w.mag || !w.infiniteReserve && a.reserve <= 0) return false;
     networkAdapter?.reload?.(w.id);
-    const n = Math.min(w.mag - a.mag, a.reserve);
-    begin('reload', 'reload', w.reload, w.reloadEv, 0, () => { a.mag += n; a.reserve -= n; hud(); });
+    begin('reload', 'reload', w.reload, w.reloadEv, 0, () => { refillMagazine(a, w); hud(); });
     return true;
   }
 
@@ -503,17 +502,17 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     if (!a) return;
     const note = act ? (act.kind === 'cycle' ? 'Передёргиваем затвор…' : 'Перезарядка…') :
       shown && (mounted !== weapon || raise < VM.fireRaise) ? 'Поднимаем оружие…' :
-      a.mag === 0 ? (a.reserve ? 'R — перезарядить' : 'Патроны кончились') : '';
+      a.mag === 0 ? (w.infiniteReserve || a.reserve ? 'R — перезарядить' : 'Патроны кончились') : '';
     const k = `${w.id}|${a.mag}|${a.reserve}|${note}|${empty}`;
     if (k === hudKey) return;
     hudKey = k;
     hName.textContent = w.name;
     hAmmo.children[0].textContent = a.mag;
-    hAmmo.children[1].textContent = '/ ' + a.reserve;
+    hAmmo.children[1].textContent = '/ ' + (w.infiniteReserve ? '∞' : a.reserve);
     hNote.textContent = note;
     hudEl.classList.toggle('low', a.mag <= Math.ceil(w.mag / 4));
     hudEl.classList.toggle('busy', !!act && act.kind !== 'cycle');
-    hudEl.setAttribute('aria-label', `${w.name}: ${a.mag} в магазине, ${a.reserve} в запасе${note ? '. ' + note : ''}`);
+    hudEl.setAttribute('aria-label', `${w.name}: ${a.mag} в магазине, ${w.infiniteReserve ? 'бесконечный запас' : a.reserve + ' в запасе'}${note ? '. ' + note : ''}`);
     if (empty) { hudEl.classList.remove('shake'); void hudEl.offsetWidth; hudEl.classList.add('shake'); }
     if (!act) hBar.style.transform = '';
   }
@@ -658,7 +657,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     get weapon() { return weapon; },
     get sound() { return sound; },
     get armed() { return shown && !seated(); },
-    get ammo() { const a = ammo[weapon]; return a ? { ...a } : null; },
+    get ammo() { const a = ammo[weapon]; return a ? { ...a, infiniteReserve: !!W().infiniteReserve } : null; },
     get busy() { return act?.kind ?? null; },
     get aiming() { return adsE; },
     get spread() { return spreadNow(); },

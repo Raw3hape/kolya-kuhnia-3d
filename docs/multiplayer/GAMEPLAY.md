@@ -16,8 +16,13 @@ are shared by multiplayer and the existing single-player hunt.
 
 Animal IDs contain kind, pool index and spawn generation. Snapshots contain only
 plain poses and health. Browser `hunt.setNetwork(true)` disables its local
-random simulation, local rounds and local XP. `applyNetworkSnapshot(snapshot)`
+random simulation and local XP. `applyNetworkSnapshot(snapshot, personalScore)`
 interpolates poses; `applyNetworkHit(hit,{local:true})` shows the shooter's popup.
+The corner HUD shows the authority's personal session score, without timed rounds
+or a results dialog. Solo score is preserved while temporarily entering a room.
+All weapons have `infiniteReserve`; magazines, reload duration and firing rate
+remain authoritative. `refillMagazine` is shared with the solo viewmodel, and
+wire ammunition values stay finite. See [play session](../play-session.md).
 
 ## Weapons and apartment damage
 

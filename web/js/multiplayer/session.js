@@ -138,7 +138,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     const me = snapshot.players.find(p => p.id === client.id);
     m.seats?.applyNetwork?.(snapshot.seats || {}, me, { instant: !started });
     m.viewmodel.reconcileNetworkDamage(snapshot.effects || [], snapshot.broken || []);
-    if (m.hunt) { if (appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; } m.hunt.applyNetworkSnapshot(snapshot.hunt); }
+    if (m.hunt) { if (appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; } m.hunt.applyNetworkSnapshot(snapshot.hunt, me?.score ?? 0); }
     if (client.role !== 'host' && snapshot.ambient) m.life?.applyNetworkSnapshot?.(snapshot.ambient);
     if (me) {
       if (m.seats?.active || me.seat) started = false;
@@ -200,7 +200,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     const m = getModules();
     if (sessionRole === 'host' && !m.walk.active) wasWalking = false;
     syncWeapon(m.viewmodel.weapon);
-    if (m.hunt && appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; if (lastSnapshot?.hunt) m.hunt.applyNetworkSnapshot(lastSnapshot.hunt); }
+    if (m.hunt && appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; if (lastSnapshot?.hunt) m.hunt.applyNetworkSnapshot(lastSnapshot.hunt, client.self?.score ?? 0); }
     sendClock += dt; ambientClock += dt;
     if (sendClock >= 1 / R.inputHz) {
       sendClock %= 1 / R.inputHz;
