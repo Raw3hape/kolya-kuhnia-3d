@@ -1,42 +1,28 @@
-# Party QA · 2026-11-16
+# Party QA · реалистичная редакция · 2026-11-16
 
-Feature contract: [party.md](party.md).
+Контракт: [party.md](party.md). Воспроизведение: `tools/qa/party-ui-qa.mjs`
+с `PLAYWRIGHT_MODULE`, `QA_URL`, `QA_OUTPUT`; браузер всегда закрывается в `finally`.
+Локально: 140 автоматических тестов, сборка и 17 браузерных проверок прошли.
+Сетевой проход до коробки использует настоящие клавиши и маршрут по текущим коллайдерам.
 
-`npm test`: 117/117. `npm run build`: vendor integrity and static build pass.
-Pure tests include exclusive ownership, spam rejection, five sips, throw collision,
-late state restoration, disconnect, hookah range and actual ground below the balcony.
+- Авторские библиотеки реквизита, интерактивных вещей и кистей проверены
+  glTF-валидатором, импортом, размерами, нормалями и студийным видом.
+- 19 новых единиц не пересекаются с существующей обстановкой по проверке границ;
+  все 15 бытовых шаблонов используются. Старый генератор игрушек удалён.
+- В реальной комнате просмотрены остров/столик/ТВ, кальян, поднос, бутылка
+  полной и пустой, процесс питья, кисть с дудкой и мундштуком.
+- Проверка объёма: пять шагов уменьшают жидкость, наклоны сохраняют долю объёма.
+  Плоскость воды согласована с декодированными преобразованиями Meshopt.
+- Восемь этикеток ChatGPT Images просмотрены целиком; читаемость и тёмное
+  стекло проверены в реальном первом лице. Атлас общий, выбор связан с ID бутылки.
+- Производительность: eco, один Chrome, предмет в руке, 150 кадров / 2,5 с —
+  медиана кадра 16,8 мс, p95 17,6 мс; CPU рендера 8,5 / 11,2 мс; 217 команд рисования.
+  Это один локальный замер, без заявления о гарантированном FPS на других устройствах.
 
-Real browser pass: Chrome, eco, one Mac, two full rendered clients connected
-through real PeerJS/WebRTC. Host walked from hall to balcony with keyboard input.
-Native E took a bottle; holding E consumed exactly one sip; four further clicks
-reached five on both clients. Q broke the bottle at a shared collision point;
-both clients rendered the break and shards. Hookah ownership/puff and vape
-ownership/puff agreed on both clients, with local smoke on each.
-Hookah also puffed while seated on the sofa (seat API selected the fixture).
-Native pistol fire destroyed the same new island mug for both observers.
-Representative balcony, crate, held bottle, lounge and smoke frames were inspected.
+Сетевой тест использует настоящие PeerJS/WebRTC и два полноценных клиента на
+одном Mac; мобильный контекст идёт отдельно. Проверяет общий остаток/владельца,
+поздний вход, запястье наблюдателя, одинаковые этикетки, разрушение и мобильный ввод.
+Кросс-сетевая NAT/relay-доступность и новая нагрузка десятью игроками не измерены.
 
-`tools/qa/party-ui-qa.mjs` adds ten bounded browser checks: prop pickup takes
-priority over seating, seated right-mouse look works while carrying, smoke
-shader renders, a late WebRTC guest receives current ownership, remote props
-follow the animated wrist, and native mobile buttons emit smoke without overlap.
-All ten pass locally with no application errors; every context closes in `finally`.
-Set `QA_URL`, `PLAYWRIGHT_MODULE`, and `QA_OUTPUT` to repeat against a release.
-
-Production `e1fcc5a`, `dpl_DoYwTraAPAxkQKeF1s9QbMLxXuSe`: all ten checks pass
-at the public URL, including actual late guest and mobile tap. The first run
-timed out waiting for the guest connection; a fresh full run passed. Its cause
-was later isolated on `3fdbee3`: the guest's deferred PeerJS script exceeded
-its ten-second loader timeout while apartment assets were loading. The small
-first-party runtime now loads with high priority before `main.js`; its dynamic
-fallback also requests high priority. An eleventh browser check confirms the
-runtime exists before the first multiplayer action. General NAT/relay coverage
-still follows the existing [transport contract](multiplayer/TRANSPORT.md).
-The subsequent room-creation fix preserves already-rearranged item homes;
-its transport contract is covered by the client handshake test.
-
-Smoke has one draw, at most 180 pooled particles; bottle shards one instanced
-draw, at most 72 fragments. The 24 target meshes share eight geometries and
-one vertex-color material. Unchanged placement requests no new render.
-These are budgets, not a measured FPS guarantee. Cross-network NAT coverage
-and a new ten-player capacity soak were not tested in this feature pass.
+Небольшие JSON/лог-квитанции находятся в `output/playwright/party-realism*/`;
+временные кадры удаляются после просмотра. Временный сервер и браузеры останавливаются.

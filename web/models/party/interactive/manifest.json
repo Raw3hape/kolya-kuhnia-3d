@@ -1,0 +1,16 @@
+{
+  "generator": "tools/party/build_interactive.blender.py",
+  "units": "metres",
+  "nodes": [
+    "beer",
+    "vape",
+    "mouthpiece",
+    "hookah",
+    "crate"
+  ],
+  "triangles": 25188,
+  "meshes": 21,
+  "materials": 14,
+  "bytes": 1416684,
+  "compression": "dedup + Meshopt + WebP"
+}

@@ -328,6 +328,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   // Слой поверх растра (руки с оружием в прогулке, viewmodel.js): { active() -> bool, draw() }.
   // Рисуется только в живом растре: не в фото-режиме, не в capture() и не в трассировщике.
   let overlay = null;
+  const extraOverlays = new Set();
 
   function invalidate() {
     lastChange = performance.now();
@@ -356,11 +357,11 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     for (let i = waiters.length - 1; i >= 0; i--) {
       if (ptFailed || broken || lost || done >= waiters[i].n || now > waiters[i].until) waiters.splice(i, 1)[0].resolve();
     }
-    const ov = !explicit && !!overlay?.active();
+    const ov = !explicit && (!!overlay?.active() || [...extraOverlays].some(o => o.active()));
     const want = explicit && !ptFailed && !broken;
     if (want && !pt) loadTracer();
     if (!want || !pt || building || quiet < SETTLE) {
-      if (rasterDirty) { rasterDirty = false; refreshShadows(); drawRaster(true); if (ov) overlay.draw(); if (!explicit) watchFrameRate(now); drawnWaiters.splice(0).forEach(f => f()); }
+      if (rasterDirty) { rasterDirty = false; refreshShadows(); drawRaster(true); if (ov) { if (overlay?.active()) overlay.draw(); for (const o of extraOverlays) if (o.active()) o.draw(); } if (!explicit) watchFrameRate(now); drawnWaiters.splice(0).forEach(f => f()); }
       report(0, want ? (pt && !building ? 'waiting' : building ? 'building' : 'loading') : 'idle');
       return;
     }
@@ -576,6 +577,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 
   function dispose() {
     exitPhoto();
+    extraOverlays.clear(); overlay = null;
     dropTracer();
     composer.passes.forEach(p => p.dispose()); composer.dispose();
     batches.dispose();
@@ -628,6 +630,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     onProgress(cb) { progressCb = cb; },
     whenDrawn() { rasterDirty = true; return new Promise(r => drawnWaiters.push(r)); },
     setOverlay(o) { overlay = o; rasterDirty = true; },   // см. overlay выше; null — снять
+    addOverlay(o) { extraOverlays.add(o); rasterDirty = true; return () => { extraOverlays.delete(o); rasterDirty = true; }; },
     get quality() { return quality; },
     get batches() { return batches.stats; },
     get eco() { return eco.stats; },

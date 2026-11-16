@@ -47,7 +47,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
   async function roomState() {
     await apartmentQueue.catch(() => {});
     let modules = getModules();
-    await Promise.all([modules.decor?.ready, modules.furniture?.ready, modules.paper?.ready, getParty()?.ready].filter(Boolean));
+    await Promise.all([modules.decor?.ready, modules.furniture?.ready, modules.paper?.ready, modules.partyPropsReady, getParty()?.ready].filter(Boolean));
     modules = getModules();
     // The loader visually grows models after attaching them. Sample authored scale synchronously,
     // then restore the animation; room entry never waits on an arbitrary animation timeout.

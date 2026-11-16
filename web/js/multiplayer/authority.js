@@ -81,6 +81,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     }
     for (const object of objects.values()) {
       if (broken.has(object.unitId) || object.unitId === `party:${item.id}` || object.id.startsWith(`party:${item.id}/`)) continue;
+      if (object.unitId.startsWith('party:') && party.status(object.unitId.slice(6)) !== 'ready') continue;
       const hit = rayBox(from, direction, object.bounds, length); if (hit) candidates.push(hit);
     }
     for (const door of doorObstacles()) {

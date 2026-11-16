@@ -1,0 +1,64 @@
+{
+  "version": 2,
+  "asset": "models/party/hands.glb",
+  "_about": "Grips are authored around prop bottom at identity. Metres, glTF +Y up. Static meshes share skin and nail materials; no runtime skeletal work.",
+  "presets": {
+    "beer": {
+      "node": "grip_beer",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1,
+      "socket": [
+        0,
+        0.104,
+        0
+      ]
+    },
+    "vape": {
+      "node": "grip_vape",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1,
+      "socket": [
+        0,
+        0.052,
+        0
+      ]
+    },
+    "hookah": {
+      "node": "grip_hookah",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1,
+      "socket": [
+        0,
+        0.07,
+        0
+      ]
+    }
+  }
+}

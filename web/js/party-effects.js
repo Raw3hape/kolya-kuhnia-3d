@@ -1,5 +1,5 @@
 // Bounded local particle pools and synthesized comic foley; no network particle traffic.
-export function createPartyEffects({THREE,scene,spec,floorAt=()=>0,getSound}) {
+export function createPartyEffects({THREE,scene,spec,glassColor,floorAt=()=>0,getSound}) {
   const smoke=[],shards=[],r=spec.effects;
   const positions=new Float32Array(r.smokeBudget*3),sizes=new Float32Array(r.smokeBudget),alpha=new Float32Array(r.smokeBudget);
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(positions,3));
@@ -9,7 +9,7 @@ export function createPartyEffects({THREE,scene,spec,floorAt=()=>0,getSound}) {
     fragmentShader:'varying float a;void main(){vec2 p=gl_PointCoord*2.-1.;float d=dot(p,p);float wisps=.72+.28*sin(p.x*7.+sin(p.y*8.))*sin(p.y*6.);float cloud=exp(-3.6*d)*(1.-smoothstep(.55,1.,d))*wisps;gl_FragColor=vec4(.79,.84,.87,cloud*a);}' });
   const points=new THREE.Points(geo,mat);points.name='party_smoke';points.frustumCulled=false;points.renderOrder=3;
   points.userData.networkEffect=true;points.userData.rasterOnly=true;scene.add(points);
-  const shardGeo=new THREE.TetrahedronGeometry(.022),shardMat=new THREE.MeshStandardMaterial({color:0x61934a,metalness:.35,roughness:.2});
+  const shardGeo=new THREE.TetrahedronGeometry(.022),shardMat=new THREE.MeshStandardMaterial({color:glassColor,metalness:.15,roughness:.2,transparent:true,opacity:.82,depthWrite:false});
   const pieces=new THREE.InstancedMesh(shardGeo,shardMat,r.shardBudget);pieces.name='party_bottle_shards';pieces.count=0;pieces.frustumCulled=false;
   pieces.userData.networkEffect=true;pieces.userData.rasterOnly=true;scene.add(pieces);
   const dummy=new THREE.Object3D();let audio=null;

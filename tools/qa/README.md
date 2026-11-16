@@ -1,8 +1,10 @@
 # Independent browser QA harnesses
 
-Party interactions: `party-ui-qa.mjs` runs ten bounded desktop/mobile/WebRTC
-checks, including pickup priority, seated look, soft smoke, late ownership and
-wrist attachment. Defaults to local port8765; use `QA_URL` for production.
+Party interactions: `party-ui-qa.mjs` runs bounded desktop/mobile/WebRTC
+checks, including eight stable beer labels and their held/observer agreement,
+visible beer draining/throwing, new ceramic destruction, pickup priority,
+seated look, soft smoke, late ownership and wrist attachment. Multiplayer movement
+uses native walking; fixture placement is confined to solo mode. Defaults to local port8765; use `QA_URL` for production.
 See [party QA](../../docs/party-qa.md). The browser closes in `finally`.
 
 Performance comparison: [../../docs/performance.md](../../docs/performance.md).

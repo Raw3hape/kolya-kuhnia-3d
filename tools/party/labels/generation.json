@@ -1,0 +1,47 @@
+{
+  "tool": "ChatGPT Images (built-in image_gen)",
+  "date": "2026-11-16",
+  "use": "Original flat label artwork; resized for source storage, packed without creative modification.",
+  "labels": [
+    {
+      "id": "beer-0",
+      "source": "source/beer-0.webp",
+      "prompt": "Use case: logo-brand. Asset: a single flat PRINT-READY FRONT LABEL texture for a realistic craft beer bottle in a 3D game. One original humorous Russian beer label, portrait rectangle filling the whole image edge to edge, no bottle, no mockup, no perspective, no shadows outside the artwork, no other labels. Name in big perfectly readable Cyrillic: «ДЕДЛАЙН». Subtitle: «ПОДОЖДЁТ». Small bottom text: «ПЯТЬ ГЛОТКОВ ДО ПЯТНИЦЫ». Witty elegant engraved illustration of an exhausted office boar with a loosened necktie reclining on a stack of paper, tiny hourglass. Sophisticated real printed beer packaging, warm ivory uncoated paper, deep burgundy ink, a little faded copper, crisp typographic hierarchy and thin ornamental border. Detailed hand engraved editorial illustration, subtly humorous, adult craft brewery design, never childish cartoon. Keep all lettering inside central 85% with a generous safety margin. Front label only."
+    },
+    {
+      "id": "beer-1",
+      "source": "source/beer-1.webp",
+      "prompt": "Use case: logo-brand. Asset: a single flat PRINT-READY FRONT LABEL texture for a realistic craft beer bottle in a 3D game. One original humorous Russian beer label, portrait rectangle filling the whole image edge to edge. No bottle, no mockup, no perspective, no exterior shadows, no other labels. Sophisticated authentic printed craft beer packaging with crisp typography and refined engraved editorial illustration; witty, adult, never childish. Keep all lettering inside central 85%, generous safety margins. Name in big perfectly readable Cyrillic: «ПЯТЫЙ ГЛОТОК». Small subtitle «ФИНАЛЬНЫЙ БОСС». Humorous ornate illustration: a regal snail in a small crown guarding a single hop cone like treasure. Dark navy, antique cream and restrained gold ink; vintage numbered brewery seal with large 5. Paper print grain, strong hierarchy."
+    },
+    {
+      "id": "beer-2",
+      "source": "source/beer-2.webp",
+      "prompt": "Use case: logo-brand. Asset: a single flat PRINT-READY FRONT LABEL texture for a realistic craft beer bottle in a 3D game. One original humorous Russian beer label, portrait rectangle filling the whole image edge to edge. No bottle, no mockup, no perspective, no exterior shadows, no other labels. Sophisticated authentic printed craft beer packaging with crisp typography and refined engraved editorial illustration; witty, adult, never childish. Keep all lettering inside central 85%, generous safety margins. Name in big perfectly readable Cyrillic: «БАЛКОННОЕ». Subtitle: «ВЫХОД В ОТПУСК». An elegantly engraved relaxed boar in slippers and a bathrobe on a small balcony among potted plants, looking over a distant forest. Sage green, warm ivory, faded terracotta. Finely drawn premium botanical craft label with narrow border, wry domestic charm."
+    },
+    {
+      "id": "beer-3",
+      "source": "source/beer-3.webp",
+      "prompt": "Use case: logo-brand. Asset: a single flat PRINT-READY FRONT LABEL texture for a realistic craft beer bottle in a 3D game. One original humorous Russian beer label, portrait rectangle filling the whole image edge to edge. No bottle, no mockup, no perspective, no exterior shadows, no other labels. Sophisticated authentic printed craft beer packaging with crisp typography and refined engraved editorial illustration; witty, adult, never childish. Keep all lettering inside central 85%, generous safety margins. Name in big perfectly readable Cyrillic: «НАЛОГ НА ПЕНУ». Subtitle «ОПЛАЧЕНО ГЛОТКАМИ». Witty finely engraved illustration of a serious owl accountant wearing little round glasses, counting hop cones with an abacus. Dark forest green ink, warm cream paper, red tax-paid stamp. Realistic old financial document meets premium craft beer label, clean legible typography."
+    },
+    {
+      "id": "beer-4",
+      "source": "source/beer-4.webp",
+      "prompt": "Use case: logo-brand. Asset: a single flat PRINT-READY FRONT LABEL texture for a realistic craft beer bottle in a 3D game. One original humorous Russian beer label, portrait rectangle filling the whole image edge to edge. No bottle, no mockup, no perspective, no exterior shadows, no other labels. Sophisticated authentic printed craft beer packaging with crisp typography and refined engraved editorial illustration; witty, adult, never childish. Keep all lettering inside central 85%, generous safety margins. Name in big perfectly readable Cyrillic: «ЕЩЁ ОДНУ». Subtitle «И ТОЧНО ДОМОЙ». Finely engraved illustration of a pigeon proudly navigating a folded map upside down beneath a tiny crescent moon. Warm midnight indigo, ivory, faded orange on uncoated paper. Real premium European craft lager label, ornamental frame, witty restrained illustration."
+    },
+    {
+      "id": "beer-5",
+      "source": "source/beer-5.webp",
+      "prompt": "Use case: logo-brand. Asset: a single flat PRINT-READY FRONT LABEL texture for a realistic craft beer bottle in a 3D game. One original humorous Russian beer label, portrait rectangle filling the whole image edge to edge. No bottle, no mockup, no perspective, no exterior shadows, no other labels. Sophisticated authentic printed craft beer packaging with crisp typography and refined engraved editorial illustration; witty, adult, never childish. Keep all lettering inside central 85%, generous safety margins. Name in big perfectly readable Cyrillic: «КАБАНИЙ РЕЗЕРВ». Subtitle «ВЫДЕРЖАНО НА ДИВАНЕ». Finely engraved dignified wild boar in velvet smoking jacket lounging in a leather armchair beside a tiny clock. Deep oxblood red, antique cream and muted brass, elegant small brewery crest with hop leaves. Wry sophisticated premium barrel reserve beer packaging."
+    },
+    {
+      "id": "beer-6",
+      "source": "source/beer-6.webp",
+      "prompt": "Use case: logo-brand. Asset: a single flat PRINT-READY FRONT LABEL texture for a realistic craft beer bottle in a 3D game. One original humorous Russian beer label, portrait rectangle filling the whole image edge to edge. No bottle, no mockup, no perspective, no exterior shadows, no other labels. Sophisticated authentic printed craft beer packaging with crisp typography and refined engraved editorial illustration; witty, adult, never childish. Keep all lettering inside central 85%, generous safety margins. Name in big perfectly readable Cyrillic: «ПЕННАЯ ПАУЗА». Subtitle «ДЕЛА ПОДОЖДУТ». Finely engraved illustration of a sloth carefully stopping a mechanical stopwatch with a hop cone, delicate botanical hop leaves. Dusty teal and ivory with restrained ochre. Refined vintage craft beer print, lovely paper grain and letterpress border, mature and witty."
+    },
+    {
+      "id": "beer-7",
+      "source": "source/beer-7.webp",
+      "prompt": "Use case: logo-brand. Asset: a single flat PRINT-READY FRONT LABEL texture for a realistic craft beer bottle in a 3D game. One original humorous Russian beer label, portrait rectangle filling the whole image edge to edge. No bottle, no mockup, no perspective, no exterior shadows, no other labels. Sophisticated authentic printed craft beer packaging with crisp typography and refined engraved editorial illustration; witty, adult, never childish. Keep all lettering inside central 85%, generous safety margins. Name in big perfectly readable Cyrillic: «ПЛАН Б». Subtitle «ПЛАН А ЗАКОНЧИЛСЯ». Finely engraved clever raccoon in a small engineer's waistcoat holding an absurdly elaborate blueprint whose final diagram is a simple hop cone. Mustard ochre, charcoal black and warm cream. Realistic humorous craft brewery label, sophisticated typography, restrained technical diagram ornaments and uncoated paper grain."
+    }
+  ]
+}

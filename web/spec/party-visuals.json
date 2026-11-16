@@ -1,0 +1,270 @@
+{
+  "version": 2,
+  "asset": "models/party/interactive/library.glb",
+  "_about": "Authored SI geometry and first-person presentation. Shared by the Blender generator and runtime; item state stays in party.json.",
+  "bottle": {
+    "outer": [
+      [
+        0,
+        0.021
+      ],
+      [
+        0.002,
+        0.027
+      ],
+      [
+        0.006,
+        0.03
+      ],
+      [
+        0.012,
+        0.0305
+      ],
+      [
+        0.145,
+        0.0305
+      ],
+      [
+        0.155,
+        0.03
+      ],
+      [
+        0.169,
+        0.027
+      ],
+      [
+        0.184,
+        0.019
+      ],
+      [
+        0.195,
+        0.012
+      ],
+      [
+        0.22,
+        0.0118
+      ],
+      [
+        0.224,
+        0.014
+      ],
+      [
+        0.23,
+        0.014
+      ],
+      [
+        0.234,
+        0.0135
+      ],
+      [
+        0.236,
+        0.012
+      ]
+    ],
+    "inner": [
+      [
+        0.008,
+        0.02
+      ],
+      [
+        0.01,
+        0.0268
+      ],
+      [
+        0.016,
+        0.0287
+      ],
+      [
+        0.145,
+        0.0287
+      ],
+      [
+        0.153,
+        0.028
+      ],
+      [
+        0.167,
+        0.025
+      ],
+      [
+        0.182,
+        0.017
+      ],
+      [
+        0.194,
+        0.01
+      ],
+      [
+        0.22,
+        0.01
+      ],
+      [
+        0.234,
+        0.01
+      ]
+    ],
+    "segments": 64,
+    "initialFill": 0.86,
+    "liquidColor": "#ce9638",
+    "liquidOpacity": 0.49,
+    "samples": 384,
+    "surfaceSegments": 48,
+    "settleRate": 8,
+    "glassOpacity": 0.62,
+    "glassTint": "#2c361c",
+    "glassRimOpacity": 0.95
+  },
+  "models": {
+    "beer": {
+      "node": "beer",
+      "restEuler": [
+        0,
+        0,
+        0
+      ],
+      "view": {
+        "position": [
+          0.14,
+          -0.22,
+          -0.42
+        ],
+        "rotation": [
+          0,
+          -0.26,
+          -0.1
+        ],
+        "usePosition": [
+          0.005,
+          -0.14,
+          -0.42
+        ],
+        "useRotation": [
+          1.13,
+          0.12,
+          -0.04
+        ]
+      }
+    },
+    "vape": {
+      "node": "vape",
+      "restEuler": [
+        1.57079632679,
+        0,
+        -0.2
+      ],
+      "view": {
+        "position": [
+          0.13,
+          -0.2,
+          -0.38
+        ],
+        "rotation": [
+          0,
+          -0.2,
+          -0.12
+        ],
+        "usePosition": [
+          0.035,
+          -0.125,
+          -0.33
+        ],
+        "useRotation": [
+          0.3,
+          -0.12,
+          -0.16
+        ]
+      }
+    },
+    "mouthpiece": {
+      "node": "mouthpiece",
+      "restEuler": [
+        0,
+        0,
+        0
+      ],
+      "view": {
+        "position": [
+          0.12,
+          -0.24,
+          -0.4
+        ],
+        "rotation": [
+          0,
+          -0.18,
+          -0.14
+        ],
+        "usePosition": [
+          0.015,
+          -0.195,
+          -0.32
+        ],
+        "useRotation": [
+          0.38,
+          -0.08,
+          -0.08
+        ]
+      }
+    },
+    "hookah": {
+      "node": "hookah",
+      "restEuler": [
+        0,
+        0,
+        0
+      ]
+    },
+    "crate": {
+      "node": "crate",
+      "restEuler": [
+        0,
+        0.1,
+        0
+      ]
+    }
+  },
+  "motion": {
+    "walkBob": 0.0035,
+    "breathBob": 0.001,
+    "pickupDrop": 0.13,
+    "pickupTilt": 0.2,
+    "useIn": 0.22,
+    "useOut": 0.72,
+    "drinkDrainStart": 0.18,
+    "drinkDrainEnd": 0.7,
+    "panelShift": 0.12
+  },
+  "hose": {
+    "segments": 20,
+    "radius": 0.0065,
+    "color": "#303336",
+    "source": [
+      0.027,
+      0.19,
+      0
+    ],
+    "restEnd": [
+      0.17,
+      0.08,
+      0.03
+    ],
+    "sag": 0.27
+  },
+  "hookah": {
+    "glass": "#677d79"
+  },
+  "vape": {
+    "width": 0.02,
+    "height": 0.098,
+    "depth": 0.012,
+    "radius": 0.005,
+    "body": "#464d50",
+    "mouthpieceHeight": 0.017
+  },
+  "crate": {
+    "width": 0.32,
+    "depth": 0.18,
+    "height": 0.17,
+    "wall": 0.004,
+    "color": "#a48a61"
+  }
+}

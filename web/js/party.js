@@ -2,11 +2,15 @@
 // Ownership, sip counts and flights are canonical; pooled smoke, foley and shards are local.
 import { createPartySimulation, createPartyGround } from './party-state.js';
 import { createPartyModels } from './party-models.js';
+import { createPartyHands } from './party-hands.js';
+import { createPartyHose } from './party-hose.js';
+import { createPartyOverlay } from './party-overlay.js';
 import { createPartyEffects } from './party-effects.js';
 import { assignNetworkObjectIds } from './network-objects.js';
 import { shotHandlers, onRestore } from './breakables.js';
 import { injectStyle } from './minimap.js';
 import { addHelp } from './help.js';
+import {whenRoom} from './loading.js';
 
 addHelp(
   {mode:'walk',topic:'party',keys:['E'],text:'взять пиво на балконе, дудку на острове или шланг кальяна у дивана',order:63},
@@ -16,17 +20,17 @@ addHelp(
 );
 const typing=e=>e.target?.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName);
 const visible=o=>{for(let p=o;p;p=p.parent)if(!p.visible)return false;return true;};
-const NAMES={beer:'Кабан Лагер',vape:'Облачная дудка',hookah:'Кальян у дивана'};
+const NAMES={beer:'Пиво',vape:'Облачная дудка',hookah:'Кальян у дивана'};
 
-export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,getSeats,getVM,getTV,getPaper,getDoors,getAnchors,requestRender}) {
-  let spec=null,sim=null,models=null,effects=null,network=null,state=null,players=[],ready=false,disposed=false;
+export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,getWalk,getSeats,getVM,getTV,getPaper,getDoors,getAnchors,requestRender}) {
+  let spec=null,sim=null,models=null,grips=null,hose=null,overlay=null,effects=null,network=null,state=null,players=[],ready=false,disposed=false;
   let pending=false,generation=0,aimed=null,pickClock=0,heldId=null,actionClock=0,uiKey='',savedSolo=null;
   const world=new THREE.Group();world.name='party_world';world.userData.rasterOnly=true;scene.add(world);
-  const handRoot=new THREE.Group();handRoot.name='party_first_person';handRoot.userData.viewmodel=true;handRoot.userData.rasterOnly=true;handRoot.renderOrder=900;scene.add(handRoot);
+  const handRoot=new THREE.Group();handRoot.name='party_first_person';handRoot.userData.viewmodel=true;handRoot.userData.rasterOnly=true;
   const remoteRoot=new THREE.Group();remoteRoot.name='party_remote_props';remoteRoot.userData.networkEntity=true;remoteRoot.userData.rasterOnly=true;scene.add(remoteRoot);
   const objects=new Map(),remoteProps=new Map(),seenAction=new Map(),seenBreak=new Map(),smokeTimes=new Map();
   const V=()=>new THREE.Vector3(),ray=new THREE.Raycaster(),direction=V(),origin=V(),up=new THREE.Vector3(0,1,0),coarseQuery=matchMedia('(pointer:coarse)');
-  const hoseSegments=[];let crate=null,handModel=null,unrestore=null;
+  let crate=null,handModel=null,unrestore=null,warmViews=null;const hoseA=V(),hoseB=V(),viewQ=new THREE.Quaternion(),useQ=new THREE.Quaternion();
   injectStyle('party-style',CSS);
   const hud=document.createElement('div');hud.className='party-hud kw-float';hud.hidden=true;hud.setAttribute('role','status');
   const title=document.createElement('span'),meter=document.createElement('span'),actions=document.createElement('span');
@@ -40,7 +44,7 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
   const held=()=>state?.items.find(i=>i.owner===selfId()&&i.status==='held');
   const pose=()=>({id:'solo',x:camera.position.x,y:Math.max(0,camera.position.y-(getWalk()?.eyeHeight||1.68)),z:camera.position.z,eyeY:camera.position.y});
   const worldBusy=()=>!!getDoors()?.target||!!getSeats()?.target;
-  function clearHand(){handRoot.traverse(o=>{if(o.userData.partyHeldMaterial)o.material.dispose();});handRoot.clear();handModel=null;}
+  function clearHand(){models?.release(handModel);handRoot.clear();handModel=null;}
   function snapshot(){return sim?.snapshot()||null;}
   function accept(next,context={}){
     if(!next)return;state=next;players=context.players||players;
@@ -49,8 +53,7 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
     if(h?.id!==heldId){
       if(h){getVM()?.setWeapon('none');getTV()?.hold(false);getPaper()?.drop();effects.sound('take');}
       heldId=h?.id||null;clearHand();
-      if(h){handModel=h.kind==='hookah'?models.mouthpiece():models[h.kind]();const hands=models.hands();hands.position.y=.14;handRoot.add(handModel,hands);
-        handRoot.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.depthTest=false;o.material.depthWrite=false;o.userData.partyHeldMaterial=true;o.renderOrder=900;}});}
+      if(h){handModel=models.create(h.kind==='hookah'?'mouthpiece':h.kind,{held:true,id:h.id});handRoot.add(handModel,grips.create(h.kind));}
     }
     for(const item of state.items){
       const prior=seenAction.get(item.id),key=item.action?`${item.action.kind}:${item.action.at}:${item.action.actorId}`:null;
@@ -67,8 +70,9 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
   function traceCollision(from,to,item){
     origin.fromArray(from);direction.fromArray(to).sub(origin);const length=direction.length();if(length<1e-6)return null;
     ray.set(origin,direction.multiplyScalar(1/length));ray.far=length+.025;ray.layers.set(0);
-    const roots=scene.children.filter(o=>o!==world&&o!==handRoot&&o!==remoteRoot&&!o.userData.networkEntity&&!o.userData.networkAvatar&&!o.userData.networkEffect&&!o.userData.viewmodel);
-    const hit=ray.intersectObjects(roots,true).find(h=>visible(h.object)&&!h.object.userData.passLight&&!h.object.userData.impact&&!h.object.userData.shard);
+    const roots=scene.children.filter(o=>o!==handRoot&&o!==remoteRoot&&!o.userData.networkEntity&&!o.userData.networkAvatar&&!o.userData.networkEffect&&!o.userData.viewmodel);
+    const ignore=o=>{for(let p=o;p;p=p.parent){const u=p.userData;if(u.networkEntity||u.networkAvatar||u.networkEffect||u.viewmodel)return true;if(u.partyId&&(u.partyId===item.id||state?.items.find(i=>i.id===u.partyId)?.status!=='ready'))return true;}return false;};
+    const hit=ray.intersectObjects(roots,true).find(h=>visible(h.object)&&!ignore(h.object)&&!h.object.userData.passLight&&!h.object.userData.impact&&!h.object.userData.shard);
     return hit?{point:hit.point.toArray(),normal:hit.face?.normal?.clone().transformDirection(hit.object.matrixWorld).toArray()}:null;
   }
   async function command(verb,id=held()?.id||aimed?.id){
@@ -119,7 +123,7 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
     const remaining=h?.kind==='beer'?spec.rules.sips-h.sips:null;
     const busy=pending||!!(h?.action&&state.time-h.action.at<h.action.duration);
     const key=[can,h?.id,aimed?.id,remaining,busy,coarse].join(':');if(key===uiKey)return;uiKey=key;
-    hud.hidden=!can||!(h||aimed);title.textContent=NAMES[(h||aimed)?.kind]||'';
+    const focus=h||aimed;hud.hidden=!can||!focus;title.textContent=models?.labels.get(focus?.id)?.title||NAMES[focus?.kind]||'';
     meter.textContent=remaining===null?'':`${'●'.repeat(Math.max(0,remaining))}${'○'.repeat(h.sips)}  ${remaining} / ${spec.rules.sips}`;
     actions.textContent=h?(h.kind==='beer'?(remaining?'ЛКМ / E — глоток · Q — бросить · X — на место':'Пусто! Q — бросить с треском · X — на место'):'ЛКМ — затяжка · Q — вернуть'):'E — взять';
     if(coarse)actions.textContent=h?(h.kind==='beer'?'Каждое нажатие — один глоток · Можно бросить бутылку':'Нажмите «Затяжка», чтобы выпустить облако'):'Нажмите «Взять»';
@@ -128,41 +132,47 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
     use.textContent=h?.kind==='beer'?(remaining?'Глоток':'Пусто'):'Затяжка';use.disabled=busy||remaining===0;put.textContent=h?.kind==='beer'?'Бросить':'Вернуть';
     document.body.classList.toggle('party-held',!!h);document.body.classList.toggle('party-aimed',!!aimed&&!h);
   }
-  function paintBottle(g,item){
-    const fill=g.userData.fill;if(fill){const fraction=1-item.sips/spec.rules.sips;fill.scale.y=Math.max(.015,fraction);fill.position.y=.055+.075*fraction;fill.visible=fraction>0;}
+  const smooth=t=>{const x=Math.max(0,Math.min(1,t));return x*x*(3-2*x);};
+  function paintBottle(g,item,dt){
+    const m=models.recipe.motion,t=actionProgress(item);
+    const consumed=item.sips-(item.action?.kind==='sip'&&t<1?1-smooth((t-m.drinkDrainStart)/(m.drinkDrainEnd-m.drinkDrainStart)):0);
+    g.userData.liquid?.update(1-consumed/spec.rules.sips,dt);
     if(g.userData.cap)g.userData.cap.visible=item.sips===0&&!item.owner;
   }
   function actionProgress(item){const a=item.action;return a?Math.max(0,Math.min(1,(state.time-a.at)/a.duration)):1;}
   function positionHeld(root,item,local){
-    const progress=actionProgress(item),doing=!!item.action&&progress<1,lift=doing?Math.sin(Math.PI*Math.min(1,progress*1.2)):0;
+    const progress=actionProgress(item),doing=!!item.action&&progress<1,motion=models.recipe.motion;
+    const use=doing&&['sip','puff'].includes(item.action.kind)?smooth(progress/motion.useIn)*(1-smooth((progress-motion.useOut)/(1-motion.useOut))):0;
     if(local){
-      const bob=getWalk()?.moving?Math.sin(actionClock*8)*.012:Math.sin(actionClock*1.6)*.002;
-      root.position.set(.22-lift*.19,-.36+lift*.22+bob,-.48-lift*.05).applyQuaternion(camera.quaternion).add(camera.position);
-      root.quaternion.copy(camera.quaternion);root.rotateX(doing?.06+lift*1.18:.06);root.rotateZ(-.12-lift*.10);
+      const kind=item.kind==='hookah'?'mouthpiece':item.kind,view=models.recipe.models[kind].view;
+      const bob=getWalk()?.moving?Math.sin(actionClock*8)*motion.walkBob:Math.sin(actionClock*1.6)*motion.breathBob;
+      origin.fromArray(view.position);direction.fromArray(view.usePosition);origin.lerp(direction,use);origin.y+=bob;
+      const panel=document.body.classList.contains('panel-open')?document.getElementById('panel')?.getBoundingClientRect():null;
+      if(panel&&panel.left>innerWidth/2)origin.x-=motion.panelShift*(innerWidth-panel.left)/(innerWidth*.3);
+      if(doing&&item.action.kind==='pickup')origin.y-=motion.pickupDrop*(1-smooth(progress));
+      handRoot.position.copy(origin).applyQuaternion(camera.quaternion).add(camera.position);
+      viewQ.setFromEuler(new THREE.Euler(...view.rotation));useQ.setFromEuler(new THREE.Euler(...view.useRotation));viewQ.slerp(useQ,use);
+      if(doing&&item.action.kind==='pickup')viewQ.multiply(useQ.setFromAxisAngle(up,motion.pickupTilt*(1-smooth(progress))));
+      handRoot.quaternion.copy(camera.quaternion).multiply(viewQ);
     }else{
       const p=players.find(p=>p.id===item.owner);if(!p){root.visible=false;return;}
       const grip=network?.gripForPlayer?.(item.owner);
       if(grip){
         grip.updateWorldMatrix(true,false);grip.getWorldQuaternion(root.quaternion);grip.getWorldPosition(root.position);
-        root.position.add(new THREE.Vector3(0,item.kind==='beer'?-.13:item.kind==='vape'?-.055:-.10,0).applyQuaternion(root.quaternion));
+        root.position.add(origin.set(0,-grips.spec.presets[item.kind].socket[1],0).applyQuaternion(root.quaternion));
         root.visible=true;return;
       }
-      const yaw=p.lookYaw??p.yaw??0;root.position.set(p.x,(p.eyeY??p.y+1.68)-.65+lift*.35,p.z);
+      const yaw=p.lookYaw??p.yaw??0;root.position.set(p.x,(p.eyeY??p.y+1.68)-.65+use*.35,p.z);
       root.position.x+=Math.cos(yaw)*.24-Math.sin(yaw)*.25;root.position.z-=Math.sin(yaw)*.24+Math.cos(yaw)*.25;
-      root.rotation.set(lift*1.3,yaw,-.1);root.visible=true;
+      root.rotation.set(use*1.3,yaw,-.1);root.visible=true;
     }
   }
   function updateHose(item){
-    const base=objects.get(item.id);if(!base)return;
-    const start=base.position.clone().add(new THREE.Vector3(.04,.34,0));
+    const base=objects.get(item.id);if(!base||!hose)return;
+    hoseA.fromArray(models.recipe.hose.source).add(base.position);
     const h=item.owner===selfId()?handRoot:remoteProps.get(item.id);
-    const end=item.status==='held'&&h?.visible?h.position.clone():base.position.clone().add(new THREE.Vector3(.17,.16,.02));
-    const mid=start.clone().add(end).multiplyScalar(.5);mid.y=Math.max(.055,Math.min(start.y,end.y)-.27);
-    let prev=start;
-    for(let i=0;i<hoseSegments.length;i++){
-      const t=(i+1)/hoseSegments.length,p=start.clone().multiplyScalar((1-t)**2).addScaledVector(mid,2*(1-t)*t).addScaledVector(end,t*t);
-      const segment=hoseSegments[i],delta=p.clone().sub(prev);segment.position.copy(p).add(prev).multiplyScalar(.5);segment.scale.set(1,delta.length(),1);segment.quaternion.setFromUnitVectors(up,delta.normalize());prev=p;
-    }
+    if(item.status==='held'&&h?.visible)hoseB.copy(h.position);else hoseB.fromArray(models.recipe.hose.restEnd).add(base.position);
+    hose.update(hoseA,hoseB);
   }
   function update(dt){
     if(!ready)return false;actionClock+=dt;
@@ -175,15 +185,15 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
     if(h&&!network&&(getPaper()?.held||getTV()?.status?.held))command('return',h.id);
     pickClock-=dt;if(pickClock<=0){pickClock=.10;aim();}
     handRoot.visible=!!h&&active()&&!pipe?.photo;
-    if(h&&handRoot.visible){positionHeld(handRoot,h,true);if(h.kind==='beer')paintBottle(handModel,h);}
+    if(h&&handRoot.visible){positionHeld(handRoot,h,true);if(h.kind==='beer')paintBottle(handModel,h,dt);}
     for(const item of state.items){
       const o=objects.get(item.id);if(!o)continue;
       o.visible=item.kind==='hookah'||item.status==='ready'||item.status==='flying';o.position.fromArray(item.position);
-      if(item.kind==='beer'){paintBottle(o,item);if(item.status==='flying'){o.rotation.set(actionClock*11,actionClock*6,actionClock*4);}else o.rotation.set(0,0,0);}
+      if(item.kind==='beer'){if(item.status==='flying'){o.rotation.set(actionClock*11,actionClock*6,actionClock*4);}else o.rotation.set(0,0,0);if(o.visible)paintBottle(o,item,dt);}else if(item.status==='ready')o.rotation.fromArray([...models.recipe.models[item.kind].restEuler,'XYZ']);
       if(item.kind==='hookah')o.userData.restTip.visible=item.status!=='held';
       const remote=item.status==='held'&&item.owner!==selfId();let prop=remoteProps.get(item.id);
-      if(remote&&!prop){prop=item.kind==='hookah'?models.mouthpiece():models[item.kind]();remoteProps.set(item.id,prop);remoteRoot.add(prop);}
-      if(prop){prop.visible=remote;if(remote){positionHeld(prop,item,false);if(item.kind==='beer')paintBottle(prop,item);}}
+      if(remote&&!prop){prop=item.kind==='hookah'?models.mouthpiece():models[item.kind]({id:item.id});remoteProps.set(item.id,prop);remoteRoot.add(prop);}
+      if(prop){prop.visible=remote;if(remote){positionHeld(prop,item,false);if(item.kind==='beer')paintBottle(prop,item,dt);}}
       if(item.kind==='hookah')updateHose(item);
       const a=item.action,progress=actionProgress(item);
       if(a?.kind==='puff'&&progress>.25&&progress<1){
@@ -215,25 +225,30 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
   take.onclick=()=>command('take',aimed?.id);use.onclick=()=>{const h=held();if(h)command(h.kind==='beer'?'sip':'puff',h.id);};
   put.onclick=()=>{const h=held();if(h)command(h.kind==='beer'?'throw':'return',h.id);};back.onclick=()=>command('return');
   window.addEventListener('keydown',onKey,true);window.addEventListener('pointerdown',onPointer,true);
-  const loading=fetch('spec/party.json').then(r=>{if(!r.ok)throw Error('party_config');return r.json();}).then(data=>{
-    if(disposed)return;spec=data;const floorAt=createPartyGround({plan,site});sim=createPartySimulation({spec,collision:traceCollision,floorAt});models=createPartyModels(THREE,spec);effects=createPartyEffects({THREE,scene,spec,floorAt,getSound:()=>getVM()?.sound});
-    crate=models.crate();world.add(crate);
+  const loading=fetch('spec/party.json').then(r=>{if(!r.ok)throw Error('party_config');return r.json();}).then(async data=>{
+    if(disposed)return;spec=data;const floorAt=createPartyGround({plan,site});sim=createPartySimulation({spec,collision:traceCollision,floorAt});grips=createPartyHands();[models]=await Promise.all([createPartyModels(THREE,spec),grips.ready]);if(disposed){models.dispose();grips.dispose();return;}overlay=createPartyOverlay({THREE,renderer,scene,camera,pipe,root:handRoot,active:()=>!!held()&&active()&&!pipe.photo});effects=createPartyEffects({THREE,scene,spec,glassColor:models.recipe.bottle.glassTint,floorAt,getSound:()=>getVM()?.sound});
+    await whenRoom;if(disposed)return;
+    warmViews=new THREE.Group();
+    for(const kind of ['beer','vape','hookah']){const preview=new THREE.Group();preview.add(models.create(kind==='hookah'?'mouthpiece':kind,{held:true}),grips.create(kind));warmViews.add(preview);}
+    await overlay.warm(warmViews,()=>disposed);if(disposed)return;
+    crate=models.crate();crate.rotation.fromArray([...models.recipe.models.crate.restEuler,'XYZ']);world.add(crate);
     for(const def of spec.items){
-      const o=models[def.kind]();o.position.fromArray(def.position);o.userData.partyId=def.id;
+      const o=models[def.kind]({id:def.id});o.position.fromArray(def.position);o.userData.partyId=def.id;
       if(def.kind==='beer'){o.userData.breakable='glass';assignNetworkObjectIds(o,'party:'+def.id);o.userData.networkId='party:'+def.id;
         o.traverse(mesh=>{if(mesh.isMesh)shotHandlers.set(mesh,()=>{if(!network){sim.breakItem(def.id);accept(sim.snapshot());}return true;});});}
       else{o.userData.networkEntity=true;}
       world.add(o);objects.set(def.id,o);
-      if(def.kind==='hookah')for(let i=0;i<14;i++){const segment=new THREE.Mesh(models.geometry('CylinderGeometry',[.008,.008,1,8]),models.material(0x244b54));segment.userData.networkEntity=true;world.add(segment);hoseSegments.push(segment);}
+      if(def.kind==='hookah')hose=createPartyHose({THREE,scene:world,recipe:models.recipe.hose});
     }
     ready=true;accept(network&&state?state:sim.snapshot());
     unrestore=onRestore(()=>{if(!network){sim.reset();effects.clear();seenBreak.clear();accept(sim.snapshot());}});requestRender();
   });
   return {ready:loading,snapshot,setNetwork,applyNetworkSnapshot:accept,command,traceCollision,update,clearEffects(){effects?.clear();},
-    get spec(){return spec;},get held(){return held();},get target(){return aimed;},get debug(){return{ready,pending,state,effects:effects?.debug,worldItems:objects.size};},
-    dispose(){disposed=true;generation++;window.removeEventListener('keydown',onKey,true);window.removeEventListener('pointerdown',onPointer,true);unrestore?.();
-      for(const e of [hud,take,use,put,back])e.remove();effects?.dispose();models?.dispose();
-      handRoot.traverse(o=>{if(o.userData.partyHeldMaterial)o.material.dispose();});world.removeFromParent();handRoot.removeFromParent();remoteRoot.removeFromParent();document.body.classList.remove('party-held','party-aimed');}
+    interactionPoint(id){const o=objects.get(id);if(!o)return null;o.updateWorldMatrix(true,true);return new THREE.Box3().setFromObject(o).getCenter(V()).toArray();},
+    get spec(){return spec;},get held(){return held();},get target(){return aimed;},get labels(){return{world:Object.fromEntries([...objects].filter(([,o])=>o.userData.labelId).map(([id,o])=>[id,o.userData.labelId])),held:handModel?.userData.labelId||null,remote:Object.fromEntries([...remoteProps].filter(([,o])=>o.userData.labelId).map(([id,o])=>[id,o.userData.labelId]))};},get debug(){return{ready,pending,state,effects:effects?.debug,worldItems:objects.size,liquid:handModel?.userData.liquid?.debug,visualVersion:models?.recipe.version};},
+    dispose(){if(disposed)return;disposed=true;ready=false;generation++;window.removeEventListener('keydown',onKey,true);window.removeEventListener('pointerdown',onPointer,true);unrestore?.();
+      for(const e of [hud,take,use,put,back])e.remove();clearHand();warmViews?.clear();warmViews=null;effects?.dispose();hose?.dispose();overlay?.dispose();models?.dispose();grips?.dispose();
+      world.clear();remoteRoot.clear();objects.clear();remoteProps.clear();world.removeFromParent();handRoot.removeFromParent();remoteRoot.removeFromParent();document.body.classList.remove('party-held','party-aimed');}
   };
 }
 const CSS=`

@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "columns": 4,
+  "rows": 2,
+  "cellPixels": [
+    512,
+    640
+  ],
+  "gutterPixels": 8,
+  "material": "lager_paper",
+  "labels": [
+    {
+      "id": "beer-0",
+      "title": "Дедлайн подождёт"
+    },
+    {
+      "id": "beer-1",
+      "title": "Пятый глоток"
+    },
+    {
+      "id": "beer-2",
+      "title": "Балконное"
+    },
+    {
+      "id": "beer-3",
+      "title": "Налог на пену"
+    },
+    {
+      "id": "beer-4",
+      "title": "Ещё одну и точно домой"
+    },
+    {
+      "id": "beer-5",
+      "title": "Кабаний резерв"
+    },
+    {
+      "id": "beer-6",
+      "title": "Пенная пауза"
+    },
+    {
+      "id": "beer-7",
+      "title": "План Б"
+    }
+  ]
+}

@@ -134,5 +134,5 @@ export function createPartySimulation({ spec = {}, collision = null, floorAt = n
     if (item.status === 'ready' || item.kind === 'hookah') item.position = [...position];
     return true;
   }
-  return { rules, command, step, snapshot, restore, release, reset, held, breakItem, setHome, setCollision(fn) { collision = typeof fn === 'function' ? fn : null; } };
+  return { rules, command, step, snapshot, restore, release, reset, held, breakItem, setHome, status: id => items.get(id)?.status, setCollision(fn) { collision = typeof fn === 'function' ? fn : null; } };
 }
