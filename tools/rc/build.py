@@ -59,7 +59,7 @@ for idx,d in enumerate(S['designs']):
   for sign in [-1,1]:
    rod('cage A',(sign*.26,-.2,.37),(sign*.22,-.1,.68),.018,M['dark']);rod('cage roof',(sign*.22,-.1,.68),(sign*.22,.28,.68),.018,M['dark']);rod('cage C',(sign*.22,.28,.68),(sign*.29,.45,.36),.018,M['dark'])
   for yy in [-.1,.28]:rod('roll bar cross',(-.22,yy,.68),(.22,yy,.68),.018,M['dark'])
-  
+
   for sign in [-1,1]:
    box('buggy bucket seat',(sign*.115,.13,.4),(.17,.24,.18),M['black'],.025)
    for side in [-1,1]:rod('seat harness',(sign*.115+side*.03,.01,.47),(sign*.115+side*.03,.19,.52),.009,bodymat)
