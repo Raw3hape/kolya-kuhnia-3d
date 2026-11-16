@@ -91,7 +91,7 @@ export function solveAvatarPose(state = {}, slot = 0) {
   const weapon = W[gear], isPhone = gear === 'phone', isPaper = gear === 'newspaper';
   const targetId = action?.targetId || state.interaction?.targetId;
   const partyItem = ['beer', 'vape', 'hookah'].includes(gear);
-  if (gear === 'pizza') { right = [0.19, 1.16, -0.42]; left = [-0.19, 1.16, -0.42]; handEuler = leftEuler = [-0.2, 0, 0]; }
+  if (gear === 'pizza') { const center = state.heldGrip?.center || [0, 1.16, -0.42], half = (state.heldGrip?.width ?? 0.38) / 2; right = [center[0] + half, center[1], center[2]]; left = [center[0] - half, center[1], center[2]]; handEuler = leftEuler = [-0.2, 0, 0]; }
   if (state.washing) { const rub = Math.sin(time * 7) * 0.035; right = [0.10 + rub, 1.57, -0.16]; left = [-0.10 + rub, 1.57, -0.16]; }
   const selfUse = partyItem && ['sip', 'puff'].includes(kind) || isPhone && targetId === 'phone' || isPaper && (kind === 'page' || targetId === 'newspaper');
   let gearVisible = gear !== 'none', gearScale = 1, page = 0, tap = 0, magazine = 0, bolt = 0, breakOpen = 0;

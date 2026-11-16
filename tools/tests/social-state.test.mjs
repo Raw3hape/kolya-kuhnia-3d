@@ -7,9 +7,11 @@ const plan = read('plan.generated'), original = read('social');
 const spec = { ...original, rules: { ...original.rules, firstDelivery: 0.1 } };
 const home = socialLocations(plan, spec).delivery;
 const player = (id = 'a', x = home[0], z = home[2]) => ({ id, x, z, y: 0, eyeY: 1.68, yaw: 0 });
-function fixture(options = {}) {
-  const sim = createSocialSimulation({ spec, plan, ...options });
+function fixture({ delivered = true, ...options } = {}) {
+  const sim = createSocialSimulation({ spec, plan, isEntryOpen: () => true, ...options });
   const players = [player('a'), player('b', home[0] + 0.65)]; sim.step(0.1, players);
+  for (let i = 0; i < 12; i++) sim.step(.1, players);
+  if (delivered) { assert(sim.command(players[0], { verb: 'receive' })); for (let i = 0; i < 7; i++) sim.step(.1, players); assert(sim.command(players[0], { verb: 'return' })); }
   return { sim, players, command: (id, verb, extra = {}) => sim.command(players.find(p => p.id === id), { verb, ...extra }) };
 }
 test('two simultaneous box claims have one owner; disconnect returns it to its last safe surface', () => {
@@ -31,7 +33,7 @@ test('placement rejects malformed, blocked and floating points; another player c
   const f = fixture({ validatePlacement: p => p[1] < 0.02 }); assert(f.command('a', 'take'));
   for (const point of [[NaN, 0, 0], [home[0], 4, home[2]], [home[0], 0.9, home[2]], [400, 0.01, 0]]) assert.equal(f.command('a', 'place', { point }), false);
   assert.equal(f.command('b', 'place', { point: home }), false); assert(f.command('a', 'place', { point: home }));
-  const blocked = fixture({ blocked: () => true }); assert.equal(blocked.command('a', 'take'), false);
+  const blocked = fixture({ delivered: false, blocked: () => true }); assert.equal(blocked.command('a', 'take'), false);
 });
 test('late join receives partial pizza and radio exactly; leaving the shower releases occupancy', () => {
   const f = fixture(); assert(f.command('a', 'open')); assert(f.command('b', 'eat'));
@@ -45,17 +47,41 @@ test('late join receives partial pizza and radio exactly; leaving the shower rel
   assert(f.command('a', 'shower', { point })); assert.equal(f.command('b', 'shower', { point }), false);
   f.sim.release('a'); assert.equal(f.sim.snapshot().shower.owner, null);
 });
-test('courier repeats a bounded bell, leaves and eventually brings another shared pizza', () => {
-  const f = fixture(); assert.equal(f.sim.snapshot().bell, 1);
-  for (let i = 0; i < 100; i++) f.sim.step(0.1, f.players);
-  assert.equal(f.sim.snapshot().bell, 2);
-  for (let i = 0; i < 800; i++) f.sim.step(0.1, f.players);
-  assert.equal(f.sim.snapshot().courier, null); assert(f.sim.snapshot().pizza);
+test('courier carries the only box, requires an open door and serializes handoff claims', () => {
+  let open = false; const f = fixture({ delivered: false, isEntryOpen: () => open });
+  assert.equal(f.sim.snapshot().courier.phase, 'waiting');
+  for (const verb of ['take', 'open', 'receive', 'eat']) assert.equal(f.command('a', verb), false);
+  open = true; f.sim.step(.1, f.players); assert.equal(f.sim.snapshot().courier.phase, 'offering');
+  assert(f.command('a', 'receive')); assert.equal(f.command('b', 'receive'), false);
+  const late = createSocialSimulation({ spec, plan, isEntryOpen: () => open }); late.restore(f.sim.snapshot()); assert.deepEqual(late.snapshot(), f.sim.snapshot()); assert.equal(late.command(f.players[1], { verb: 'receive' }), false);
+  assert.equal(f.command('a', 'return'), false); assert.equal(f.command('a', 'open'), false);
+  const before = f.sim.snapshot().pizza.position; f.sim.step(.1, f.players);
+  assert.notDeepEqual(f.sim.snapshot().pizza.position, before);
+  open = false; for (let i = 0; i < 7; i++) f.sim.step(.1, f.players);
+  assert.equal(f.sim.snapshot().pizza.owner, 'a'); assert(f.command('a', 'return'));
 });
-test('opening the delivered box accepts delivery and stops the courier ringing while people eat', () => {
-  const f = fixture(); assert(f.command('a', 'open')); assert.notEqual(f.sim.snapshot().courier.leaving, null);
+test('disconnect during transfer gives the same pizza back to the courier; after transfer it returns safely', () => {
+  const f = fixture({ delivered: false }); const id = f.sim.snapshot().pizza.id;
+  assert(f.command('a', 'receive')); f.sim.release('a');
+  assert.equal(f.sim.snapshot().pizza.location, 'courier'); assert.equal(f.sim.snapshot().pizza.id, id);
+  assert(f.command('b', 'receive')); for (let i = 0; i < 7; i++) f.sim.step(.1, f.players);
+  f.sim.release('b'); assert.deepEqual(f.sim.snapshot().pizza.position, home);
+});
+test('unclaimed deliveries leave with the courier, never leave a floor duplicate, and reserve landing until the door closes', () => {
+  let open = true; const f = fixture({ delivered: false, isEntryOpen: () => open });
+  for (let i = 0; i < 100; i++) f.sim.step(.1, f.players); assert.equal(f.sim.snapshot().bell, 2);
+  for (let i = 0; i < 800; i++) f.sim.step(.1, f.players);
+  assert.equal(f.sim.snapshot().courier, null); assert.equal(f.sim.snapshot().pizza, null); assert(f.sim.reservesLanding());
+  const snapshot = f.sim.snapshot(), restored = createSocialSimulation({ spec, plan, isEntryOpen: () => open }); restored.restore(snapshot);
+  assert.deepEqual(restored.snapshot(), snapshot);
+  open = false; f.sim.step(.1, f.players); assert.equal(f.sim.reservesLanding(), false);
+  for (let i = 0; i < 2200; i++) f.sim.step(.1, f.players); assert(f.sim.snapshot().courier); assert.equal(f.sim.snapshot().pizza.id, 2);
+});
+test('accepted delivery stops bells and never brings monsters back into an open doorway', () => {
+  let open = true; const f = fixture({ isEntryOpen: () => open });
   for (let i = 0; i < 100; i++) f.sim.step(.1, f.players);
-  assert.equal(f.sim.snapshot().courier, null); assert.equal(f.sim.snapshot().bell, 1); assert(f.sim.snapshot().pizza.open);
+  assert.equal(f.sim.snapshot().courier, null); assert.equal(f.sim.snapshot().bell, 1); assert(f.sim.snapshot().pizza); assert(f.sim.reservesLanding());
+  open = false; f.sim.step(.1, f.players); assert.equal(f.sim.reservesLanding(), false);
 });
 test('pizza follows a moving support and falls to the floor when that support is removed', () => {
   const bounds = [home[0] - .5, 0, home[2] - .5, home[0] + .5, .6, home[2] + .5];

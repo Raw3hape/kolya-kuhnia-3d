@@ -59,7 +59,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     const interactions = { ...(modules.hood?.snapshot ? { hood: modules.hood.snapshot() } : {}),
       ...(modules.paper?.snapshot ? { newspaper: modules.paper.snapshot() } : {}),
       ...Object.fromEntries(Object.entries(modules.tv?.snapshot?.() || {}).map(([id, value]) => ['media:' + id, value])) };
-    return { partySpec: getParty()?.spec, socialMeta: modules.social?.metadata(), apartment: structuredClone(getState()), collision: modules.walk.collisionSnapshot(), objects, interactions,
+    return { partySpec: getParty()?.spec, socialMeta: modules.social?.metadata(), apartment: structuredClone(getState()), collision: modules.walk.collisionSnapshot({ includeAmbient: false }), ambientCollision: modules.life?.colliders() || [], objects, interactions,
       interactionMeta: { media: modules.tv?.interactionMeta?.() || {}, newspaperPages: modules.paper?.interactionMeta?.() || [], hoodPosition: modules.hood?.networkPosition?.() },
       doors: modules.doors.snapshot(), seats: modules.seats?.networkSeats?.() || [], items: ['phone', 'newspaper'].flatMap(id => {
         const m = id === 'phone' ? modules.tv : modules.paper, position = m?.networkPosition?.();
@@ -68,7 +68,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
   }
 
   const lobby = createMultiplayerLobby({ client, getApartment: () => structuredClone(getState()),
-    getCollision: () => getModules().walk.collisionSnapshot(), getRoomState: roomState,
+    getCollision: () => getModules().walk.collisionSnapshot({ includeAmbient: false }), getRoomState: roomState,
     onJoined() { requestRender(); }, onLeft: deactivate });
   let roomRequestTimer = null;
   const openRoom = () => { clearTimeout(roomRequestTimer); roomRequestTimer = setTimeout(() => { if (active && !disposed) lobby.open(); }, 0); };

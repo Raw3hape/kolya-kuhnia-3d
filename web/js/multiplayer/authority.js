@@ -70,11 +70,12 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   const effectSizes = new Map(), pendingExternal = new Map();
   const col = buildColliders(plan), hunt = createHuntSimulation({ spec: huntSpec, site, plan, seed });
   let apartment = null, hostId = null, revision = 0, seq = 0, eventSeq = 0, time = 0, disposed = false;
-  let extra = [], doorMeta = [], doors = {}, items = {}, itemMeta = [], seatMeta = [], seats = {}, effects = [], effectsBytes = 2, snapshotClock = 0, epoch = 0, ambient = null;
+  let extra = [], ambientExtra = [], doorMeta = [], doors = {}, items = {}, itemMeta = [], seatMeta = [], seats = {}, effects = [], effectsBytes = 2, snapshotClock = 0, epoch = 0, ambient = null;
   let interactionMeta = { media: {}, newspaperPages: [], hoodPosition: null }, interactions = {};
   let showerPoint = null;
   const socialSupport = id => { const object = objects.get(id); return object && !broken.has(object.unitId) ? object.bounds : null; };
   const social = socialSpec ? createSocialSimulation({ spec: socialSpec, plan,
+    isEntryOpen: () => !!doors[plan.openings.find(o => o.type === 'entry')?.id],
     blocked: (p, point) => pathBlocked(p, { x: point[0], z: point[2] }),
     validatePlacement(point, kind) {
       if (kind === 'shower') return showerPoint && distance(point, showerPoint) < 0.02;
@@ -111,7 +112,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   const active = () => [...players.values()].filter(p => p.link !== null);
   const others = self => active().filter(p => p !== self).map(p => ({ x: p.x, z: p.z, radius: WALK.radius }));
   const doorObstacles = () => doorMeta.map(d => ({ ...(doors[d.id] ? d.opened : d.closed), door: d.id }));
-  const obstacles = p => [...extra.filter(o => !o.door), ...doorObstacles(), ...others(p)];
+  const obstacles = p => [...(social?.reservesLanding() ? [] : ambientExtra), ...extra.filter(o => !o.door), ...doorObstacles(), ...others(p)];
   function pathBlocked(from, to) {
     const dx = to.x - from.x, dz = to.z - from.z, length = Math.hypot(dx, dz);
     if (length < 0.01) return false;
@@ -207,7 +208,8 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   }
 
   function setGeometry(payload) {
-    extra = sanitizeCollision(payload.collision);
+    extra = sanitizeCollision({ extra: boundedArray(payload.collision?.extra || payload.collision?.boxes, R.maxCollisionBoxes).filter(b => b?.scope !== 'ambient') });
+    if (payload.ambientCollision) ambientExtra = sanitizeCollision({ extra: payload.ambientCollision });
     doorMeta = boundedArray(payload.doors?.doors, 32).filter(d => plain(d) && typeof d.id === 'string' && d.id.length <= 96 &&
       sanitizeCollision({ extra: [d.closed, d.opened] }).length === 2).map(d => ({ id: d.id, open: !!d.open,
         closed: sanitizeCollision({ extra: [d.closed] })[0], opened: sanitizeCollision({ extra: [d.opened] })[0] }));
@@ -430,7 +432,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       case 'reload': ok = reload(p, action.weapon); break;
       case 'social': {
         ok = social?.command({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio }, action) || false;
-        if (ok && action.verb === 'take') {
+        if (ok && ['take', 'receive'].includes(action.verb)) {
           const paper = items.newspaper === p.id;
           for (const id of Object.keys(items)) if (items[id] === p.id) items[id] = null;
           party.release(p.id); if (paper) advanceNewspaper();
@@ -545,7 +547,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       } break;
       case 'clear': if (p.id === hostId) { party.reset(); for (const player of players.values()) if (!items[player.held] && !social?.heldBy(player.id)) player.held = null; broken.clear(); effects = []; effectsBytes = 2; effectSizes.clear(); pendingExternal.clear(); epoch++; ok = true; event({ kind: 'clear', actorId: p.id }); } break;
       case 'ambient': if (p.id === hostId && link === 'local' && plain(action.ambient)) {
-        try { if (byteLength(action.ambient) <= R.maxAmbientBytes) { ambient = copy(action.ambient); ok = true; } } catch { /* Reject non-serializable host state. */ }
+        try { if (byteLength(action.ambient) <= R.maxAmbientBytes) { ambient = copy(action.ambient); ambientExtra = sanitizeCollision({ extra: ambient.collision || [] }); ok = true; } } catch { /* Reject non-serializable host state. */ }
       } break;
     }
     result(link, action, ok, ok ? null : 'action_rejected');

@@ -22,7 +22,7 @@ const typing=e=>e.target?.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(e.
 const visible=o=>{for(let p=o;p;p=p.parent)if(!p.visible)return false;return true;};
 const NAMES={beer:'Пиво',vape:'Облачная дудка',hookah:'Кальян у дивана'};
 
-export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,getWalk,getSeats,getVM,getTV,getPaper,getDoors,getAnchors,requestRender}) {
+export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,getWalk,getSeats,getVM,getTV,getPaper,getDoors,getSocial,getAnchors,requestRender}) {
   let spec=null,sim=null,models=null,grips=null,hose=null,overlay=null,effects=null,network=null,state=null,players=[],ready=false,disposed=false;
   let pending=false,generation=0,aimed=null,pickClock=0,heldId=null,actionClock=0,uiKey='',savedSolo=null;
   const world=new THREE.Group();world.name='party_world';world.userData.rasterOnly=true;scene.add(world);
@@ -43,7 +43,7 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
   const selfId=()=>network?(typeof network.selfId==='function'?network.selfId():network.selfId):'solo';
   const held=()=>state?.items.find(i=>i.owner===selfId()&&i.status==='held');
   const pose=()=>({id:'solo',x:camera.position.x,y:Math.max(0,camera.position.y-(getWalk()?.eyeHeight||1.68)),z:camera.position.z,eyeY:camera.position.y});
-  const worldBusy=()=>!!getDoors()?.target||!!getSeats()?.target;
+  const worldBusy=()=>!!getDoors()?.target||!!getSeats()?.target||!!getSocial?.()?.target;
   function clearHand(){models?.release(handModel);handRoot.clear();handModel=null;}
   function snapshot(){return sim?.snapshot()||null;}
   function accept(next,context={}){
@@ -220,7 +220,7 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
   }
   function onPointer(e){
     if(e.target!==canvas||!active()||!ready||e.button!==0||e.pointerType==='touch')return;
-    const h=held();if(h){command(h.kind==='beer'?'sip':'puff',h.id);stop(e);}
+    const h=held();if(h&&!worldBusy()){command(h.kind==='beer'?'sip':'puff',h.id);stop(e);}
   }
   take.onclick=()=>command('take',aimed?.id);use.onclick=()=>{const h=held();if(h)command(h.kind==='beer'?'sip':'puff',h.id);};
   put.onclick=()=>{const h=held();if(h)command(h.kind==='beer'?'throw':'return',h.id);};back.onclick=()=>command('return');

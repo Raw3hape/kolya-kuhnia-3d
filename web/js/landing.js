@@ -36,12 +36,13 @@ export function create(L) {
   let root = null, lamp = null, bulbMat = null, models = null, loading = null, built = false, live = true;
   let open = !!L.doors?.list?.find(d => d.id === entry.id)?.open;
   const cast = [];   // { def, obj, mixer, acts, x, z, busy }
-  let network = null, networkSnapshot = null;
+  let network = null, networkSnapshot = null, visitor = false, disposed = false, monsterGroup = null, greetingTimer = null;
+  const voices = new Set();
   let acc = 0, flick = { mode: 'on', t: 0, until: rand(2, 6), k: 1 }, pushCool = 0, pushedOnce = false, wasSeen = false, shove = 0;
 
   // ---------- загрузка и сборка ----------
   function preload() {
-    loading ??= Promise.all(CAST.map(c => L.loadGLB(c.file))).then(g => { models = g; if (built) addCast(); if (networkSnapshot) applyNetworkSnapshot(networkSnapshot); }).catch(e => console.warn('landing:', e));
+    loading ??= Promise.all(CAST.map(c => L.loadGLB(c.file))).then(g => { if (disposed) return; models = g; if (built) addCast(); if (networkSnapshot) applyNetworkSnapshot(networkSnapshot); }).catch(e => console.warn('landing:', e));
     return loading;
   }
   function build() {
@@ -64,11 +65,11 @@ export function create(L) {
     lamp.position.set(bx, by - 0.02, bz); lamp.target.position.set(bx, 0, bz);
     root.add(lamp, lamp.target);
     scene.add(root);
-    if (models) addCast(); else preload();
+    if (models) addCast(); else if (!visitor) preload();
   }
   function addCast() {
     if (cast.length || !models) return;
-    const group = new THREE.Group(); group.name = 'life_monsters'; group.userData.networkEntity = true;
+    const group = monsterGroup = new THREE.Group(); group.visible = !visitor; group.name = 'life_monsters'; group.userData.networkEntity = true;
     CAST.forEach((def, i) => {
       const g = models[i];
       const obj = g.clone(g.scene);
@@ -89,7 +90,7 @@ export function create(L) {
       play(m, 'Idle', { offset: Math.random() });
       cast.push(m);
     });
-    L.warm(group).then(() => { root?.add(group); L.walk?.refreshObstacles?.(); L.requestRender?.(); });
+    L.warm(group).then(() => { if (disposed) { group.removeFromParent(); return; } group.visible = !visitor; root?.add(group); L.walk?.refreshObstacles?.(); L.requestRender?.(); });
   }
 
   // ---------- анимации ----------
@@ -113,7 +114,7 @@ export function create(L) {
   // ---------- звук: рык ----------
   function growl(m, k = 1) {
     const A = L.audio, ctx = A.ctx;
-    if (!A.ok || !m) return;
+    if (visitor || disposed || !A.ok || !m) return;
     const t = ctx.currentTime + 0.02, len = rand(0.7, 1.4) * (m.def.h < 1 ? 0.6 : 1);
     const pan = A.panner(m.x, m.def.h * 0.85, m.z, { ref: 1.2 });
     const g = ctx.createGain(); g.gain.value = 0; g.connect(pan);
@@ -125,7 +126,8 @@ export function create(L) {
     const n = A.noise(true), ng = ctx.createGain(); ng.gain.value = 0.25; n.connect(ng).connect(bp);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.6 * k, t + 0.12); g.gain.setValueAtTime(0.6 * k, t + len - 0.25); g.gain.linearRampToValueAtTime(0, t + len);
     for (const x of [o, roll, n]) { x.start(t); x.stop(t + len + 0.05); }
-    setTimeout(() => { try { pan.disconnect(); g.disconnect(); } catch { /* снят */ } }, (len + 0.4) * 1000);
+    const voice = { stop() { clearTimeout(voice.timer); for (const x of [o, roll, n]) { try { x.stop(); x.disconnect(); } catch {} } for (const x of [pan, g, bp, rg, ng]) x.disconnect(); voices.delete(voice); } };
+    voice.timer = setTimeout(() => voice.stop(), (len + 0.4) * 1000); voices.add(voice);
   }
 
   // ---------- дверь ----------
@@ -133,13 +135,14 @@ export function create(L) {
     if (id !== entry.id) return;
     open = isOpen;
     if (!live) return;
+    sync();
     if (open) {
       build();
       sync();
       if (network && !network.authority) return;
       // встречают: кто-то машет, кто-то мотает головой, кто-то рычит
-      setTimeout(() => {
-        if (!open || !cast.length || network && !network.authority) return;
+      clearTimeout(greetingTimer); greetingTimer = setTimeout(() => {
+        if (visitor || disposed || !open || !cast.length || network && !network.authority) return;
         for (const m of cast) act(m, ...(Math.random() < 0.5 ? ['Wave', 'Dance', 'No'] : ['No', 'Wave']));
         growl(cast[Math.floor(Math.random() * cast.length)], 0.8);
         L.requestRender?.();
@@ -149,6 +152,8 @@ export function create(L) {
   function sync() {
     const vis = live && open && built;
     if (root) root.visible = vis;
+    if (monsterGroup) monsterGroup.visible = !visitor;
+    if (visitor && lamp) { flick.k = 1; lamp.intensity = BULB_LM / (2 * Math.PI * (1 - Math.cos(1.35))) * NIGHT_SCALE; bulbMat.emissiveIntensity = 2.65; }
     L.walk?.refreshObstacles?.();
   }
 
@@ -200,7 +205,7 @@ export function create(L) {
   const sphere = new THREE.Sphere(), hitP = new THREE.Vector3();
   const offTargets = addTargets({
     raycast(rc) {
-      if (!live || !open || !cast.length || !root?.visible) return null;
+      if (visitor || !live || !open || !cast.length || !root?.visible) return null;
       let best = null, bt = rc.far ?? Infinity;
       for (const m of cast) {
         const r = m.def.r * 0.9;
@@ -219,7 +224,7 @@ export function create(L) {
         distance: bt, point, normal: rc.ray.direction.clone().negate(), object: m.obj, animal: 'monster', animalId: m.id,
         surface: { albedo: new THREE.Color(0.5, 0.5, 0.55), solid: true },
         hit() {
-          if (used) return null; used = true;
+          if (used || visitor || disposed) return null; used = true;
           act(m, 'HitReact', 'HitRecieve');
           growl(m, 1.1);
           L.hunt?.award?.(0, point, 'Ему нипочём', m.def.h < 1 ? 'грибу не страшно' : 'монстр с площадки');
@@ -233,6 +238,7 @@ export function create(L) {
   // ---------- кадр ----------
   let nearT = 0;
   function update(dt) {
+    if (visitor) return false;
     if (network && !network.authority) {
       if (!built || !root?.visible) return false;
       for (const m of cast) m.mixer.update(Math.min(dt, 0.1));
@@ -262,8 +268,8 @@ export function create(L) {
   }
 
   function colliders() {
-    if (!live || !open || !cast.length) return null;
-    return cast.map(m => ({ ax: m.x, az: m.z, bx: m.x + 1e-3, bz: m.z, h: m.def.r }));
+    if (visitor || !live || !open || !cast.length) return null;
+    return cast.map(m => ({ ax: m.x, az: m.z, bx: m.x + 1e-3, bz: m.z, h: m.def.r, scope: 'ambient' }));
   }
 
   function setLive(on) {
@@ -276,6 +282,7 @@ export function create(L) {
   }
 
   function dispose() {
+    disposed = true; clearTimeout(greetingTimer); for (const voice of [...voices]) voice.stop();
     offToggle?.(); offTargets?.();
     if (root) { scene.remove(root); root.traverse(o => { if (o.isMesh && !o.isSkinnedMesh) o.geometry?.dispose(); }); }
   }
@@ -311,9 +318,18 @@ export function create(L) {
     // Flicker, clip time, yaw and gestures do not change these circular blockers.
     // Refresh only on an actual collision change; addCast/setLive handle loading.
     if (obstaclesChanged) L.walk?.refreshObstacles?.();
+    if (visitor) sync();
     L.requestRender?.();
   }
-  return { update, colliders, setLive, dispose, preload, snapshot, applyNetworkSnapshot,
+  function setVisitor(on) {
+    if (visitor === !!on) return;
+    visitor = !!on; shove = 0; pushCool = 0; clearTimeout(greetingTimer);
+    for (const voice of [...voices]) voice.stop();
+    if (!visitor && built && !models) preload();
+    if (!visitor) flick = { mode: 'on', t: 0, until: rand(2, 6), k: 1 };
+    sync(); L.requestRender?.();
+  }
+  return { update, colliders, setLive, setVisitor, dispose, preload, snapshot, applyNetworkSnapshot,
     setNetwork(value) { network = value || null; }, open: () => L.doors?.setOpen?.(entry.id, true),
-    get debug() { return { root, cast, flick, area }; } };
+    get debug() { return { root, cast, flick, area, visitor, voices: voices.size }; } };
 }

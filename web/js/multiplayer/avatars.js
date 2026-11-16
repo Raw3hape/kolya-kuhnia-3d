@@ -42,12 +42,19 @@ function builder(material) {
   }
   return {
     box: (size, tint, position, rotation) => add(new THREE.BoxGeometry(...size), tint, position, rotation),
-    ball: (radius, tint, position, scale) => add(new THREE.IcosahedronGeometry(radius, 1), tint, position, undefined, scale),
+    ball: (radius, tint, position, scale) => add(new THREE.IcosahedronGeometry(radius, material.userData.bakedFill ? 2 : 1), tint, position, undefined, scale),
     cylinder: (top, bottom, height, tint, position, rotation) => add(new THREE.CylinderGeometry(top, bottom, height, 8), tint, position, rotation),
     build() {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
       geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      if (material.userData.bakedFill) {
+        // Soft, deterministic key/fill baked into NPC vertices. No extra lights or shader variants.
+        for (let i = 0; i < colors.length; i += 3) {
+          const light = 0.72 + 0.28 * Math.max(0, -normals[i] * 0.38 + normals[i + 1] * 0.64 - normals[i + 2] * 0.67);
+          for (let j = 0; j < 3; j++) colors[i + j] *= light;
+        }
+      }
       geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
       geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
@@ -89,6 +96,13 @@ function torso(material, d) {
     for (const x of [-0.09, 0.09]) b.box([0.09, 0.09, 0.022], '#3c556f', [x, 1.24, -0.13]);
     b.box([0.37, 0.05, 0.255], '#3b342e', [0, 0.89, 0]);
     b.box([0.1, 0.14, 0.045], d.accent, [0.14, 0.84, -0.145]);
+  } else if (d.style === 'courier') {
+    b.box([0.018, 0.49, 0.014], d.accent, [0, 1.14, -0.124]);
+    for (const x of [-0.092, 0.092]) {
+      b.box([0.13, 0.09, 0.02], d.accent, [x, 1.0, -0.13]);
+      b.box([0.15, 0.018, 0.014], '#d5e7cf', [x, 1.22, -0.132]);
+    }
+    b.box([0.38, 0.028, 0.242], d.accent, [0, 0.9, 0]);
   } else if (d.style === 'zip') {
     b.box([0.018, 0.5, 0.012], d.accent, [0, 1.14, -0.124]);
     b.box([0.14, 0.035, 0.013], d.accent, [-0.105, 1.3, -0.125], [0, 0, -0.25]);
@@ -272,10 +286,11 @@ function createGear(kind, material, flashMaterial, screenMaterial) {
   return { root, kind, muzzle, flash, magazine, bolt, barrels, page, grip };
 }
 
-export function createAvatar({ slot = 0, name = '', host = false, layer = 0 } = {}) {
-  const index = Number.isInteger(slot) && slot >= 0 && slot < AVATAR_ROSTER.length ? slot : 0, d = AVATAR_ROSTER[index];
+export function createAvatar({ slot = 0, name = '', host = false, layer = 0, appearance = null, showNameplate = true } = {}) {
+  const index = Number.isInteger(slot) && slot >= 0 && slot < AVATAR_ROSTER.length ? slot : 0, d = appearance || AVATAR_ROSTER[index];
   const root = joint(`player_${d.id}`), rig = joint('avatar_rig'), body = joint('avatar_body', [0, R.hipY, 0]);
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.91, flatShading: true });
+  const material = appearance ? new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }) : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.91, flatShading: true });
+  material.userData.bakedFill = !!appearance;
   const flashMaterial = new THREE.MeshBasicMaterial({ color: '#ffda84', transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
   const screenMaterial = new THREE.MeshBasicMaterial({ color: '#85b8bc', toneMapped: false });
   const torsoMesh = torso(material, d); torsoMesh.position.y = -R.hipY; body.add(torsoMesh);
@@ -286,7 +301,7 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0 } = 
   const gearSocket = joint('avatar_gear'); rightArm.wrist.add(gearSocket);
   const spare = builder(material); spare.box([0.036, 0.12, 0.055], '#333b40', [0, -0.06, 0]);
   const spareMagazine = spare.build(); spareMagazine.name = 'reload_magazine_in_hand'; spareMagazine.visible = false; leftArm.wrist.add(spareMagazine);
-  const plate = nameplate(); if (plate) { root.add(plate.sprite); plate.write(name, host); }
+  const plate = showNameplate ? nameplate() : null; if (plate) { root.add(plate.sprite); plate.write(name, host); }
   const gearCache = new Map(), down = new THREE.Vector3(0, -1, 0), direction = new THREE.Vector3();
   const lowerWorld = new THREE.Quaternion(), handWorld = new THREE.Quaternion(), euler = new THREE.Euler(), target = new THREE.Vector3();
   let currentGear = null, pose = null, disposed = false, lastSeatY = 0.45;

@@ -1,5 +1,6 @@
 // Procedural apartment props. Shared materials/geometries, twelve removable pizza slices.
 import { createAvatar } from './multiplayer/avatars.js';
+import { courierPose } from './courier-pose.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 export function createSocialModels({ THREE: T, scene, spec, locations }) {
   const root = new T.Group(); root.name = 'social_activities'; root.userData.rasterOnly = true; root.userData.networkEffect = true; scene.add(root);
@@ -11,20 +12,26 @@ export function createSocialModels({ THREE: T, scene, spec, locations }) {
     const object = new T.Mesh(geometry, material); object.position.set(...position); if (size) object.scale.set(...size); object.receiveShadow = true; group.add(object); return object;
   }
   const box = (group, material, position, size) => mesh(group, cube, material, position, size);
+  const labelMaterials = new Map();
   function label(group, text, width, height, position, flat = false) {
-    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 256;
-    const c = canvas.getContext('2d'); c.fillStyle = '#108b46'; c.fillRect(0, 0, 512, 256); c.fillStyle = '#fff9df';
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = 'bold 64px Arial'; c.fillText(text, 256, 116, 480);
-    c.font = '24px Arial'; c.fillText('DOBRZE, ŻE JESTEŚ', 256, 187);
-    const texture = own(new T.CanvasTexture(canvas)); texture.colorSpace = T.SRGBColorSpace;
-    const face = own(new T.MeshStandardMaterial({ map: texture, roughness: 0.8, side: T.DoubleSide }));
-    const plane = mesh(group, own(new T.PlaneGeometry(width, height)), face, position); if (flat) plane.rotation.x = -Math.PI / 2; return plane;
+    let face = labelMaterials.get(text);
+    if (!face) {
+      const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 256;
+      const c = canvas.getContext('2d'); c.fillStyle = '#108b46'; c.fillRect(0, 0, 512, 256); c.fillStyle = '#fff9df';
+      c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = 'bold 64px Arial'; c.fillText(text, 256, 116, 480);
+      c.font = '24px Arial'; c.fillText('DOBRZE, ŻE JESTEŚ', 256, 187);
+      const texture = own(new T.CanvasTexture(canvas)); texture.colorSpace = T.SRGBColorSpace;
+      face = own(new T.MeshBasicMaterial({ map: texture, side: T.DoubleSide, toneMapped: false })); labelMaterials.set(text, face);
+    }
+    const plane = mesh(group, own(new T.PlaneGeometry(width, height)), face, position); if (flat) plane.rotation.set(-Math.PI / 2, 0, Math.PI); return plane;
   }
   const pizza = new T.Group(); pizza.name = 'social_pizza'; root.add(pizza);
   const size = spec.pizza.size, h = spec.pizza.height;
   box(pizza, cardboard, [0, 0.006, 0], [size, 0.012, size]);
   box(pizza, cream, [0, 0.013, 0], [size - 0.012, 0.002, size - 0.012]);
   for (const s of [-1, 1]) { box(pizza, cardboard, [s * size / 2, h / 2, 0], [0.006, h, size]); box(pizza, cardboard, [0, h / 2, s * size / 2], [size, h, 0.006]); }
+  for (const x of [-0.09, 0, 0.09]) box(pizza, dark, [x, h * 0.55, size / 2 + 0.0035], [0.026, 0.007, 0.001]);
+  label(pizza, 'żabka pizza', size * 0.66, h * 0.72, [0, h / 2, size / 2 + 0.004]);
   const lid = new T.Group(); lid.position.set(0, h, -size / 2); pizza.add(lid);
   box(lid, cardboard, [0, 0, size / 2], [size + 0.008, 0.008, size]);
   label(lid, 'żabka pizza', size * 0.82, size * 0.55, [0, 0.005, size / 2], true);
@@ -59,14 +66,15 @@ export function createSocialModels({ THREE: T, scene, spec, locations }) {
   }
   const screen = own(new T.MeshBasicMaterial({ color: '#77ebaf' })); box(radio, screen, [0, rh * 0.63, d / 2 + 0.006], [0.09, 0.045, 0.003]);
   box(radio, green, [0, rh * 0.24, d / 2 + 0.007], [0.027, 0.027, 0.016]);
-  const courier = createAvatar({ slot: 2, name: spec.courier.label, host: false }); courier.root.position.fromArray(locations.courier);
-  // The landing has no daylight probes. Vertex colours remain readable there
-  // without adding another light/shader variant to the apartment renderer.
-  const courierMaterial = own(new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
-  courier.root.traverse(object => { if (object.isMesh && object.material?.vertexColors) object.material = courierMaterial; });
-  courier.root.name = 'social_courier'; root.add(courier.root); label(courier.root, 'żabka', 0.28, 0.13, [0, 1.15, -0.143]).rotation.y = Math.PI;
-  const bag = box(courier.root, green, [0, 1.05, -0.26], [0.45, 0.48, 0.22]); bag.name = 'delivery_bag';
-  label(courier.root, 'żabka', 0.30, 0.16, [0, 1.07, -0.373]).rotation.y = Math.PI;
+  const courier = createAvatar({ appearance: spec.courier.appearance, showNameplate: false });
+  courier.root.name = 'social_courier'; courier.root.position.fromArray(locations.courier); root.add(courier.root);
+  // Branding follows the articulated jacket/head; the single real box stays in both hands.
+  const body = courier.root.getObjectByName('avatar_body'), head = courier.root.getObjectByName('avatar_head');
+  label(body, 'żabka', 0.125, 0.06, [-0.10, 1.31 - body.position.y, -0.135]).rotation.y = Math.PI;
+  label(head, 'żabka', 0.13, 0.058, [0, 0.29, -0.129]).rotation.y = Math.PI;
+  const bag = box(courier.root, green, [0.29, 0.95, -0.01], [0.17, 0.39, 0.26]); bag.name = 'delivery_bag';
+  box(courier.root, dark, [0.29, 1.15, -0.01], [0.18, 0.02, 0.27]);
+  label(courier.root, 'żabka', 0.145, 0.105, [0.29, 0.96, -0.143]).rotation.y = Math.PI;
   const showerGeometry = own(new T.BufferGeometry()), rain = new Float32Array(96 * 3);
   showerGeometry.setAttribute('position', new T.BufferAttribute(rain, 3));
   const dropCanvas = document.createElement('canvas'); dropCanvas.width = dropCanvas.height = 64;
@@ -88,6 +96,7 @@ export function createSocialModels({ THREE: T, scene, spec, locations }) {
     pizza.visible = !!state.pizza;
     if (state.pizza) {
       pizza.position.fromArray(state.pizza.position);
+      pizza.rotation.y = state.pizza.location === 'courier' && state.courier ? courierPose(spec, locations, state.courier, state.time).yaw : 0;
       const target = state.pizza.open ? -Math.PI * 0.65 : 0;
       lid.rotation.x += (target - lid.rotation.x) * Math.min(1, dt * 12);
       slices.forEach((slice, i) => { slice.visible = lid.rotation.x < -0.1 && i < state.pizza.remaining; });
@@ -111,9 +120,9 @@ export function createSocialModels({ THREE: T, scene, spec, locations }) {
     bites.count = count; if (count) bites.instanceMatrix.needsUpdate = true;
     courier.root.visible = !!state.courier;
     if (state.courier) {
-      const leave = state.courier.leaving === null ? 0 : Math.min(1, (state.time - state.courier.leaving) / 3);
-      courier.root.position.set(locations.courier[0] + leave * 1.6, 0, locations.courier[2]);
-      courier.update({ time: state.time, speed: leave ? 1 : 0, weapon: 'none', held: 'pizza' });
+      const pose = courierPose(spec, locations, state.courier, state.time), phase = state.courier.phase;
+      courier.root.position.fromArray(pose.position); courier.root.rotation.y = pose.yaw;
+      courier.update({ heldGrip: { center: spec.courier.boxOffset, width: spec.pizza.size }, time: state.time, speed: ['arriving', 'leaving'].includes(phase) ? 0.7 : 0, weapon: 'none', held: state.pizza?.location === 'courier' || phase === 'handoff' ? 'pizza' : null, aimPitch: phase === 'thanks' ? Math.sin((state.time - state.courier.phaseAt) * Math.PI) * 0.18 : 0 });
     }
     shower.visible = !!state.shower.owner && !!showerPoint;
     if (shower.visible) {

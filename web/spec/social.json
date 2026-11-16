@@ -21,7 +21,29 @@
   "courier": {
     "outside": 0.25,
     "color": "#169b55",
-    "label": "ŻABKA · PIZZA"
+    "label": "ŻABKA · PIZZA",
+    "arriveSeconds": 1.1,
+    "handoffSeconds": 0.65,
+    "thanksSeconds": 1.1,
+    "leaveSeconds": 1.4,
+    "clearSeconds": 2,
+    "sideStep": 0.8,
+    "offerStep": 0.08,
+    "boxOffset": [
+      0,
+      1.16,
+      -0.42
+    ],
+    "appearance": {
+      "id": "courier",
+      "shirt": "#16834e",
+      "accent": "#105d3b",
+      "pants": "#25312d",
+      "skin": "#d9a27c",
+      "hair": "#42362f",
+      "style": "courier",
+      "head": "cap"
+    }
   },
   "radio": {
     "position": [

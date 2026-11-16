@@ -586,7 +586,7 @@ tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => st
 paper = createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction });
 // Register item capture before seating: E on a small prop must not also sit on the sofa behind it.
 party = createParty({ THREE, scene, camera, renderer, canvas, pipe, plan, site, getWalk: () => walk, getSeats: () => seats,
-  getVM: () => viewmodel, getTV: () => tv, getPaper: () => paper, getDoors: () => doors,
+  getVM: () => viewmodel, getTV: () => tv, getPaper: () => paper, getDoors: () => doors, getSocial: () => social,
   getAnchors: () => furnitureAnchors(furn, state, plan, kit), requestRender });
 seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender, getState: () => state,
   getFurniture: () => furn, getDecor: () => decor, getDoors: () => doors, getTV: () => tv, seating: socialSpec.seating });

@@ -61,7 +61,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
   getWalk, getDoors, getHunt, getObstacles }) {
   const mods = {};
   let started = false, disposed = false, capturing = false, live = false, frameNo = 0;
-  let network = null, networkSnapshot = null;
+  let network = null, networkSnapshot = null, entryVisitor = false;
   const externalPending = new Map();
 
   // ---------- звук ----------
@@ -247,6 +247,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
       try {
         const m = await p; if (disposed) return; mods[id] = m.create(core);
         mods[id].setNetwork?.(network);
+        if (id === 'landing') mods[id].setVisitor?.(entryVisitor);
         if (networkSnapshot?.modules?.[id]) mods[id].applyNetworkSnapshot?.(networkSnapshot.modules[id]);
       } catch (e) { console.warn('life:', id, e); throw e; }
     }
@@ -295,7 +296,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
     syncLive();
   }
   function snapshot() {
-    return { live, modules: Object.fromEntries(Object.entries(mods).filter(([, m]) => m.snapshot).map(([id, m]) => [id, m.snapshot()])) };
+    return { live, collision: colliders(), modules: Object.fromEntries(Object.entries(mods).filter(([, m]) => m.snapshot).map(([id, m]) => [id, m.snapshot()])) };
   }
   function applyNetworkSnapshot(value) {
     if (!value || !network || network.authority) return;
@@ -338,6 +339,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
     ready,
     get muted() { return !!prefs.mute; },
     update, colliders, dispose, setNetwork, snapshot, networkSnapshot: snapshot, applyNetworkSnapshot, traceExternalShot, resolveExternalShot,
+    setEntryVisitor(on) { entryVisitor = !!on; mods.landing?.setVisitor?.(entryVisitor); },
     setShowerControlled(on) { mods.water?.setShowerControlled(on); },
     get debug() { return { mods, prefs, core, ring: () => mods.neighbours?.ring(), water: id => mods.water?.start(id), mouse: () => mods.mice?.spawn(true) }; },
   };

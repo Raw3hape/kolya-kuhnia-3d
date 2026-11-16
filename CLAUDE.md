@@ -135,7 +135,8 @@
 - Пицца/курьер Żabka, радио, ручной душ, два места дивана и поза лёжа: [docs/social.md](docs/social.md).
   `spec/social.json` — конфигурация, `social-state.js` — чистая симуляция solo/Worker;
   `social.js`/`social-models.js`/`social-audio.js` — адаптеры. Радио следует за тумбой;
-  три локальные авторские композиции генерирует `tools/build_radio.py`.
+  Доставка/фазы/защита площадки/QA: [docs/courier-delivery.md](docs/courier-delivery.md).
+  Три локальные авторские композиции генерирует `tools/build_radio.py`.
 - Пиво, кальян, дудка, новые мишени и близкое стадо: [docs/party.md](docs/party.md).
   `party-state.js` — общие чистые правила; `party.js` — ввод/представление; позиции и лимиты в `spec/party*.json`.
 - Проверка в браузере: встроенная панель Claude теряет WebGL после тяжёлой трассировки; надёжнее chrome-devtools MCP

@@ -508,10 +508,11 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     return true;
   }
 
-  function collisionSnapshot() {
+  function collisionSnapshot({ includeAmbient = true } = {}) {
     refreshObstacles(true);
-    return { boxes: [...col.boxes, ...extra.filter(b => b.ax === undefined)],
-      segs: [...col.segs, ...extra.filter(b => b.ax !== undefined)], extra: extra.map(b => ({ ...b })) };
+    const obstacles = extra.filter(b => includeAmbient || b.scope !== 'ambient');
+    return { boxes: [...col.boxes, ...obstacles.filter(b => b.ax === undefined)],
+      segs: [...col.segs, ...obstacles.filter(b => b.ax !== undefined)], extra: obstacles.map(b => ({ ...b })) };
   }
 
   return {

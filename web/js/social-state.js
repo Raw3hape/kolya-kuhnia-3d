@@ -1,4 +1,5 @@
 // Pure shared rules. The solo adapter and host Worker use the same clock and commands.
+import { courierPose, deliveryEase } from './courier-pose.js';
 const clone = value => structuredClone(value);
 const finite3 = value => Array.isArray(value) && value.length === 3 && value.every(Number.isFinite);
 export function socialLocations(plan, spec) {
@@ -6,17 +7,24 @@ export function socialLocations(plan, spec) {
   const x = (door.x0 + door.x1) / 2, z = door.z0;
   return { door: door.id, delivery: [x, 0.01, z - spec.pizza.deliveryInset], courier: [x, 0, door.z1 + spec.courier.outside] };
 }
-export function createSocialSimulation({ spec, plan, blocked = () => false, validatePlacement = () => true }) {
+export function createSocialSimulation({ spec, plan, blocked = () => false, validatePlacement = () => true, isEntryOpen = () => false }) {
   const rules = spec.rules, locations = socialLocations(plan, spec);
   let time = 0, nextDelivery = rules.firstDelivery, serial = 0, bell = 0, nextBell = 0;
-  let courier = null, pizza = null, shower = { owner: null, until: 0 };
+  let courier = null, pizza = null, shower = { owner: null, until: 0 }, landingReserved = false, landingClearAt = 0;
   let radio = { station: 0, playing: false, volume: spec.radio.volume, since: 0, position: [...spec.radio.position], yaw: spec.radio.yaw || 0 };
   const cooldowns = new Map();
   const eye = player => [player.x, player.eyeY ?? (player.y || 0) + 1.68, player.z];
   const near = (player, position) => Math.hypot(...eye(player).map((v, i) => v - position[i])) <= rules.reach && !blocked(player, position);
-  const acceptDelivery = () => { if (courier && courier.leaving === null) { courier.leaving = time; courier.until = time + 3; } };
+  const setPhase = phase => { courier.phase = phase; courier.phaseAt = time; };
+  function startLeaving() { setPhase('leaving'); courier.leaving = time; courier.until = time + spec.courier.leaveSeconds; }
+  const transferBusy = () => !!pizza?.owner && time < (pizza.transferUntil || 0);
+  function courierWaiting() { setPhase(isEntryOpen() ? 'offering' : 'waiting'); courier.recipient = null; }
   function releaseItem(id) {
-    if (pizza?.owner === id) { pizza.owner = null; pizza.position = [...pizza.safePosition]; }
+    if (pizza?.owner !== id) return;
+    if (transferBusy() && courier?.phase === 'handoff' && courier.recipient === id) {
+      pizza.owner = null; pizza.location = 'courier'; pizza.transferUntil = 0; courierWaiting();
+      pizza.position = courierPose(spec, locations, courier, time).box;
+    } else { pizza.owner = null; pizza.location = 'placed'; pizza.transferUntil = 0; pizza.position = [...pizza.safePosition]; }
   }
   function release(id) {
     releaseItem(id);
@@ -42,21 +50,26 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
       shower = { owner: player.id, until: time + rules.showerSeconds, point: [...action.point] }; return true;
     }
     if (!pizza) return false;
+    if (verb === 'receive') {
+      if (player.seat || pizza.location !== 'courier' || pizza.owner || courier?.phase !== 'offering' || !isEntryOpen() || !near(player, pizza.position)) return false;
+      pizza.owner = player.id; pizza.location = 'held'; pizza.open = false; pizza.transferFrom = [...pizza.position]; pizza.transferAt = time; pizza.transferUntil = time + spec.courier.handoffSeconds;
+      courier.recipient = player.id; setPhase('handoff'); return true;
+    }
+    if (pizza.location === 'courier' || transferBusy()) return false;
     if (verb === 'take') {
       if (pizza.owner || !near(player, pizza.position)) return false;
-      pizza.owner = player.id; pizza.open = false; pizza.safePosition = [...pizza.position];
-      acceptDelivery();
+      pizza.owner = player.id; pizza.location = 'held'; pizza.open = false; pizza.safePosition = [...pizza.position];
       return true;
     }
     if (verb === 'place') {
       if (pizza.owner !== player.id || !finite3(action.point) || action.point[1] < 0 || action.point[1] > 1.65 ||
         !near(player, action.point)) return false;
       const support = validatePlacement(action.point, 'pizza'); if (!support) return false;
-      pizza.owner = null; pizza.position = [...action.point]; pizza.safePosition = [...action.point]; pizza.support = support === true ? null : clone(support); return true;
+      pizza.owner = null; pizza.location = 'placed'; pizza.position = [...action.point]; pizza.safePosition = [...action.point]; pizza.support = support === true ? null : clone(support); return true;
     }
-    if (verb === 'return') { if (pizza.owner !== player.id) return false; pizza.owner = null; pizza.position = [...pizza.safePosition]; return true; }
+    if (verb === 'return') { if (pizza.owner !== player.id) return false; pizza.owner = null; pizza.location = 'placed'; pizza.position = [...pizza.safePosition]; return true; }
     if (!near(player, pizza.position) && pizza.owner !== player.id) return false;
-    if (verb === 'open') { if (pizza.owner && pizza.owner !== player.id) return false; pizza.open = !pizza.open; acceptDelivery(); return true; }
+    if (verb === 'open') { if (pizza.owner && pizza.owner !== player.id) return false; pizza.open = !pizza.open; return true; }
     if (verb === 'eat') {
       if (!pizza.open || pizza.owner || pizza.remaining <= 0 || time < (cooldowns.get(player.id) || 0)) return false;
       pizza.remaining--; cooldowns.set(player.id, time + rules.eatSeconds);
@@ -69,22 +82,41 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
   function step(dt, players = []) {
     time += Math.max(0, Math.min(dt, 0.1));
     if (!pizza && !courier && time >= nextDelivery) {
-      courier = { arrived: time, until: time + rules.courierWait, leaving: null };
-      pizza = { id: ++serial, owner: null, position: [...locations.delivery], safePosition: [...locations.delivery], open: false, remaining: rules.slices, eaters: [], emptyAt: null };
+      courier = { arrived: time, phase: 'arriving', phaseAt: time, until: time + spec.courier.arriveSeconds + rules.courierWait, leaving: null, recipient: null };
+      landingReserved = true;
+      pizza = { id: ++serial, location: 'courier', owner: null, position: courierPose(spec, locations, courier, time).box, safePosition: [...locations.delivery], open: false, remaining: rules.slices, eaters: [], emptyAt: null, transferUntil: 0 };
       bell++; nextBell = time + rules.bellEvery;
     }
-    if (courier && courier.leaving === null && time >= nextBell && time < courier.until) { bell++; nextBell = time + rules.bellEvery; }
-    if (courier && time >= courier.until) { courier = null; nextDelivery = time + rules.deliveryEvery; }
+    if (courier) {
+      const elapsed = time - courier.phaseAt;
+      if (courier.phase === 'arriving' && elapsed >= spec.courier.arriveSeconds) courierWaiting();
+      if (['offering', 'waiting'].includes(courier.phase)) {
+        if ((courier.phase === 'offering') !== !!isEntryOpen()) courierWaiting();
+        if (time >= courier.until) startLeaving();
+        else if (time >= nextBell) { bell++; nextBell = time + rules.bellEvery; }
+      } else if (courier.phase === 'handoff' && !transferBusy()) setPhase('thanks');
+      else if (courier.phase === 'thanks' && elapsed >= spec.courier.thanksSeconds) startLeaving();
+      else if (courier.phase === 'leaving' && elapsed >= spec.courier.leaveSeconds) {
+        if (pizza?.location === 'courier') pizza = null;
+        courier = null; nextDelivery = time + rules.deliveryEvery; landingClearAt = time + spec.courier.clearSeconds;
+      }
+    }
+    if (courier && pizza?.location === 'courier') pizza.position = courierPose(spec, locations, courier, time).box;
+    if (!courier && time >= landingClearAt && !isEntryOpen()) landingReserved = false;
     if (pizza?.owner) {
       const owner = players.find(p => p.id === pizza.owner);
       if (!owner) release(pizza.owner);
-      else pizza.position = [owner.x - Math.sin(owner.lookYaw ?? owner.yaw ?? 0) * 0.42, (owner.eyeY ?? 1.68) - 0.5, owner.z - Math.cos(owner.lookYaw ?? owner.yaw ?? 0) * 0.42];
+      else {
+        const held = [owner.x - Math.sin(owner.lookYaw ?? owner.yaw ?? 0) * 0.42, (owner.eyeY ?? 1.68) - 0.5, owner.z - Math.cos(owner.lookYaw ?? owner.yaw ?? 0) * 0.42];
+        const t = transferBusy() ? deliveryEase((time - pizza.transferAt) / spec.courier.handoffSeconds) : 1;
+        pizza.position = held.map((n, i) => t < 1 ? pizza.transferFrom[i] + (n - pizza.transferFrom[i]) * t : n);
+      }
     }
     if (pizza?.emptyAt !== null && pizza && !pizza.owner && time - pizza.emptyAt > rules.emptySeconds) { pizza = null; nextDelivery = time + rules.deliveryEvery; }
     if (shower.owner && (time >= shower.until || !players.some(p => p.id === shower.owner && Math.hypot(p.x - shower.point[0], p.z - shower.point[2]) < rules.showerReach))) shower = { owner: null, until: 0 };
     for (const [id, until] of cooldowns) if (time > until + 5) cooldowns.delete(id);
   }
-  return { step, command, release, releaseItem, heldBy: id => pizza?.owner === id,
+  return { step, command, release, releaseItem, heldBy: id => pizza?.owner === id, reservesLanding: () => landingReserved,
     reconcileSupport(lookup) {
       if (!pizza?.support) return;
       const before = pizza.support.bounds, after = lookup(pizza.support.id), margin = spec.pizza.size / 2 - 0.015;
@@ -99,6 +131,6 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
       pizza.safePosition = position; if (!pizza.owner) pizza.position = [...position];
     },
     setRadioPose(pose) { const position = finite3(pose?.position) ? [...pose.position] : null; radio = { ...radio, position, yaw: Number.isFinite(pose?.yaw) ? pose.yaw : 0, playing: position ? radio.playing : false }; },
-    snapshot: () => clone({ time, nextDelivery, serial, bell, courier, pizza, shower, radio }),
-    restore(value) { if (value) { ({ time, nextDelivery, serial, bell, courier, pizza, shower, radio } = clone(value)); cooldowns.clear(); } } };
+    snapshot: () => clone({ time, nextDelivery, serial, bell, nextBell, courier, pizza, shower, radio, landingReserved, landingClearAt, entryOpen: !!isEntryOpen() }),
+    restore(value) { if (value) { ({ time, nextDelivery, serial, bell, nextBell = 0, courier, pizza, shower, radio, landingReserved = false, landingClearAt = 0 } = clone(value)); cooldowns.clear(); } } };
 }
