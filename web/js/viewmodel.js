@@ -82,6 +82,7 @@ export const WEAPONS = [
 const VM = {
   fovV: 50,          // вертикальный угол камеры рук (на портретном экране — так, чтобы по ширине было столько же)
   raise: 0.35,       // руки поднимаются при входе и смене оружия, с
+  fireRaise: 0.7,    // доля подъёма, с которой принимается выстрел
   settle: 2.5,       // через сколько секунд покоя затихает дыхание
   hold: 180,         // мс удержания без движения мыши, после которых автомат начинает очередь
   drag: 5,           // px: дальше — это взгляд, не выстрел
@@ -294,6 +295,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
       recV += (-320 * rec - 26 * recV) * s; rec += recV * s;
     }
     raise = Math.min(1, raise + dt / VM.raise);
+    syncFireReadiness();
     flash = Math.max(0, flash - dt);
     const busy = mv || Math.abs(dYaw) + Math.abs(dPitch) > 1e-4 || holding || flash > 0 || raise < 1 || act || clipName || bloom > 0 || (adsK > 0 && adsK < 1);
     quiet = busy ? 0 : quiet + dt;
@@ -346,7 +348,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   }
   function fire() {
     const w = W(), now = performance.now();
-    if (!w.rate || !shown || raise < 0.7 || aimed() || seated() || act) return false;   // «без оружия» не стреляет
+    if (!readyToFire() || aimed()) return false;
     if (now - lastShot < 1000 / w.rate) return false;
     const a = ammo[w.id];
     if (a.mag <= 0) { dry(); return false; }
@@ -462,6 +464,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   const aimBtn = floatButton('kvm-aim', 'Прицел', '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M2 8V3.5A1.5 1.5 0 0 1 3.5 2H8M14 2h4.5A1.5 1.5 0 0 1 20 3.5V8M20 14v4.5a1.5 1.5 0 0 1-1.5 1.5H14M8 20H3.5A1.5 1.5 0 0 1 2 18.5V14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M11 7.5v7M7.5 11h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>');
   let btnId = null;
   fireBtn.addEventListener('pointerdown', e => {
+    if (!readyToFire()) return;
     e.preventDefault();
     btnId = e.pointerId;
     try { fireBtn.setPointerCapture(e.pointerId); } catch { /* не критично */ }
@@ -498,7 +501,9 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   function hud(empty = false) {
     const w = W(), a = ammo[w.id];
     if (!a) return;
-    const note = act && act.kind !== 'cycle' ? 'Перезарядка…' : a.mag === 0 ? (a.reserve ? 'R — перезарядить' : 'Патроны кончились') : '';
+    const note = act ? (act.kind === 'cycle' ? 'Передёргиваем затвор…' : 'Перезарядка…') :
+      shown && (mounted !== weapon || raise < VM.fireRaise) ? 'Поднимаем оружие…' :
+      a.mag === 0 ? (a.reserve ? 'R — перезарядить' : 'Патроны кончились') : '';
     const k = `${w.id}|${a.mag}|${a.reserve}|${note}|${empty}`;
     if (k === hudKey) return;
     hudKey = k;
@@ -515,11 +520,21 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   function hudProgress() { if (act.kind !== 'cycle') hBar.style.transform = `scaleX(${Math.min(1, Math.max(0, act.t / act.dur)).toFixed(3)})`; }
 
   // классы на body (ui.js следит за ними) и видимость плавающих элементов
+  function readyToFire() {
+    return !!W().rate && shown && mounted === weapon && raise >= VM.fireRaise && !act && !seated();
+  }
+  function syncFireReadiness() {
+    const disabled = !readyToFire();
+    if (fireBtn.disabled === disabled) return;
+    fireBtn.disabled = disabled; fireBtn.setAttribute('aria-busy', String(disabled));
+    if (shown) hud();
+  }
   function syncDom() {
     for (const w of WEAPONS) document.body.classList.toggle('kvm-w-' + w.id, w.id !== 'none' && weapon === w.id);
     if (!shown) document.body.classList.remove('kvm-ads');
     const touch = touchSeen || coarse();
     fireBtn.hidden = aimBtn.hidden = !(shown && touch);
+    syncFireReadiness();
     aimBtn.classList.toggle('on', aimHeld);
     aimBtn.setAttribute('aria-pressed', String(aimHeld));
     cross.hidden = hudEl.hidden = !shown;
@@ -618,6 +633,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
 
   return {
     update, setWeapon, setSound, setAim, reload, link, dispose,
+    get fireReady() { return readyToFire(); },
     setNetwork(adapter) { networkAdapter = adapter || null; impacts.setNetwork(!!networkAdapter); },
     applyNetworkShot: impacts.applyNetworkShot,
     applyBroken: impacts.applyBroken,
@@ -790,6 +806,7 @@ function injectStyle() {
   width: 56px; height: 56px; color: var(--kw-ink); background: color-mix(in srgb, var(--kw-sheet) 88%, transparent); }
 .kvm-aim.on { color: var(--kw-accent-ink); background: var(--kw-accent); border-color: var(--kw-accent); }
 .kvm-fire:active, .kvm-aim:active { transform: scale(0.94); }
+.kvm-fire:disabled { opacity: 0.45; cursor: wait; }
 .kvm-fire:focus-visible, .kvm-aim:focus-visible, .kvm-hud:focus-visible { outline: 2px solid var(--kw-accent); outline-offset: 3px; }
 .kvm-fire[hidden], .kvm-aim[hidden], .kvm-hud[hidden], .kvm-cross[hidden] { display: none; }
 .kvm-cross { position: fixed; z-index: 5; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; --g: 6px; transition: opacity 0.12s ease; }
