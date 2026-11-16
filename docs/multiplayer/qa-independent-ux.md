@@ -1,5 +1,7 @@
 # Independent UX QA — published production
 
+Final animated release/capacity evidence and the final production readiness fix are recorded in [qa-final-production-capacity-ux.md](qa-final-production-capacity-ux.md). The dated baseline findings below are preserved.
+
 2026-11-16. Target: https://kolya-kuhnia-3d.vercel.app. Chrome 157 headless, real WebGL and WebRTC, isolated host/guest browser contexts. Desktop 1440×900; touch emulation 390×844 and 844×390. At most two WebGL pages in this lane. Main interactive run: 11 min 23 s.
 
 I did not read `VALIDATION.md`. I began with the visible UI, then used read-only `__kitchen` telemetry to measure movement, room state and weapon counters. No runtime files or deployment were changed. Browser screenshots were visually reviewed, then removed as temporary captures.
