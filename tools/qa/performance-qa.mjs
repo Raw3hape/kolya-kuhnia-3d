@@ -9,7 +9,8 @@ const url = process.env.QA_URL || 'http://127.0.0.1:8776/';
 const output = path.resolve(process.env.QA_OUTPUT || 'output/playwright/performance');
 fs.mkdirSync(output, { recursive: true });
 const cpuRate = role => Math.max(1, Math.min(8, Number(process.env[role==='guest'?'QA_GUEST_CPU_RATE':'QA_HOST_CPU_RATE'] || process.env.QA_CPU_RATE || 1)));
-const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], cpuRates:{host:cpuRate('host'),guest:cpuRate('guest')}, results: [], errors: [], consoleDiagnostics: [], cleanup: false };
+const disableMultiDraw=process.env.QA_NO_MULTIDRAW==='1';
+const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], cpuRates:{host:cpuRate('host'),guest:cpuRate('guest')}, disableMultiDraw, results: [], errors: [], consoleDiagnostics: [], cleanup: false };
 const pause = ms => new Promise(r => setTimeout(r, ms));
 let browser;
 const watchdog = setTimeout(() => { browser?.close().finally(() => process.exit(2)); }, 240000);
@@ -17,6 +18,7 @@ function save() { fs.writeFileSync(path.join(output, report.label + '.json'), JS
 async function page(target = url, role = 'host') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript(() => { localStorage.setItem('kitchen-ui-v1', JSON.stringify({ quality: 'eco', seen: { intro: true } })); });
+  if(disableMultiDraw)await context.addInitScript(()=>{const proto=WebGL2RenderingContext.prototype,original=proto.getExtension;proto.getExtension=function(name){return name==='WEBGL_multi_draw'?null:original.call(this,name);};});
   const p = await context.newPage();
   p.on('pageerror', e => { if (report.errors.length < 20) report.errors.push(e.message); });
   p.on('console', m => {
