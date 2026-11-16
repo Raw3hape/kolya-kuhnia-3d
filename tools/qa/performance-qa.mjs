@@ -141,6 +141,9 @@ try {
     report.responsive = await guest.evaluate(()=>({width:innerWidth,canvas:__kitchen.renderer.domElement.width,connected:__kitchen.multiplayer.client.connected}));
     save();
   }
+  await Promise.all([host,guest].map(p=>p.waitForFunction(()=>__kitchen.multiplayer.client.connected,null,{timeout:45000})));
+  report.finalState=await Promise.all([host,guest].map(p=>p.evaluate(()=>({connected:__kitchen.multiplayer.client.connected,players:__kitchen.multiplayer.client.state.players.length,status:__kitchen.multiplayer.client.status}))));
+  if(!report.finalState.every(s=>s.connected&&s.players===2))throw new Error('Final multiplayer state lost a player');
   await host.evaluate(()=>__kitchen.multiplayer.client.leave());
 } catch (error) { report.failure = error.stack; console.error(error.stack); process.exitCode=1; }
 finally { clearTimeout(watchdog); await browser?.close(); report.cleanup=true; if(report.failure || report.errors.length) process.exitCode=1; save(); }
