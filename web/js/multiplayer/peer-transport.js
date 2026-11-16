@@ -39,7 +39,7 @@ async function hostIdentity(room) {
 function loadPeer(scriptURL) {
   if (globalThis.Peer) return Promise.resolve(globalThis.Peer);
   if (!libraryPromise) libraryPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script'); script.src = scriptURL; script.async = true;
+    const script = document.createElement('script'); script.src = scriptURL; script.async = true; script.fetchPriority = 'high';
     const timeout = setTimeout(() => { script.remove(); reject(new Error('Не удалось загрузить совместную игру. Обновите страницу.')); }, 10000);
     script.onload = () => { clearTimeout(timeout); globalThis.Peer ? resolve(globalThis.Peer) : reject(new Error('Библиотека совместной игры недоступна.')); };
     script.onerror = () => { clearTimeout(timeout); script.remove(); reject(new Error('Не удалось загрузить совместную игру. Проверьте подключение.')); };

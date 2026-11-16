@@ -26,7 +26,12 @@ Set `QA_URL`, `PLAYWRIGHT_MODULE`, and `QA_OUTPUT` to repeat against a release.
 Production `e1fcc5a`, `dpl_DoYwTraAPAxkQKeF1s9QbMLxXuSe`: all ten checks pass
 at the public URL, including actual late guest and mobile tap. The first run
 timed out waiting for the guest connection; a fresh full run passed. Its cause
-was not isolated, so this is not evidence of universal network connectivity.
+was later isolated on `3fdbee3`: the guest's deferred PeerJS script exceeded
+its ten-second loader timeout while apartment assets were loading. The small
+first-party runtime now loads with high priority before `main.js`; its dynamic
+fallback also requests high priority. An eleventh browser check confirms the
+runtime exists before the first multiplayer action. General NAT/relay coverage
+still follows the existing [transport contract](multiplayer/TRANSPORT.md).
 The subsequent room-creation fix preserves already-rearranged item homes;
 its transport contract is covered by the client handshake test.
 

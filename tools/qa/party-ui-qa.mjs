@@ -37,6 +37,7 @@ async function screenshot(p,name){await p.screenshot({path:path.join(output,name
 try{
   browser=await chromium.launch({channel:'chrome',headless:true,args:['--mute-audio','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
   const host=await page();await host.waitForFunction(()=>__kitchen.walk.walking);
+  check('network runtime is ready before the first multiplayer action',await host.evaluate(()=>typeof window.Peer==='function'));
   await host.locator('.hide-btn').click().catch(()=>{});
   // Fixture placement uses the existing public walkthrough; every take/use/look below is native input.
   await host.evaluate(()=>{__kitchen.viewmodel.setWeapon('none');__kitchen.walk.enter({x:1.2,z:1.74},Math.PI*1.5);});await host.waitForTimeout(1000);
