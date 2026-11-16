@@ -17,7 +17,11 @@ async function page(target = url, mobile = false) {
   // Accelerate only delivery waiting; transport, physics, actions and all placement checks are unchanged.
   await context.route('**/spec/social.json', async route => { const response = await route.fetch(), spec = await response.json(); spec.rules.firstDelivery = 2; await route.fulfill({ response, json: spec }); });
   const p = await context.newPage(); p.setDefaultTimeout(12000); p.on('pageerror', error => report.errors.push(error.message));
-  await p.goto(target, { waitUntil: 'domcontentloaded' }); await awaitPlayable(p);
+  await p.goto(target, { waitUntil: 'domcontentloaded' });
+  await p.waitForFunction(() => window.__kitchen?.social?.debug.ready, null, { timeout: 90000 }); await p.waitForTimeout(500);
+  const preparation = await p.evaluate(() => ({ status: __kitchen.startup.status, time: __kitchen.social.debug.state.time }));
+  check('delivery waits for complete startup', preparation.status !== 'loading' || preparation.time === 0, preparation);
+  await awaitPlayable(p);
   await p.waitForFunction(() => __kitchen.social.debug.ready && __kitchen.party?.spec);
   await p.getByRole('button', { name: 'Понятно', exact: true }).click({ timeout: 700 }).catch(() => {});
   return p;

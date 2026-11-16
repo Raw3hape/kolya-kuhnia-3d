@@ -578,7 +578,7 @@ doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, wa
 // после первого вида (LOAD): звери и их спецификация не нужны первому кадру; до этого getHunt() — null
 afterRoom(() => { hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site }); });
 viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getWalk: () => walk, getHunt: () => hunt });
-social = createSocial({ THREE, scene, camera, canvas, pipe, plan, bathSpec, spec: socialSpec, getWalk: () => walk, getSeats: () => seats, getVM: () => viewmodel,
+social = createSocial({ THREE, scene, camera, canvas, pipe, plan, bathSpec, spec: socialSpec, canPlay: () => startup.status === 'ready', getWalk: () => walk, getSeats: () => seats, getVM: () => viewmodel,
   getFurniture: () => furn, getDoors: () => doors, getParty: () => party, getTV: () => tv, getPaper: () => paper, getLife: () => life, requestRender });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
 tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction });   // ТВ, ноутбуки, телефон (в руке — handheld.js: с ним можно сесть)

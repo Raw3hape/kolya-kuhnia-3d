@@ -17,7 +17,7 @@ addHelp(
   { mode: 'seat', topic: 'social', keys: ['ЛКМ'], text: 'можно есть пиццу, сидя рядом с открытой коробкой', order: 46 },
 );
 const typing = event => event.target?.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(event.target?.tagName);
-export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bathSpec, spec, getFurniture, getWalk, getSeats, getVM, getDoors, getParty, getTV, getPaper, getLife, requestRender }) {
+export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bathSpec, spec, canPlay, getFurniture, getWalk, getSeats, getVM, getDoors, getParty, getTV, getPaper, getLife, requestRender }) {
   let sim, state, models, audio, locations, disposed = false, network = null, savedSolo = null, capturing = false;
   const offLive = pipe.onLive?.(live => { capturing = !live; if (models) models.root.visible = live && !pipe.photo; });
   let target = null, pending = false, generation = 0, aimClock = 0, lastBell = null, lastUI = '', noticeUntil = 0, notice = '', players = [], lastCommand = null;
@@ -38,7 +38,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
   }
   const selfId = () => network?.selfId?.() || 'solo';
   const held = () => state?.pizza?.owner === selfId();
-  const active = () => (getWalk()?.walking || getSeats()?.active) && !pipe.photo && !capturing && !document.body.classList.contains('kmp-modal-open');
+  const active = () => canPlay() && (getWalk()?.walking || getSeats()?.active) && !pipe.photo && !capturing && !document.body.classList.contains('kmp-modal-open');
   function pose() { return { id: 'solo', ...getWalk()?.getNetworkPose?.(), x: camera.position.x, z: camera.position.z, eyeY: camera.position.y, yaw: camera.rotation.y, lookYaw: Math.atan2(-direction.x, -direction.z) }; }
   function clearLine(from, to) {
     const distance = Math.hypot(to[0] - from.x, to[2] - from.z);
