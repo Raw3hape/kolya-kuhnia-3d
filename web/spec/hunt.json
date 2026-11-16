@@ -51,15 +51,88 @@
     "fadeTime": 1.2
   },
   "events": {
-    "earlyChance": 0.22,
-    "early": [45, 120],
-    "first": [240, 600],
-    "every": [240, 600],
+    "earlyChance": 0.5,
+    "early": [
+      12,
+      25
+    ],
+    "first": [
+      25,
+      45
+    ],
+    "every": [
+      25,
+      45
+    ],
     "types": {
-      "police": { "name": "POLICJA · патруль срезает через поле", "line": "Без очереди? Тут вообще-то поле. · 650 очков", "damaged": "Радиатор дымит. Ещё немного!", "hp": 280, "points": 650, "speed": 13, "altitude": 0 },
-      "tractor": { "name": "PIEROGI EXPRESS", "line": "Бронетрактор. Груз можно сбить отдельно. · 800 очков", "damaged": "Броня держит. Попробуй сбить пирог!", "hp": 1400, "armor": 0.6, "cargoHp": 110, "cargoPoints": 250, "points": 800, "speed": 3.2, "altitude": 0 },
-      "drone": { "name": "PACZKA! · доставка на балкон", "line": "Курьер: «Вас не было дома». · 450 очков", "damaged": "Посылка перешла в турбулентность.", "hp": 90, "points": 450, "speed": 5, "altitude": 12 },
-      "plane": { "name": "POLSKA GUROM!", "line": "Реклама летит. Бюджет тоже. · 1000 очков", "damaged": "Кажется, рекламная кампания падает.", "hp": 240, "points": 1000, "speed": 28, "altitude": 55, "weave": 28, "climb": 6 }
+      "police": {
+        "name": "POLICJA · патруль срезает через поле",
+        "line": "Без очереди? Тут вообще-то поле. · 650 очков",
+        "damaged": "Радиатор дымит. Ещё немного!",
+        "hp": 280,
+        "points": 650,
+        "speed": 13,
+        "altitude": 0
+      },
+      "tractor": {
+        "name": "PIEROGI EXPRESS",
+        "line": "Бронетрактор. Груз можно сбить отдельно. · 800 очков",
+        "damaged": "Броня держит. Попробуй сбить пирог!",
+        "hp": 1400,
+        "armor": 0.6,
+        "cargoHp": 110,
+        "cargoPoints": 250,
+        "points": 800,
+        "speed": 3.2,
+        "altitude": 0
+      },
+      "drone": {
+        "name": "PACZKA! · доставка на балкон",
+        "line": "Курьер: «Вас не было дома». · 450 очков",
+        "damaged": "Посылка перешла в турбулентность.",
+        "hp": 90,
+        "points": 450,
+        "speed": 5,
+        "altitude": 12
+      },
+      "plane": {
+        "name": "POLSKA GUROM!",
+        "line": "Реклама летит. Бюджет тоже. · 1000 очков",
+        "damaged": "Кажется, рекламная кампания падает.",
+        "hp": 240,
+        "points": 1000,
+        "speed": 28,
+        "altitude": 55,
+        "weave": 28,
+        "climb": 6
+      },
+      "van": {
+        "name": "ŻABKA TURBO · пицца уже в пути",
+        "line": "Доставка срезает по полю · 750 очков",
+        "damaged": "Пицца горячая, радиатор тоже!",
+        "hp": 440,
+        "points": 750,
+        "speed": 8,
+        "altitude": 0
+      },
+      "ufo": {
+        "name": "KOSMICZNA ŻABKA",
+        "line": "Пришельцы тоже за хот-догом · 1200 очков",
+        "damaged": "Щит барахлит. Стреляйте вместе!",
+        "hp": 700,
+        "points": 1200,
+        "speed": 6,
+        "altitude": 18
+      },
+      "balloon": {
+        "name": "LECĘ PO ŻABKĘ",
+        "line": "Кто-то выбрал воздушную доставку · 600 очков",
+        "damaged": "Кажется, воздух заканчивается.",
+        "hp": 360,
+        "points": 600,
+        "speed": 3.8,
+        "altitude": 24
+      }
     }
   },
   "hit": { "lag": 0.16, "perMetre": 0.0012 },

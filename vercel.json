@@ -24,7 +24,7 @@
       ]
     },
     {
-      "source": "/(textures|models)/(.*)",
+      "source": "/(textures|models|audio)/(.*)",
       "has": [
         {
           "type": "query",
@@ -39,7 +39,7 @@
       ]
     },
     {
-      "source": "/(textures|models)/(.*)",
+      "source": "/(textures|models|audio)/(.*)",
       "missing": [
         {
           "type": "query",

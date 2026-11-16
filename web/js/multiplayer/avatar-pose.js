@@ -83,7 +83,7 @@ export function solveAvatarPose(state = {}, slot = 0) {
   const leftLeg = leg(-1), rightLeg = leg(1);
   let right = [R.shoulderX, 0.91, -0.025 - step * motion * 0.11], left = [-R.shoulderX, 0.91, -0.025 + step * motion * 0.11];
   let handEuler = [0, 0, 0], leftEuler = [0, 0, 0], headPitch = clamp(finite(state.aimPitch) * 0.72, -0.65, 0.65);
-  const held = ['beer', 'vape', 'hookah'].includes(state.carried) ? state.carried : ['phone', 'newspaper', 'beer', 'vape', 'hookah'].includes(state.held) ? state.held : null;
+  const held = ['beer', 'vape', 'hookah'].includes(state.carried) ? state.carried : ['phone', 'newspaper', 'beer', 'vape', 'hookah', 'pizza'].includes(state.held) ? state.held : null;
   let gear = held || (state.weapon && Object.hasOwn(W, state.weapon) ? state.weapon : 'none');
   if (!state.held && activeAction && kind === 'drop' && ['phone', 'newspaper', 'beer', 'vape', 'hookah'].includes(action?.targetId)) gear = action.targetId;
   if (!held && activeAction && kind === 'holster' && Object.hasOwn(W, action?.targetId)) gear = action.targetId;
@@ -91,6 +91,8 @@ export function solveAvatarPose(state = {}, slot = 0) {
   const weapon = W[gear], isPhone = gear === 'phone', isPaper = gear === 'newspaper';
   const targetId = action?.targetId || state.interaction?.targetId;
   const partyItem = ['beer', 'vape', 'hookah'].includes(gear);
+  if (gear === 'pizza') { right = [0.19, 1.16, -0.42]; left = [-0.19, 1.16, -0.42]; handEuler = leftEuler = [-0.2, 0, 0]; }
+  if (state.washing) { const rub = Math.sin(time * 7) * 0.035; right = [0.10 + rub, 1.57, -0.16]; left = [-0.10 + rub, 1.57, -0.16]; }
   const selfUse = partyItem && ['sip', 'puff'].includes(kind) || isPhone && targetId === 'phone' || isPaper && (kind === 'page' || targetId === 'newspaper');
   let gearVisible = gear !== 'none', gearScale = 1, page = 0, tap = 0, magazine = 0, bolt = 0, breakOpen = 0;
   let shotAge = Number.isFinite(state.shotAge) ? Math.max(0, state.shotAge) : activeAction && kind === 'fire' ? elapsed : state.shooting ? 0.035 : Infinity;

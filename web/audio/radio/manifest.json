@@ -1,0 +1,27 @@
+{
+  "generator": "tools/build_radio.py",
+  "rights": "Original procedural compositions and synthesis. No external samples.",
+  "tracks": [
+    {
+      "id": "kuchnia",
+      "bpm": 84,
+      "seconds": 22.857,
+      "bytes": 275289,
+      "seed": 13
+    },
+    {
+      "id": "zabka",
+      "bpm": 124,
+      "seconds": 15.484,
+      "bytes": 186888,
+      "seed": 31
+    },
+    {
+      "id": "noc",
+      "bpm": 96,
+      "seconds": 20.0,
+      "bytes": 241117,
+      "seed": 71
+    }
+  ]
+}

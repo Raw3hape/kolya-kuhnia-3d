@@ -132,6 +132,10 @@
   короткие v3) читаются. Сейчас хвост: …FURN_SCHEMA_2, LAMP_SCHEMA_ROOMS.
 - `window.__kitchen` в консоли: `setState`, `goView`, `snapshot`, `exportGLB`, `pipe`, `lighting`, `furnEditor`
   для автоматических проверок.
+- Пицца/курьер Żabka, радио, ручной душ, два места дивана и поза лёжа: [docs/social.md](docs/social.md).
+  `spec/social.json` — конфигурация, `social-state.js` — чистая симуляция solo/Worker;
+  `social.js`/`social-models.js`/`social-audio.js` — адаптеры. Радио следует за тумбой;
+  три локальные авторские композиции генерирует `tools/build_radio.py`.
 - Пиво, кальян, дудка, новые мишени и близкое стадо: [docs/party.md](docs/party.md).
   `party-state.js` — общие чистые правила; `party.js` — ввод/представление; позиции и лимиты в `spec/party*.json`.
 - Проверка в браузере: встроенная панель Claude теряет WebGL после тяжёлой трассировки; надёжнее chrome-devtools MCP

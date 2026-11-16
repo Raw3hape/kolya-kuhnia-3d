@@ -311,17 +311,19 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0 } = 
       target.y -= state.seated ? lastSeatY - R.hipY : 0; state.interactionTarget = target.toArray();
     }
     pose = solveAvatarPose(state, index);
-    rig.position.y = pose.body.y; body.rotation.set(pose.body.pitch, 0, pose.body.roll);
+    rig.rotation.x = state.reclined ? Math.PI / 2 : 0;
+    rig.position.set(0, state.reclined ? state.seatY : pose.body.y, state.reclined ? -R.hipY : 0);
+    body.rotation.set(state.reclined ? 0 : pose.body.pitch, 0, pose.body.roll);
     head.rotation.set(pose.head.pitch, pose.head.yaw, -pose.body.roll * 0.3);
     for (const [chain, value] of [[leftLeg, pose.legs.left], [rightLeg, pose.legs.right]]) {
-      chain.hip.rotation.x = value.hip; chain.knee.rotation.x = value.knee; chain.ankle.rotation.x = value.ankle;
+      chain.hip.rotation.x = state.reclined ? 0 : value.hip; chain.knee.rotation.x = state.reclined ? 0 : value.knee; chain.ankle.rotation.x = state.reclined ? 0 : value.ankle;
     }
     applyArm(leftArm, pose.arms.left, pose.hands.left); applyArm(rightArm, pose.arms.right, pose.hands.right);
     const kind = pose.gear.kind;
     if (currentGear?.kind !== kind) {
       currentGear?.root.removeFromParent(); currentGear = null;
       // Party rendering owns its shared models, liquids and hose. The rig only poses the hand.
-      if (kind !== 'none' && !['beer', 'vape', 'hookah'].includes(kind)) {
+      if (kind !== 'none' && !['beer', 'vape', 'hookah', 'pizza'].includes(kind)) {
         if (!gearCache.has(kind)) { const gear = createGear(kind, material, flashMaterial, screenMaterial); setLayer(gear.root); gearCache.set(kind, gear); }
         currentGear = gearCache.get(kind); gearSocket.add(currentGear.root);
       }

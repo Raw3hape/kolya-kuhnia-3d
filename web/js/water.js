@@ -17,6 +17,7 @@ export function create(L) {
   const { THREE, scene, kit } = L;
   let t = 0, next = rand(...FIRST), live = true;
   let network = null;
+  let controlledShower = false;
   let mat = null, alpha = null;
   const taps = {};          // id -> { top: Vector3, bottom: Vector3, group, stream, splash, built }
   let cur = null;           // { tap, t, len, stopAt, k, sound }
@@ -154,9 +155,10 @@ export function create(L) {
 
   // ---------- включить / выключить ----------
   function start(id, { remote = false } = {}) {
+    if (id === 'shower' && controlledShower) return false;
     if (network && !network.authority && !remote) return false;
     if (cur || !live) return false;
-    const ids = ['kitchen', 'sink', 'shower'].filter(i => locate(i));
+    const ids = ['kitchen', 'sink', 'shower'].filter(i => (i !== 'shower' || !controlledShower) && locate(i));
     if (!ids.length) return false;
     if (!id) {
       // ближе к игроку — вероятнее
@@ -224,6 +226,7 @@ export function create(L) {
     L.requestRender?.();
   }
   return { update, start, stop, setLive, dispose, snapshot, applyNetworkSnapshot,
+    setShowerControlled(on) { controlledShower = !!on; if (controlledShower && cur?.id === 'shower') stop(true); },
     setNetwork(value) { network = value || null; if (network && !network.authority) stop(true); },
     get debug() { return { taps, cur }; } };
 }

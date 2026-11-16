@@ -24,6 +24,7 @@ import { wcSeat } from './bath.js';
 import { SOFA_CATALOG, FURN_SPEC } from './furniture.js';
 import { injectStyle } from './minimap.js';
 import { addHelp } from './help.js';
+import { decorPart } from './decor.js';
 
 // Справка (help.js): ui.js — окно «?», полоса внизу сидя (brief), раздел «Сесть»
 addHelp(
@@ -56,7 +57,7 @@ const coarse = () => { try { return matchMedia('(hover: none), (pointer: coarse)
 const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 export function createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender,
-  getState, getFurniture, getDecor, getDoors, getTV }) {
+  getState, getFurniture, getDecor, getDoors, getTV, seating }) {
   const wc = wcSeat(bathSpec);
   const walls = buildColliders(plan).boxes;   // стены по плану (проёмы открыты): прицел не сажает сквозь стену
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -86,7 +87,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     const back = hit ? z0 - hit.distance : -d / 2;
     const hipZ = Math.min(back + SEAT.hipFromBack, d / 2 - SEAT.minFront);
     const hip = obj.localToWorld(V(0, 0, hipZ)); hip.y = seatH;
-    return { id: 'sofa', label: 'Сесть на диван', root: obj, hip, face, look: tvPoint(furn) };
+    return { id: 'sofa', label: 'Диван · левое место', root: obj, hip, face, look: tvPoint(furn) };
   }
   // Экран ТВ: меш с userData.tvScreen или 'tv_screen' (его ставит tv.js), иначе центр ТВ из мебели
   function tvPoint(furn) {
@@ -116,7 +117,8 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
       // объект для прицела — сама часть (decor.js отдаёт root), иначе ближайшая вещь к месту (по полу, не дальше метра)
       let root = s.root?.isObject3D ? s.root : null, best = 1;
       if (!root) for (const h of holders) { const dd = Math.hypot(h.position.x - s.x, h.position.z - s.z); if (dd < best) { best = dd; root = h; } }
-      return { id: String(s.id), label: s.label || 'Сесть', root, hip: V(s.x, s.y, s.z), face: s.yaw, look: null };
+      const hitRoots = String(s.id).startsWith('d_room2_bed:') ? holders.filter(h => { const part = decorPart(h); return h.userData.decor === root?.userData.decor && part?.option.parts[part.index].seatTarget; }) : [root];
+      return { id: String(s.id), label: s.label || 'Сесть', root, hitRoots, hip: V(s.x, s.y, s.z), face: s.yaw, look: null };
     });
   }
 
@@ -132,7 +134,18 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     if (key.length === lastKey.length && key.every((v, i) => v === lastKey[i])) return anchors;
     lastKey = key;
     const S = getState?.() ?? {};
-    anchors = [sofaSeat(getFurniture?.(), S), wcAnchor(), ...decorSeats(getDecor?.())].filter(Boolean);
+    const sofa = sofaSeat(getFurniture?.(), S), sofaSeats = [];
+    if (sofa) for (const [i, sign] of [[0, -1], [1, 1]]) {
+      const hip = sofa.hip.clone(); hip.x += Math.cos(sofa.face) * sign * seating.sofaSpacing / 2; hip.z -= Math.sin(sofa.face) * sign * seating.sofaSpacing / 2;
+      sofaSeats.push({ ...sofa, hip, id: i ? 'sofa:2' : 'sofa', label: i ? 'Диван · правое место' : sofa.label });
+    }
+    const decor = decorSeats(getDecor?.());
+    const bed = decor.find(a => a.id.startsWith('d_room2_bed:'));
+    const recline = bed ? { ...bed, id: bed.id + ':recline', label: 'Лечь рядом с ноутбуком', posture: 'recline',
+      hip: bed.root.localToWorld(V(-seating.reclineOffset, bed.hip.y - bed.root.position.y + seating.reclineHip, 0)),
+      stand: bed.root.localToWorld(V(-seating.reclineOffset - SEAT.standOut, 0, 0)),
+      look: bed.hip.clone().add(V(0, 0.15, -0.1)) } : null;
+    anchors = [...sofaSeats, wcAnchor(), recline, ...decor].filter(Boolean);
     return anchors;
   }
   const byId = id => getAnchors().find(a => a.id === id) || null;
@@ -140,7 +153,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
   // ---------- поза сидящего ----------
 
   const eyeAbove = () => SEAT.eyeAboveSeat * ((walk?.personHeight ?? WALK.height) / WALK.height);
-  const eyeOf = a => V(a.hip.x, a.hip.y + eyeAbove(), a.hip.z);
+  const eyeOf = a => a.posture === 'recline' ? V(a.hip.x, a.hip.y + seating.reclineEye, a.hip.z).addScaledVector(V(-Math.sin(a.face), 0, -Math.cos(a.face)), seating.reclineHead) : V(a.hip.x, a.hip.y + eyeAbove(), a.hip.z);
   const fwdOf = face => V(Math.sin(face), 0, Math.cos(face));
   const YAW = SEAT.yaw * RAD, PMIN = SEAT.pitchMin * RAD, PMAX = SEAT.pitchMax * RAD;
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -183,19 +196,19 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
         const orbit = walk.orbitPose;       // облёт до прогулки: туда вернёт выход из неё после того, как встанем
         walk.exit({ restore: false, network: authoritative });
         if (walk.active) return false;      // прогулка ещё доигрывает выход
-        origin = { walk: true, orbit };
+        origin = { walk: true, orbit, from: camera.position.clone() };
       } else {
         origin = { walk: false, pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov };
       }
       controls.enabled = false;
       fov = tFov = naturalFov(camera.aspect);
     }
-    if (seat?.id === 'sofa' && a.id !== 'sofa') getTV?.()?.setAudio(false);
+    if (seat?.id.startsWith('sofa') && !a.id.startsWith('sofa')) getTV?.()?.setAudio(false);
     seat = a; seatKeyRef = lastKey; eye = eyeOf(a);
     aimAt(a, eye);
     mode = 'sitting';
     startAnim(eye.clone(), quatOf(base + rel, pitch), fov, instant ? 0 : SEAT.transition, () => { mode = 'seated'; });
-    if (a.id === 'sofa') getTV?.()?.setAudio(true);
+    if (a.id.startsWith('sofa')) getTV?.()?.setAudio(true);
     // фокус с кнопки панели: иначе Пробел («встать») снова нажмёт её
     if (document.activeElement?.closest?.('#panel')) document.activeElement.blur();
     target = null; renderAim(); syncUI();
@@ -207,11 +220,11 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     if (mode === 'off' || mode === 'standing') return;
     if (network && !authoritative) return requestSeat({ kind: 'stand' });
     const a = seat;
-    if (a?.id === 'sofa') getTV?.()?.setAudio(false);
+    if (a?.id.startsWith('sofa')) getTV?.()?.setAudio(false);
     lookRelease();
     if (origin?.walk || toWalk) {
       // в прогулку: прогулка сама плавно переведёт камеру к свободному месту перед сиденьем
-      const fw = fwdOf(a.face), p = pose && Number.isFinite(pose.x) && Number.isFinite(pose.z) ? V(pose.x, 0, pose.z) : a.hip.clone().addScaledVector(fw, SEAT.standOut);
+      const fw = fwdOf(a.face), p = pose && Number.isFinite(pose.x) && Number.isFinite(pose.z) ? V(pose.x, 0, pose.z) : origin.from?.clone() || a.stand?.clone() || a.hip.clone().addScaledVector(fw, SEAT.standOut);
       const orbit = origin.walk ? origin.orbit : origin;
       controls.target.copy(camera.position).addScaledVector(camera.getWorldDirection(V()), 2);
       finish(false);
@@ -242,7 +255,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
   }
   // камеру забрали снаружи (ракурс из панели, телепорт по плану, включили прогулку): встаём на месте
   function abandon(byWalk) {
-    if (seat?.id === 'sofa') getTV?.()?.setAudio(false);
+    if (seat?.id.startsWith('sofa')) getTV?.()?.setAudio(false);
     lookRelease();
     if (!byWalk) {
       controls.target.copy(camera.position).addScaledVector(camera.getWorldDirection(V()), 2);
@@ -323,10 +336,11 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
       ray.set(posTmp, dirTmp); ray.far = SEAT.reach * 2;
       let best = Infinity;
       for (const a of list) {
-        const h = ray.intersectObject(a.root, true).find(x => x.object.visible && !x.object.userData.glass && !x.object.userData.shadowOnly);
-        if (!h || h.distance >= best || Math.hypot(h.point.x - posTmp.x, h.point.z - posTmp.z) > SEAT.reach) continue;
+        const h = ray.intersectObjects(a.hitRoots || [a.root], true).find(x => x.object.visible && !x.object.userData.glass && !x.object.userData.shadowOnly);
+        const score = h ? h.distance + Math.hypot(h.point.x - a.hip.x, h.point.z - a.hip.z) * 0.08 : Infinity;
+        if (!h || score >= best || Math.hypot(h.point.x - posTmp.x, h.point.z - posTmp.z) > SEAT.reach) continue;
         if (blocked(posTmp, h.point)) continue;
-        best = h.distance; next = a;
+        best = score; next = a;
       }
     }
     if (next !== target) { target = next; renderAim(); }
@@ -466,8 +480,8 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
   }
   function networkSeats() {
     return getAnchors().map(a => {
-      const stand = a.hip.clone().addScaledVector(fwdOf(a.face), SEAT.standOut);
-      return { id: a.id, position: a.hip.toArray(), yaw: a.face + Math.PI, eyeY: eyeOf(a).y, stand: [stand.x, stand.z] };
+      const stand = a.stand || a.hip.clone().addScaledVector(fwdOf(a.face), SEAT.standOut);
+      return { id: a.id, position: a.hip.toArray(), yaw: a.face + Math.PI, eyeY: eyeOf(a).y, stand: [stand.x, stand.z], posture: a.posture || 'sit' };
     });
   }
 

@@ -336,7 +336,9 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
   }
   return {
     ready,
+    get muted() { return !!prefs.mute; },
     update, colliders, dispose, setNetwork, snapshot, networkSnapshot: snapshot, applyNetworkSnapshot, traceExternalShot, resolveExternalShot,
+    setShowerControlled(on) { mods.water?.setShowerControlled(on); },
     get debug() { return { mods, prefs, core, ring: () => mods.neighbours?.ring(), water: id => mods.water?.start(id), mouse: () => mods.mice?.spawn(true) }; },
   };
 }

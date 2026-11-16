@@ -1,5 +1,11 @@
 # Independent browser QA harnesses
 
+`social-qa.mjs` проверяет пиццу/курьера, радио, душ, позу лёжа, два места дивана
+и общую пиццу через настоящий WebRTC. `QA_ROOM_ONLY=1` запускает только комнату.
+`field-gallery.mjs` даёт отдельный WebGL-снимок семи моделей для визуального просмотра.
+Оба используют существующий `PLAYWRIGHT_MODULE`, имеют дедлайн и закрывают браузер.
+Вход и ограничения: [квартирные активности](../../docs/social.md).
+
 Party interactions: `party-ui-qa.mjs` runs bounded desktop/mobile/WebRTC
 checks, including eight stable beer labels and their held/observer agreement,
 visible beer draining/throwing, new ceramic destruction, pickup priority,

@@ -26,10 +26,10 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
 
   const client = createMultiplayerClient({
     createAuthority: async ({ room, send }) => {
-      const [huntSpec, partySpec] = await Promise.all(['hunt', 'party'].map(name => fetch(`spec/${name}.json`).then(r => {
+      const [huntSpec, partySpec, socialSpec] = await Promise.all(['hunt', 'party', 'social'].map(name => fetch(`spec/${name}.json`).then(r => {
         if (!r.ok) throw new Error(`${name}_config`); return r.json();
       })));
-      return createHostAuthority({ room, plan, site, huntSpec, partySpec, send,
+      return createHostAuthority({ room, plan, site, huntSpec, partySpec, socialSpec, send,
         resolveSurfaces: (...args) => getModules().viewmodel.resolveNetworkSurfaces(...args),
         resolveExternalTrace: shot => getModules().life?.traceExternalShot?.(shot),
         resolveExternalShot: shot => getModules().life?.resolveExternalShot?.(shot) });
@@ -47,7 +47,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
   async function roomState() {
     await apartmentQueue.catch(() => {});
     let modules = getModules();
-    await Promise.all([modules.decor?.ready, modules.furniture?.ready, modules.paper?.ready, modules.partyPropsReady, getParty()?.ready].filter(Boolean));
+    await Promise.all([modules.decor?.ready, modules.furniture?.ready, modules.paper?.ready, modules.social?.ready, modules.partyPropsReady, getParty()?.ready].filter(Boolean));
     modules = getModules();
     // The loader visually grows models after attaching them. Sample authored scale synchronously,
     // then restore the animation; room entry never waits on an arbitrary animation timeout.
@@ -59,7 +59,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     const interactions = { ...(modules.hood?.snapshot ? { hood: modules.hood.snapshot() } : {}),
       ...(modules.paper?.snapshot ? { newspaper: modules.paper.snapshot() } : {}),
       ...Object.fromEntries(Object.entries(modules.tv?.snapshot?.() || {}).map(([id, value]) => ['media:' + id, value])) };
-    return { partySpec: getParty()?.spec, apartment: structuredClone(getState()), collision: modules.walk.collisionSnapshot(), objects, interactions,
+    return { partySpec: getParty()?.spec, socialMeta: modules.social?.metadata(), apartment: structuredClone(getState()), collision: modules.walk.collisionSnapshot(), objects, interactions,
       interactionMeta: { media: modules.tv?.interactionMeta?.() || {}, newspaperPages: modules.paper?.interactionMeta?.() || [], hoodPosition: modules.hood?.networkPosition?.() },
       doors: modules.doors.snapshot(), seats: modules.seats?.networkSeats?.() || [], items: ['phone', 'newspaper'].flatMap(id => {
         const m = id === 'phone' ? modules.tv : modules.paper, position = m?.networkPosition?.();
@@ -103,6 +103,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.hunt?.setNetwork(true); appliedHunt = m.hunt;
     m.life?.setNetwork?.({ authority: client.role === 'host' });
     m.seats?.setNetwork?.({ request, selfId: () => client.id });
+    m.social?.setNetwork?.({ request, selfId: () => client.id });
     getParty()?.setNetwork?.({ request, selfId: () => client.id, isHost: () => client.role === 'host',
       gripForPlayer: id => avatars.get(id)?.root.getObjectByName('right_wrist') });
     // The panel remains available for weapons and local device settings.
@@ -144,6 +145,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.tv.applyInteractionState?.(snapshot.interactions || {});
     m.tv.applyNetwork(snapshot.items?.phone ?? null); m.paper.applyNetwork(snapshot.items?.newspaper ?? null);
     getParty()?.applyNetworkSnapshot?.(snapshot.party, { players: snapshot.players, time: snapshot.time, selfId: client.id });
+    m.social?.applyNetwork(snapshot.social, snapshot.players);
     const me = snapshot.players.find(p => p.id === client.id);
     m.seats?.applyNetwork?.(snapshot.seats || {}, me, { instant: !started });
     if (m.viewmodel !== damageModule || snapshot.effects !== damageEffects || snapshot.broken !== damageBroken) {
@@ -251,7 +253,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       const lookYaw = angle(before.lookYaw ?? before.yaw, p.lookYaw ?? p.yaw, k);
       const aimYaw = Math.atan2(Math.sin(lookYaw - avatar.root.rotation.y), Math.cos(lookYaw - avatar.root.rotation.y));
       avatar.update({ dt, ...visual, speed, weapon: shown.weapon, aimPitch: angle(before.pitch, p.pitch, k),
-        aimYaw, held: shown.held, carried: shown.carried, seated: !!shown.seat, seatY: shown.seatY });
+        aimYaw, held: shown.held, carried: shown.carried, seated: !!shown.seat, seatY: shown.seatY, reclined: shown.reclined, washing: b.snapshot.social?.shower.owner === shown.id });
     }
     // Cheap generation checks only. A scene-wide mesh/bounds scan is done once after a real change.
     if (client.role === 'host' && started && !manifestPending && (m.decor !== manifestDecor || m.furniture !== manifestFurniture || m.decor?.pass !== manifestPass)) {
@@ -269,6 +271,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     const m = getModules();
     m.walk.setNetwork(null); m.doors.setNetwork(null); m.tv.setNetwork(null); m.paper.setNetwork(null);
     m.hood?.setNetwork?.(null); getParty()?.setNetwork?.(null);
+    m.social?.setNetwork?.(null);
     m.seats?.setNetwork?.(null); m.viewmodel.setNetwork(null); m.hunt?.setNetwork(false); m.life?.setNetwork?.(null);
     for (const avatar of avatars.values()) { scene.remove(avatar.root); avatar.dispose(); } avatars.clear(); shots.clear();
     samples.length = 0; inputs.length = 0; seenEvents.clear(); appliedHunt = null; appliedAmbient = ambientModule = null; epoch = revision = -1; started = false;

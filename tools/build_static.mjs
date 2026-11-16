@@ -27,7 +27,7 @@ rmSync(dist, { recursive: true, force: true });
 cpSync(web, dist, { recursive: true, filter: src => !src.endsWith('.DS_Store') });
 
 // ---------- 1. версии и размеры ----------
-const BINARY = /\.(jpe?g|png|webp|glb|hdr)$/i;
+const BINARY = /\.(jpe?g|png|webp|glb|hdr|mp3)$/i;
 const versions = {};
 function hashDirs(dir) {
   const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
@@ -42,7 +42,7 @@ function hashDirs(dir) {
   }
   if (files) versions[relative(dist, dir).split('\\').join('/')] = h.digest('hex').slice(0, 10) + (bin ? `/${Math.max(1, Math.round(binBytes / bin / 1024))}` : '');
 }
-for (const d of ['textures', 'models']) hashDirs(join(dist, d));
+for (const d of ['textures', 'models', 'audio']) hashDirs(join(dist, d));
 
 // ---------- 2. sizes.json и meta.json текстур ----------
 const meta = {};

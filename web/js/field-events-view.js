@@ -132,6 +132,34 @@ export function createFieldEventView({ THREE: T, parent, camera, ground, rules }
         label(parcel, 'PACZKA!', '#443e27', '#e7bb4c', [x * 0.53, 0, 0], 0.8, 0.32, x);
       }
       lights.push(cube(body, M.beacon, [0, 0, 0.67], [0.12, 0.1, 0.04]));
+    } else if (e.kind === 'van') {
+      cube(body, M.green, [0, 1.15, -0.4], [2.25, 1.9, 3.4]);
+      cube(body, M.white, [0, 0.9, 1.5], [2.1, 1.25, 1.4]);
+      cube(body, M.glass, [0, 1.8, 1.2], [1.9, 0.7, 1.1]);
+      cube(body, M.black, [0, 0.65, 2.24], [1.75, 0.3, 0.09]);
+      for (const x of [-1, 1]) {
+        for (const z of [-1.6, 1.55]) wheels.push(wheel(body, x * 1.04, z, 0.41));
+        label(body, 'ŻABKA TURBO', '#fffbe9', '#416b3d', [x * 1.14, 1.4, -0.4], 2.8, 0.65, x);
+        cube(body, M.lamp, [x * 0.75, 1.05, 2.22], [0.35, 0.25, 0.07]);
+      }
+      // A pizza the size of the roof, with a dozen toppings.
+      mesh(body, cylinder, M.dough, [0, 2.18, -0.4], [0.97, 0.12, 0.97]);
+      for (let i = 0; i < 9; i++) mesh(body, cylinder, M.red, [Math.sin(i * 2.4) * 0.65, 2.25, -0.4 + Math.cos(i * 2.4) * 0.65], [0.13, 0.025, 0.13]);
+    } else if (e.kind === 'ufo') {
+      mesh(body, ball, M.metal, [0, 0, 0], [3.4, 0.65, 3.4]);
+      mesh(body, ball, M.glass, [0, 0.6, 0], [1.25, 1, 1.25]);
+      mesh(body, ring, M.green, [0, 0, 0], [3.2, 3.2, 3.2]).rotation.x = Math.PI / 2;
+      for (let i = 0; i < 12; i++) lights.push(mesh(body, ball, i % 2 ? M.beacon : M.lamp, [Math.sin(i / 12 * Math.PI * 2) * 2.8, -0.12, Math.cos(i / 12 * Math.PI * 2) * 2.8], [0.14, 0.14, 0.14]));
+      mesh(body, ball, M.green, [0, 0.9, 0], [0.42, 0.65, 0.42]);
+    } else if (e.kind === 'balloon') {
+      mesh(body, ball, M.red, [0, 1.3, 0], [2.4, 2.9, 2.4]);
+      for (let i = 0; i < 8; i++) {
+        const angle = i / 8 * Math.PI * 2;
+        mesh(body, ball, M.white, [Math.sin(angle) * 0.45, 1.3, Math.cos(angle) * 0.45], [1.7, 2.7, 1.7]);
+      }
+      cube(body, M.cardboard, [0, -2.4, 0], [1.3, 0.85, 1.2]);
+      for (const x of [-1, 1]) for (const z of [-1, 1]) cube(body, M.black, [x * 0.5, -1.4, z * 0.45], [0.05, 1.4, 0.05]);
+      for (const x of [-1, 1]) label(body, 'LECĘ PO ŻABKĘ', '#fff', '#a63229', [x * 2.1, 1.4, 0], 2.3, 0.65, x);
     } else {
       mesh(body, ball, M.white, [0, 0, 0], [0.65, 0.65, 3.3]);
       cube(body, M.red, [0, 0.12, 0], [10.2, 0.14, 1.65]);

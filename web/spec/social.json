@@ -1,0 +1,76 @@
+{
+  "_about": "Shared apartment activities. Metres, simulation seconds. Original local radio music; no third-party broadcast dependency.",
+  "rules": {
+    "reach": 2.2,
+    "eatSeconds": 1.1,
+    "slices": 12,
+    "firstDelivery": 35,
+    "deliveryEvery": 210,
+    "courierWait": 75,
+    "bellEvery": 9,
+    "emptySeconds": 35,
+    "showerSeconds": 180,
+    "showerReach": 1.6
+  },
+  "pizza": {
+    "size": 0.38,
+    "height": 0.045,
+    "radius": 0.158,
+    "deliveryInset": 0.55
+  },
+  "courier": {
+    "outside": 0.7,
+    "color": "#169b55",
+    "label": "ŻABKA · PIZZA"
+  },
+  "radio": {
+    "position": [
+      5.88,
+      0.422,
+      1.65
+    ],
+    "size": [
+      0.48,
+      0.24,
+      0.19
+    ],
+    "volume": 0.45,
+    "distance": 6,
+    "stations": [
+      {
+        "id": "kuchnia",
+        "name": "KUCHNIA FM",
+        "genre": "Lo-fi · уютный вечер",
+        "url": "audio/radio/kuchnia.mp3"
+      },
+      {
+        "id": "zabka",
+        "name": "ŻABKA DANCE",
+        "genre": "House · кухня танцует",
+        "url": "audio/radio/zabka.mp3"
+      },
+      {
+        "id": "noc",
+        "name": "NOCNY JAZZ",
+        "genre": "Jazz · после полуночи",
+        "url": "audio/radio/noc.mp3"
+      }
+    ],
+    "yaw": -1.5707963267948966,
+    "mount": {
+      "anchor": "console",
+      "offset": [
+        0.51,
+        0.002,
+        0
+      ]
+    }
+  },
+  "seating": {
+    "sofaSpacing": 0.64,
+    "reclineOffset": 0.5,
+    "reclineHead": 0.66,
+    "reclineEye": 0.27,
+    "reclineHip": 0.09
+  }
+}

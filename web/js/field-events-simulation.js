@@ -6,7 +6,7 @@ import { WEAPON_RULES } from './multiplayer/rules.js';
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const vector = a => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
 const turn = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
-export const EVENT_KINDS = ['police', 'tractor', 'drone', 'plane'];
+export const EVENT_KINDS = ['police', 'tractor', 'drone', 'plane', 'van', 'ufo', 'balloon'];
 // Smooth pursuit path, shared by both simulations; no renderer or wall clock.
 export function sampleFieldRoute(route, t) {
   const f = clamp(t, 0, 0.999999) * (route.length - 1), i = Math.floor(f), u = f - i;
@@ -20,6 +20,9 @@ export const EVENT_SHAPES = {
   tractor: [[0, 1.2, 0.7, 1.3, 1.35, 2], [0, 0.7, -3.6, 1.45, 0.45, 1.5]],
   drone: [[0, 0, 0, 1.6, 0.45, 1.6], [0, -0.9, 0, 0.65, 0.65, 0.65]],
   plane: [[0, 0, 0, 0.85, 0.9, 3.5], [0, 0.1, 0, 5.3, 0.22, 1.25]],
+  van: [[0, 1.1, 0, 1.2, 1.1, 2.5]],
+  ufo: [[0, 0, 0, 3.4, 0.65, 3.4], [0, 0.75, 0, 1.2, 0.8, 1.2]],
+  balloon: [[0, 0.5, 0, 2.4, 3.6, 2.4]],
 };
 
 export function createFieldEventSimulation({ spec, region, ground, seed = 1 }) {
@@ -53,7 +56,9 @@ export function createFieldEventSimulation({ spec, region, ground, seed = 1 }) {
 
   function spawn() {
     if (!rules || !lanes.length) return;
-    const pool = EVENT_KINDS.filter(kind => kind !== lastKind);
+    const configured = EVENT_KINDS.filter(kind => rules.types[kind]);
+    if (!configured.length) return;
+    const different = configured.filter(kind => kind !== lastKind), pool = different.length ? different : configured;
     const kind = pool[Math.floor(random() * pool.length)], r = rules.types[kind];
     lastKind = kind;
     const lane = lanes[Math.floor(random() * Math.min(lanes.length, 8))];
@@ -90,7 +95,7 @@ export function createFieldEventSimulation({ spec, region, ground, seed = 1 }) {
       e.cargoFlash = Math.max(0, e.cargoFlash - dt * 5); if (e.cargoDead) e.cargoAge += dt;
       if (e.dead) {
         e.deadAge += dt;
-        const air = e.kind === 'plane' || e.kind === 'drone';
+        const air = rules.types[e.kind].altitude > 0;
         if (air && e.impactAge === null) {
           e.x = e.crashX + Math.sin(e.yaw) * e.deadAge * (e.kind === 'plane' ? 5 : 1.5);
           e.z = e.crashZ + Math.cos(e.yaw) * e.deadAge * (e.kind === 'plane' ? 5 : 1.5);
@@ -193,7 +198,7 @@ export function createFieldEventSimulation({ spec, region, ground, seed = 1 }) {
     e.hp = Math.max(0, e.hp - Math.round(w.damage * armor)); e.flash = 1; e.hits++;
     if (e.hp === 0) {
       e.dead = true; e.deadAge = 0; e.crashX = e.x; e.crashY = e.y; e.crashZ = e.z;
-      if (e.kind === 'police' || e.kind === 'tractor') e.impactAge = 0;
+      if (!rules.types[e.kind].altitude) e.impactAge = 0;
     }
     return { ...h, killed: e.dead, points: e.dead ? rules.types[e.kind].points : 0, hp: e.hp, maxHp: e.maxHp, ricochet: armor < 1 };
   }

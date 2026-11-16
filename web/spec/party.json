@@ -122,6 +122,25 @@
         2.3
       ],
       "anchor": "sofa"
+    },
+    {
+      "id": "vape-lounge",
+      "kind": "vape",
+      "position": [
+        4.1,
+        0.426,
+        1.22
+      ],
+      "anchor": "table"
+    },
+    {
+      "id": "vape-kitchen",
+      "kind": "vape",
+      "position": [
+        0.43,
+        0.916,
+        1.66
+      ]
     }
   ]
 }

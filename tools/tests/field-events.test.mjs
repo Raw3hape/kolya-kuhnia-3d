@@ -22,7 +22,7 @@ function aim(e) {
   return { origin, direction: [0, 0, -1], weapon: 'rifle', range: 100 };
 }
 
-test('encounters choose all four kinds, stay bounded and follow safe field lanes', () => {
+test('encounters choose all configured kinds, stay bounded and follow safe field lanes', () => {
   const s = make(), seen = new Set();
   assert.ok(s.lanes.length > 3);
   for (const lane of s.lanes) for (let i = 0; i <= 20; i++) {
@@ -49,8 +49,7 @@ test('health is shared, a kill is credited once, dead targets stop intercepting 
 });
 
 test('aircraft tumble and reach the same crash point after snapshot restoration', () => {
-  const s = make(); let e;
-  for (let i = 0; i < 180; i++) { advance(s, 1); e = s.snapshot().events.find(e => e.kind === 'drone' && e.age > 1); if (e) break; }
+  const s = fixtureKind('drone'); const e = s.snapshot().events.find(e => e.kind === 'drone');
   assert.ok(e); const ray = aim(e); for (let i = 0; i < 4; i++) s.hit(ray);
   const dead = s.snapshot(); assert.ok(dead.events.find(x => x.id === e.id).dead);
   const restored = make(4); assert.ok(restored.restore(dead));
@@ -81,21 +80,21 @@ test('score submission accepts wildlife plus event targets and rejects fabricate
   assert.ok(validate({ ...result, targets: 0, boars: 1 }).entry);
 });
 
-test('new launches randomize rare timing and kind, with minutes of quiet and no immediate repeat', () => {
+test('new launches randomize frequent encounters and never immediately repeat a kind', () => {
   const first = new Set(), kinds = new Set(); let early = 0;
   for (let seed = 0; seed < 100; seed++) {
     const s = createFieldEventSimulation({ spec: authored, region, ground, seed });
-    const initial = s.snapshot(); first.add(initial.next); if (initial.next < 240) early++;
-    assert.ok(initial.next >= 45 && initial.next <= 600);
+    const initial = s.snapshot(); first.add(initial.next); if (initial.next < authored.events.first[0]) early++;
+    assert.ok(initial.next >= authored.events.early[0] && initial.next <= authored.events.first[1]);
     // Restore just before the scheduled encounter to avoid a real ten-minute wait.
     assert.ok(s.restore({ ...initial, time: initial.next - 0.01 })); s.step(0.02);
     const after = s.snapshot(); kinds.add(after.events[0].kind);
-    assert.ok(after.next - after.time >= 239.9 && after.next - after.time <= 600);
+    assert.ok(after.next - after.time >= authored.events.every[0] - 0.1 && after.next - after.time <= authored.events.every[1]);
     const previous = after.events[0].kind;
     assert.ok(s.restore({ ...after, time: after.next - 0.01, events: [] })); s.step(0.02);
     assert.notEqual(s.snapshot().events[0].kind, previous);
   }
-  assert.ok(first.size > 90); assert.ok(early > 8 && early < 40); assert.equal(kinds.size, 4);
+  assert.ok(first.size > 90); assert.ok(early > 30 && early < 70); assert.equal(kinds.size, EVENT_KINDS.length);
 });
 
 function fixtureKind(kind) {
