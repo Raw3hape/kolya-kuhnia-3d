@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { awaitPlayable } from './await-playable.mjs';
 const moduleName = process.env.PLAYWRIGHT_MODULE || 'playwright';
 const { chromium } = await import(path.isAbsolute(moduleName) ? pathToFileURL(moduleName).href : moduleName);
 const url = process.env.QA_URL || 'http://127.0.0.1:8776/';
@@ -28,6 +29,7 @@ async function page(target = url, role = 'host') {
     else if(report.errors.length<20) report.errors.push(diagnostic);
   });
   await p.goto(target, { waitUntil: 'domcontentloaded' });
+  await awaitPlayable(p);
   await p.waitForFunction(() => window.__kitchen?.hunt?.stats?.ready, null, { timeout: 90000 });
   await p.getByRole('button', { name: 'Понятно', exact: true }).click({ timeout: 700 }).catch(() => {});
   await p.evaluate(async () => { await Promise.all([__kitchen.decor?.ready, __kitchen.paper?.ready, __kitchen.party?.ready]); });

@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {awaitPlayable} from './await-playable.mjs';
 const moduleName=process.env.PLAYWRIGHT_MODULE||'playwright';
 const {chromium}=await import(path.isAbsolute(moduleName)?pathToFileURL(moduleName).href:moduleName);
 const url=process.env.QA_URL||'http://127.0.0.1:8765/';
@@ -20,6 +21,7 @@ async function page(target=url,mobile=false,delayProps=false){
   const p=await c.newPage();p.setDefaultTimeout(10000);p.on('pageerror',e=>report.errors.push(e.message));
   if(release)assetGates.set(p,release);
   await p.goto(target,{waitUntil:'domcontentloaded'});
+  if(!delayProps)await awaitPlayable(p);
   await p.waitForFunction(delayed=>window.__kitchen?.party?.debug.ready&&(delayed||window.__kitchen?.partyProps?.debug.count>0)&&window.__kitchen?.hunt?.stats?.ready,delayProps,{timeout:90000});
   await p.getByRole('button',{name:'Понятно',exact:true}).click({timeout:500}).catch(()=>{});
   return p;
@@ -104,9 +106,10 @@ try{
   await aim(host,await host.evaluate(()=>__kitchen.party.interactionPoint('vape-island')));await host.keyboard.press('e');await idleItem(host);
   check('host takes vape through room authority',await host.evaluate(()=>__kitchen.party.held?.id==='vape-island'));
   const guest=await page(await host.evaluate(()=>__kitchen.multiplayer.client.inviteUrl),false,true);
+  const fullStartup=await guest.evaluate(()=>!!__kitchen.startup);
+  if(fullStartup){check('slow domestic assets keep initial gameplay gated',await guest.evaluate(()=>__kitchen.startup.status==='loading'&&!document.querySelector('#loading').hidden&&!document.querySelector('#kmp-lobby').open));assetGates.get(guest)();await awaitPlayable(guest);}
   await guest.locator('#kmp-name').fill('Party release guest');await guest.locator('.kmp-form button[type=submit]').click();await connected(guest);await guest.waitForTimeout(600);
-  await guest.waitForFunction(()=>__kitchen.multiplayer.applying&&!__kitchen.partyProps);
-  assetGates.get(guest)();
+  if(!fullStartup){await guest.waitForFunction(()=>__kitchen.multiplayer.applying&&!__kitchen.partyProps);assetGates.get(guest)();}
   await guest.waitForFunction(()=>!__kitchen.multiplayer.applying&&__kitchen.partyProps?.debug.count>0,null,{timeout:60000});
   check('joining waits for slow domestic assets before damage reconciliation',true);
   const ids=await Promise.all([host,guest].map(p=>p.evaluate(()=>__kitchen.party.debug.state.items.find(i=>i.kind==='vape').owner)));
