@@ -12,6 +12,7 @@ addHelp(
   {mode:'walk',topic:'party',keys:['E'],text:'взять пиво на балконе, дудку на острове или шланг кальяна у дивана',order:63},
   {mode:'walk',topic:'party',keys:['ЛКМ'],text:'один глоток / затяжка; пиво выпивается за пять нажатий',order:64},
   {mode:'walk',topic:'party',keys:['Q'],text:'бросить бутылку; вернуть дудку или шланг. X — поставить бутылку обратно',order:65},
+  {mode:'seat',topic:'party',keys:['ПКМ'],text:'с бутылкой, дудкой или шлангом в руке — осмотреться; ЛКМ — глоток или затяжка',order:45},
 );
 const typing=e=>e.target?.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName);
 const visible=o=>{for(let p=o;p;p=p.parent)if(!p.visible)return false;return true;};
@@ -32,6 +33,7 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
   title.className='party-title';meter.className='party-meter';actions.className='party-actions';hud.append(title,meter,actions);document.body.append(hud);
   const take=document.createElement('button'),use=document.createElement('button'),put=document.createElement('button'),back=document.createElement('button');
   for(const b of [take,use,put,back]){b.type='button';b.hidden=true;b.className='party-touch kw-float';document.body.append(b);}
+  take.classList.add('party-take');use.classList.add('party-use');put.classList.add('party-put');back.classList.add('party-back');
   take.textContent='Взять';use.textContent='Глоток';put.textContent='Бросить';back.textContent='На место';
   const active=()=>!!getWalk()?.active||!!getSeats()?.active;
   const selfId=()=>network?(typeof network.selfId==='function'?network.selfId():network.selfId):'solo';
@@ -120,6 +122,7 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
     hud.hidden=!can||!(h||aimed);title.textContent=NAMES[(h||aimed)?.kind]||'';
     meter.textContent=remaining===null?'':`${'●'.repeat(Math.max(0,remaining))}${'○'.repeat(h.sips)}  ${remaining} / ${spec.rules.sips}`;
     actions.textContent=h?(h.kind==='beer'?(remaining?'ЛКМ / E — глоток · Q — бросить · X — на место':'Пусто! Q — бросить с треском · X — на место'):'ЛКМ — затяжка · Q — вернуть'):'E — взять';
+    if(coarse)actions.textContent=h?(h.kind==='beer'?'Каждое нажатие — один глоток · Можно бросить бутылку':'Нажмите «Затяжка», чтобы выпустить облако'):'Нажмите «Взять»';
     take.hidden=!can||!coarse||!aimed||!!h;use.hidden=put.hidden=!can||!coarse||!h;back.hidden=!can||!coarse||h?.kind!=='beer';
     for(const b of [take,use,put,back])b.disabled=busy;
     use.textContent=h?.kind==='beer'?(remaining?'Глоток':'Пусто'):'Затяжка';use.disabled=busy||remaining===0;put.textContent=h?.kind==='beer'?'Бросить':'Вернуть';
@@ -235,6 +238,6 @@ export function createParty({THREE,scene,camera,canvas,pipe,plan,site,getWalk,ge
 }
 const CSS=`
 .party-hud{position:fixed;z-index:8;left:50%;bottom:calc(var(--hud-bottom,76px) + 12px);transform:translateX(-50%);padding:10px 15px;border-radius:14px;background:#17362fe8;color:#fff3d6;box-shadow:0 4px 18px #0003;display:flex;align-items:center;gap:13px;max-width:min(660px,88vw);font:12px/1.45 system-ui;pointer-events:none;backdrop-filter:blur(8px)}
-.party-hud[hidden],.party-touch[hidden]{display:none!important}.party-title{font-weight:750;white-space:nowrap}.party-meter{color:#f7ca65;white-space:nowrap;font-weight:700;letter-spacing:1px}.party-actions{opacity:.85}.party-touch{position:fixed;z-index:9;border:1px solid #ffffff60;background:#17362fef;color:#fff3d6;border-radius:15px;padding:13px 18px;right:16px;bottom:calc(var(--hud-bottom,76px) + 70px);font:600 14px system-ui;touch-action:manipulation}.party-touch:nth-last-child(3){right:120px}.party-touch:nth-last-child(2){bottom:calc(var(--hud-bottom,76px) + 124px)}.party-touch:last-child{right:120px;bottom:calc(var(--hud-bottom,76px) + 124px)}.party-touch:disabled{opacity:.55}body.party-aimed .kd-hint,body.party-aimed .ks-hint{visibility:hidden}
+.party-hud[hidden],.party-touch[hidden]{display:none!important}.party-title{font-weight:750;white-space:nowrap}.party-meter{color:#f7ca65;white-space:nowrap;font-weight:700;letter-spacing:1px}.party-actions{opacity:.85}.party-touch{position:fixed;z-index:9;border:1px solid #ffffff60;background:#17362fef;color:#fff3d6;border-radius:15px;padding:13px 18px;right:16px;bottom:calc(var(--hud-bottom,76px) + 180px);font:600 14px system-ui;touch-action:manipulation}.party-use{right:120px}.party-back{right:120px;bottom:calc(var(--hud-bottom,76px) + 234px)}.party-touch:disabled{opacity:.55}body.party-aimed .kd-hint,body.party-aimed .ks-hint{visibility:hidden}
 @media(max-width:650px){.party-hud{bottom:calc(var(--hud-bottom,76px) + 8px);gap:6px;flex-wrap:wrap;justify-content:center;padding:8px 12px}.party-actions{width:100%;text-align:center;font-size:11px}}
 `;

@@ -16,6 +16,13 @@ Hookah also puffed while seated on the sofa (seat API selected the fixture).
 Native pistol fire destroyed the same new island mug for both observers.
 Representative balcony, crate, held bottle, lounge and smoke frames were inspected.
 
+`tools/qa/party-ui-qa.mjs` adds ten bounded browser checks: prop pickup takes
+priority over seating, seated right-mouse look works while carrying, smoke
+shader renders, a late WebRTC guest receives current ownership, remote props
+follow the animated wrist, and native mobile buttons emit smoke without overlap.
+All ten pass locally with no application errors; every context closes in `finally`.
+Set `QA_URL`, `PLAYWRIGHT_MODULE`, and `QA_OUTPUT` to repeat against a release.
+
 Smoke has one draw, at most 180 pooled particles; bottle shards one instanced
 draw, at most 72 fragments. The 24 target meshes share eight geometries and
 one vertex-color material. Unchanged placement requests no new render.

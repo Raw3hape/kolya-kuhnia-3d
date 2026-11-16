@@ -579,14 +579,15 @@ viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requ
 tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction });   // ТВ, ноутбуки, телефон (в руке — handheld.js: с ним можно сесть)
 // BEDROOM: газета на полочке над унитазом (newspaper.js, полка — bath.js): взять E, листать, сесть с ней, Q — на место; до seats: газета под прицелом важнее унитаза под ней
 paper = createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction });
+// Register item capture before seating: E on a small prop must not also sit on the sofa behind it.
+party = createParty({ THREE, scene, camera, canvas, pipe, plan, site, getWalk: () => walk, getSeats: () => seats,
+  getVM: () => viewmodel, getTV: () => tv, getPaper: () => paper, getDoors: () => doors,
+  getAnchors: () => furnitureAnchors(furn, state, plan, kit), requestRender });
 seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender, getState: () => state,
   getFurniture: () => furn, getDecor: () => decor, getDoors: () => doors, getTV: () => tv });
 // --- KITCHEN: вытяжка над варкой (hood.js, геометрия — model.js buildHood) и крипто-биржа на мониторе в комнате 3 (ticker.js) ---
 hood = createHood({ THREE, scene, camera, canvas, renderer, pipe, requestRender, getWalk: () => walk, getVM: () => viewmodel });
 let ticker = createTicker({ THREE, scene, camera, renderer, pipe, requestRender });
-party = createParty({ THREE, scene, camera, canvas, pipe, plan, site, getWalk: () => walk, getSeats: () => seats,
-  getVM: () => viewmodel, getTV: () => tv, getPaper: () => paper, getDoors: () => doors,
-  getAnchors: () => furnitureAnchors(furn, state, plan, kit), requestRender });
 afterRoom(async () => {
   partyProps = await createPartyProps({ THREE, scene, requestRender });
   partyProps.updateAnchors(furnitureAnchors(furn, state, plan, kit), state);

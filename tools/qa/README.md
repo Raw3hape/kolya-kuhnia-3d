@@ -1,5 +1,10 @@
 # Independent browser QA harnesses
 
+Party interactions: `party-ui-qa.mjs` runs ten bounded desktop/mobile/WebRTC
+checks, including pickup priority, seated look, soft smoke, late ownership and
+wrist attachment. Defaults to local port8765; use `QA_URL` for production.
+See [party QA](../../docs/party-qa.md). The browser closes in `finally`.
+
 Performance comparison: [../../docs/performance.md](../../docs/performance.md).
 `performance-qa.mjs` runs a muted, bounded browser and records frame/CPU/GPU/draw measurements for solo, host and guest. `performance-server.py` shares assets between current code and an archived baseline. Keep reports under `output/playwright/`; inspect and remove screenshots after review.
 

@@ -400,7 +400,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
   const onDown = e => {
     if (e.pointerType === 'touch') touchSeen = true;
     if (mode === 'seated' || mode === 'sitting') {
-      if (look || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      if (look || (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2)) return;
       look = { id: e.pointerId, x: e.clientX, y: e.clientY, k: e.pointerType === 'touch' ? 0.0065 : 0.0042 };
       try { canvas.setPointerCapture(e.pointerId); } catch { /* не критично */ }
       return;
