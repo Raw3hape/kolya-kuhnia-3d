@@ -121,7 +121,7 @@ function findByMaterial(o, name) {
   return null;
 }
 
-export function createTV({ camera, scene, renderer, canvas, pipe, getState, requestRender, getWalk, getVM, getSeats, getDoors }) {
+export function createTV({ camera, scene, renderer, canvas, pipe, getState, requestRender, getWalk, getVM, getSeats, getDoors, hasWorldInteraction }) {
   let live = true;
   const offLive = pipe.onLive(on => { live = on; if (!on) for (const s of SCREENS) s.HOLE.value = 0; });
 
@@ -403,9 +403,10 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
       { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
   }
 
-  const links = { getWalk, getVM, getSeats, getDoors };
+  const links = { getWalk, getVM, getSeats, getDoors, hasWorldInteraction };
   const hand = phone && createHandheld({ THREE, camera, canvas, requestRender, reach: phone.hold.reach,
     getWalk: () => links.getWalk?.(), getVM: () => links.getVM?.(), getSeats: () => links.getSeats?.(), getDoors: () => links.getDoors?.(),
+    hasWorldInteraction: () => links.hasWorldInteraction?.(),
     // на столе он спрятан, пока в руке (и пока доигрывает «положить»): видимость проверяем у держателя, не у модели
     getTarget: () => (!remoteHeld && phone.mesh && phone.holder && (!held || dropping) && visibleChain(phone.holder) ? phone.holder : null),
     getRect: () => scr.getBoundingClientRect(),
@@ -487,7 +488,7 @@ export function createTV({ camera, scene, renderer, canvas, pipe, getState, requ
   }
 
   // подключить прогулку и оружие позже (проверки из консоли до того, как main.js их передаст)
-  function link(o = {}) { for (const k of ['getWalk', 'getVM', 'getSeats', 'getDoors']) if (o[k]) links[k] = o[k]; }
+  function link(o = {}) { for (const k of ['getWalk', 'getVM', 'getSeats', 'getDoors', 'hasWorldInteraction']) if (o[k]) links[k] = o[k]; }
   // экраны в сцене (для эффектов поверх: трещины и т. п.); mesh — тот, что сейчас найден, у ТВ holder нет
   const screens = () => SCREENS.map(s => ({ id: s.id, mesh: s.mesh, holder: s.decorModel ? s.holder : null, playing: s === active }));
 

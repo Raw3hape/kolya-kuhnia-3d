@@ -30,6 +30,15 @@ test('Pose solver is deterministic, finite, anatomically bounded across 10 slots
   finiteTree(solveArm(1, [NaN, Infinity, 1000]));
 });
 
+test('Arm reach parallel to either elbow pole preserves both anatomical segment lengths', () => {
+  for (const side of [-1, 1]) for (const sign of [-1, 1]) for (const epsilon of [0, 1e-10]) {
+    const target = [side * R.shoulderX + sign * side * 0.2, R.shoulderY - sign * 0.03 + epsilon, sign * 0.05];
+    const arm = solveArm(side, target); finiteTree(arm);
+    close(distance(arm.shoulder, arm.elbow), R.upperArm);
+    close(distance(arm.elbow, arm.wrist), R.forearm);
+  }
+});
+
 test('Seated knees bend with flat lower legs; jump, landing and run have distinct poses', () => {
   const idle = solveAvatarPose({ time: 1 }), seated = solveAvatarPose({ time: 1, seated: true, seatY: 0.45 });
   assert.ok(seated.legs.left.hip > 1.5); assert.ok(seated.legs.left.knee < -1.5); close(seated.legs.left.hip + seated.legs.left.knee, 0);

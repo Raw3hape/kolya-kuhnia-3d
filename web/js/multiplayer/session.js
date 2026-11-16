@@ -151,8 +151,10 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       m.viewmodel.applyNetworkAmmo(me.ammo);
     }
     samples.push({ at: performance.now(), snapshot }); if (samples.length > 6) samples.shift();
-    const present = new Set(snapshot.players.map(p => p.id));
-    for (const [id, avatar] of avatars) if (!present.has(id)) { scene.remove(avatar.root); avatar.dispose(); avatars.delete(id); }
+    const present = new Map(snapshot.players.map(p => [p.id, p.avatar]));
+    // A returning identity may receive another free appearance if its old slot
+    // was reused. Rebuild even when an intermediate departure frame was skipped.
+    for (const [id, avatar] of avatars) if (!present.has(id) || present.get(id) !== avatar.slot) { scene.remove(avatar.root); avatar.dispose(); avatars.delete(id); }
     for (const p of snapshot.players) if (p.id !== client.id && !avatars.has(p.id)) {
       const avatar = createAvatar({ slot: p.avatar, name: p.name, host: p.id === snapshot.hostId });
       avatar.root.userData.networkAvatar = true; avatar.root.userData.rasterOnly = true;

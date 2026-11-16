@@ -23,9 +23,17 @@ export function solveArm(side, requested) {
   delta = rawLength > 1e-6 ? delta.map(v => v / rawLength) : [0, -1, 0];
   const wrist = shoulder.map((v, i) => v + delta[i] * reach);
   let pole = [side, -0.15, 0.25];
-  const dot = pole.reduce((sum, v, i) => sum + v * delta[i], 0);
+  let dot = pole.reduce((sum, v, i) => sum + v * delta[i], 0);
   pole = pole.map((v, i) => v - dot * delta[i]);
-  const poleLength = Math.hypot(...pole) || 1; pole = pole.map(v => v / poleLength);
+  let poleLength = Math.hypot(...pole);
+  // A reach parallel to the preferred elbow pole needs another bend plane;
+  // normalizing floating-point residue can otherwise change limb lengths.
+  if (poleLength < 1e-6) {
+    pole = Math.abs(delta[1]) < 0.9 ? [0, 1, 0] : [0, 0, 1];
+    dot = pole.reduce((sum, v, i) => sum + v * delta[i], 0);
+    pole = pole.map((v, i) => v - dot * delta[i]); poleLength = Math.hypot(...pole);
+  }
+  pole = pole.map(v => v / poleLength);
   const along = (R.upperArm ** 2 - R.forearm ** 2 + reach ** 2) / (2 * reach);
   const height = Math.sqrt(Math.max(0, R.upperArm ** 2 - along ** 2));
   const elbow = shoulder.map((v, i) => v + delta[i] * along + pole[i] * height);

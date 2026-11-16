@@ -34,7 +34,7 @@ const PAGE_W_NARROW = 420;          // на узком экране — уже, 
 const LOWER_AFTER = 120, RAISE_AFTER = 380;   // мс: опустить на ходу, поднять после остановки
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-export function createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk, getVM, getSeats, getDoors }) {
+export function createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk, getVM, getSeats, getDoors, hasWorldInteraction }) {
   let papers = null, issue = 0, page = 0, held = false, leaving = null, remoteHeld = false;
   let pendingInteraction = null, resolveReady;
   const ready = new Promise(resolve => { resolveReady = resolve; });
@@ -259,7 +259,7 @@ export function createNewspaper({ THREE, scene, camera, canvas, requestRender, g
     }
   }
 
-  const hand = createHandheld({ THREE, camera, canvas, requestRender, reach: 1.9, getWalk, getVM, getSeats, getDoors, networkId: 'newspaper',
+  const hand = createHandheld({ THREE, camera, canvas, requestRender, reach: 1.9, getWalk, getVM, getSeats, getDoors, hasWorldInteraction, networkId: 'newspaper',
     getTarget: () => { find(); return !remoteHeld && papers?.length && stack && top?.visible && !held ? stack : null; },
     getRect: () => sheet.getBoundingClientRect(),
     onHold, onStep, name: { take: 'взять газету', btn: 'Взять газету', scroll: 'листать', heldHint: false } });   // клавиши — в подвале газеты

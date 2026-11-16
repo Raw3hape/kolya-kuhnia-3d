@@ -10,9 +10,10 @@
 //   Вернуть на место: Q (всегда), E — когда прицел ни на что не наведён, Esc в прогулке, кнопка «Положить».
 //   1–5 (оружие) сначала кладут вещь; вышли из прогулки и не сидим — вещь возвращается сама.
 //
-// createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats?, getDoors?, requestRender, reach, getTarget, getRect,
+// createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats?, getDoors?, hasWorldInteraction?, requestRender, reach, getTarget, getRect,
 //                  onHold, onStep, name? })
 //   getTarget() -> Object3D вещи на месте (луч прицела) | null; getRect() -> DOMRect вещи в руке (свайп);
+//   hasWorldInteraction() -> bool: другой модуль предлагает E; вещь не перехватывает это действие.
 //   onHold(on) — взяли/положили; onStep(d) — листать (1 — следующее, −1 — предыдущее);
 //   name — { take: 'взять телефон', btn: 'Взять телефон', scroll: 'листать', heldHint: true } для подсказок
 //   (heldHint: false — в руке своей подсказки не показывать: вещь пишет клавиши сама, как газета в подвале).
@@ -41,7 +42,7 @@ function bodyClasses() {
   document.body.classList.toggle('khh-held', held);
 }
 
-export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats, getDoors, requestRender, reach = 2, getTarget, getRect,
+export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats, getDoors, hasWorldInteraction, requestRender, reach = 2, getTarget, getRect,
   onHold, onStep, name = {}, networkId = 'phone' }) {
   const N = { take: 'взять телефон', btn: 'Взять телефон', scroll: 'листать', heldHint: true, ...name };
   const state = { on: false, held: false, aimed: false };
@@ -59,8 +60,9 @@ export function createHandheld({ THREE, camera, canvas, getWalk, getVM, getSeats
   const walking = () => !!getWalk?.()?.walking;
   const seated = () => !!getSeats?.()?.active;
   const carrying = () => !!getWalk?.()?.active || seated();       // вещь может оставаться в руке
-  // E с вещью в руке: дверь или сиденье под прицелом — им (вещь остаётся в руке), иначе — вернуть вещь
-  const eBusy = () => seated() || (walking() && (!!getDoors?.()?.target || !!getSeats?.()?.target));
+  // The composition root supplies available world actions. Carrying a prop must
+  // not consume E while another module is offering that same interaction.
+  const eBusy = () => seated() || (walking() && (hasWorldInteraction?.() ?? (!!getDoors?.()?.target || !!getSeats?.()?.target)));
   const mq = matchMedia('(pointer: coarse)'), coarse = () => mq.matches;
   const ray = new THREE.Raycaster(), hits = [], ndc = new THREE.Vector2();
   // попадает ли луч из точки экрана (NDC; по умолчанию центр — прицел) в вещь на месте ближе reach

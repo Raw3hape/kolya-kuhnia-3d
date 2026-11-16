@@ -21,7 +21,6 @@ export const AVATAR_ROSTER = Object.freeze([
 ].map(Object.freeze));
 
 const INK = '#282c30', WHITE = '#eeeadd';
-const clamp = THREE.MathUtils.clamp;
 
 // Merge coloured primitives while building. Each limb remains a single draw call.
 function builder(material) {

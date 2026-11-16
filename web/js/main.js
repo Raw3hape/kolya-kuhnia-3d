@@ -550,7 +550,8 @@ export async function exportGLB() {
 
 // ---------- запуск ----------
 
-let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null, paper = null;
+let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null, paper = null, hood = null;
+const hasWorldInteraction = () => [doors, seats, hood].some(module => !!module?.target);
 registerFurnitureUI(addSection);
 registerDecorUI(addSection);
 registerViewmodelUI(addSection, () => viewmodel);
@@ -571,13 +572,13 @@ doors = initDoors({ THREE, scene, camera, canvas, plan, M, doorsGroup, shell, wa
 afterRoom(() => { hunt = createHunt({ THREE, scene, camera, renderer, pipe, requestRender, getState: () => state, getWalk: () => walk, plan, site }); });
 viewmodel = createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, requestRender, getDoors: () => doors, getSeats: () => seats, getWalk: () => walk, getHunt: () => hunt });
 // ТВ всегда показывает YouTube (tv.js, spec/tv.json); сесть на унитаз, диван, стулья (seats.js)
-tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors });   // ТВ, ноутбуки, телефон (в руке — handheld.js: с ним можно сесть)
+tv = createTV({ THREE, scene, camera, renderer, canvas, pipe, getState: () => state, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction });   // ТВ, ноутбуки, телефон (в руке — handheld.js: с ним можно сесть)
 // BEDROOM: газета на полочке над унитазом (newspaper.js, полка — bath.js): взять E, листать, сесть с ней, Q — на место; до seats: газета под прицелом важнее унитаза под ней
-paper = createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors });
+paper = createNewspaper({ THREE, scene, camera, canvas, requestRender, getWalk: () => walk, getVM: () => viewmodel, getSeats: () => seats, getDoors: () => doors, hasWorldInteraction });
 seats = createSeats({ THREE, scene, camera, canvas, controls, plan, bathSpec, walk, requestRender, getState: () => state,
   getFurniture: () => furn, getDecor: () => decor, getDoors: () => doors, getTV: () => tv });
 // --- KITCHEN: вытяжка над варкой (hood.js, геометрия — model.js buildHood) и крипто-биржа на мониторе в комнате 3 (ticker.js) ---
-let hood = createHood({ THREE, scene, camera, canvas, renderer, pipe, requestRender, getWalk: () => walk, getVM: () => viewmodel });
+hood = createHood({ THREE, scene, camera, canvas, renderer, pipe, requestRender, getWalk: () => walk, getVM: () => viewmodel });
 let ticker = createTicker({ THREE, scene, camera, renderer, pipe, requestRender });
 // --- /KITCHEN ---
 // --- LIFE: «Живой дом» — соседи за стенами и звонок, монстры за входной дверью, вода сама, мыши (life.js + модули) ---
