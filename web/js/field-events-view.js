@@ -181,7 +181,7 @@ export function createFieldEventView({ THREE: T, parent, camera, ground, rules }
   const projected = new T.Vector3();
   function update(state, { visible = true, walking = false, dt = 1 / 60, network = false, canSee = () => true } = {}) {
     root.visible = visible; const live = new Set(), announcements = [];
-    let aimed = null, best = 0.17;
+    let aimed = null, best = 0.17, inView = false;
     for (const pose of state?.events ?? []) {
       const prior = models.get(pose.id);
       const k = 1 - Math.exp(-20 * Math.min(0.1, dt));
@@ -247,6 +247,7 @@ export function createFieldEventView({ THREE: T, parent, camera, ground, rules }
       }
       projected.set(e.x, e.y + (e.kind === 'tractor' ? 3.8 : e.kind === 'police' ? 2.2 : 1.5), e.z);
       const unobscured = canSee(projected, e.id); projected.project(camera);
+      if (unobscured && projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1.1 && Math.abs(projected.y) < 1.1) inView = true;
       m.plate.hidden = !visible || e.dead || !unobscured || projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > 0.95 || Math.abs(projected.y) > 0.95 || fade < 0.5;
       if (!m.plate.hidden) {
         m.plate.style.left = `${(projected.x + 1) * innerWidth / 2}px`; m.plate.style.top = `${(1 - projected.y) * innerHeight / 2 - 8}px`;
@@ -268,7 +269,7 @@ export function createFieldEventView({ THREE: T, parent, camera, ground, rules }
       subtitle.textContent = target.kind === 'tractor' && target.cargoDead ? 'Груз сбит. Осталась броня!' : target.hp < target.maxHp ? r.damaged : r.line;
       health.hidden = !aimed; health.max = target.maxHp; health.value = target.hp;
     }
-    return visible && live.size > 0;
+    return visible && inView;
   }
   function dispose() {
     cue.remove(); for (const m of models.values()) m.plate.remove(); root.removeFromParent(); for (const o of owned) o.dispose(); models.clear();

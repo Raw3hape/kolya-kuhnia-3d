@@ -6,6 +6,8 @@ import { buildHuntRegions } from '../../web/js/hunt-regions.js';
 import { createHuntSimulation } from '../../web/js/multiplayer/hunt-simulation.js';
 import { createSnapshotEncoder, createSnapshotDecoder } from '../../web/js/multiplayer/snapshot-codec.js';
 import { validate } from '../../api/_scores-core.js';
+import * as THREE from '../../web/vendor/three-0.169/build/three.module.js';
+import { collectFieldOccluders } from '../../web/js/field-events-visibility.js';
 
 const json = p => JSON.parse(fs.readFileSync(new URL('../../' + p, import.meta.url)));
 const authored = json('web/spec/hunt.json'), site = json('web/spec/site.json'), plan = json('web/spec/plan.generated.json');
@@ -138,4 +140,18 @@ test('tractor armor ricochets and cargo detaches independently with one-time cre
   const result = s.hit(ray); assert.ok(result.cargo); assert.ok(result.killed); assert.equal(result.points, 250);
   const state = s.snapshot().events[0]; assert.equal(state.hp, bodyHit.hp); assert.equal(state.dead, false); assert.ok(state.cargoDead);
   assert.equal(s.hit(ray)?.cargo, undefined); const late = make(555); assert.ok(late.restore(s.snapshot())); assert.ok(late.snapshot().events[0].cargoDead);
+});
+
+test('HP occlusion excludes real Three sprites and avatars before tracing but retains cutaway walls', () => {
+  const scene = new THREE.Scene(), eventRoot = new THREE.Group(), avatar = new THREE.Group();
+  avatar.userData.networkAvatar = true;
+  const geometry = new THREE.BoxGeometry(2, 2, 0.2), material = new THREE.MeshBasicMaterial();
+  const wall = new THREE.Mesh(geometry, material); wall.position.z = -5; wall.layers.set(1);
+  const label = new THREE.Sprite(), actor = new THREE.Mesh(geometry, material), target = actor.clone(), glass = actor.clone();
+  glass.userData.glass = true; eventRoot.add(target); avatar.add(actor, label); scene.add(eventRoot, avatar, wall, glass); scene.updateMatrixWorld(true);
+  const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, 0, -1)); ray.layers.enable(1);
+  // Sprite.raycast would throw without ray.camera; they are never solid walls.
+  const objects = collectFieldOccluders(scene, eventRoot); assert.deepEqual(objects, [wall]);
+  assert.ok(ray.intersectObjects(objects, false).length > 0);
+  geometry.dispose(); material.dispose(); label.material.dispose();
 });

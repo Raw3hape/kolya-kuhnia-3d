@@ -3,6 +3,7 @@ import { raySphere, rayAnimalPose } from './hunt-hitboxes.js';
 import { captureLocalWildlife, restoreLocalWildlife } from './hunt-session-state.js';
 import { createFieldEventSimulation } from './field-events-simulation.js';
 import { createFieldEventView } from './field-events-view.js';
+import { collectFieldOccluders } from './field-events-visibility.js';
 // Охота «как в тире» за балконом: кабаны (dziki) с поросятами (warchlaki) пасутся на поле и лугу под домом (больше всего —
 // в 40–150 м от балкона) и на газонах справа, у дорог и парковок; над полем низко тянутся клинья больших гусей, гуси
 // пасутся на поле, реже — стайки голубей и грачей, утки. Стреляют из оружия прогулки (viewmodel.js).
@@ -397,7 +398,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   let localWildlife = null;
   let encounters = null, encounterView = null;
   const encounterSurface = { albedo: new THREE.Color('#8c9795'), metal: true, solid: true, flesh: false };
-  const eventSight = new THREE.Raycaster(), sightDirection = new THREE.Vector3(), sightCache = new Map();
+  const eventSight = new THREE.Raycaster(), sightDirection = new THREE.Vector3(), sightCache = new Map(), sightObjects = [];
   eventSight.layers.enable(1); // Cutaway walls still occlude game information.
   let sightClock = 0;
   function canSeeEncounter(point, id) {
@@ -407,10 +408,9 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     if (previous && sightClock - previous.at < 0.12 && previous.camera.distanceToSquared(camera.position) < 0.04) return previous.visible;
     sightDirection.copy(point).sub(camera.position);
     eventSight.set(camera.position, sightDirection.clone().normalize()); eventSight.near = 0.03; eventSight.far = sightDirection.length() - 0.2;
-    const blocked = eventSight.intersectObjects(scene.children, true).some(hit => {
-      const o = hit.object, u = o.userData;
-      if (u?.glass || u?.passLight || u?.shadowOnly || u?.impact) return false;
-      for (let n = o; n; n = n.parent) if (!n.visible || n === root || n.userData?.networkEntity || n.userData?.networkEffect || n.userData?.viewmodel) return false;
+    collectFieldOccluders(scene, root, sightObjects);
+    const blocked = eventSight.intersectObjects(sightObjects, false).some(hit => {
+      const o = hit.object;
       const m = Array.isArray(o.material) ? o.material[hit.face?.materialIndex || 0] : o.material;
       return !!m && m.visible !== false && m.colorWrite !== false && !(m.transparent && m.opacity < 0.1);
     });
@@ -997,7 +997,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     sightClock += dt;
     if (!network && enabled) encounters.step(dt);
     const eventFrame = encounterView.update(network ? networkSnapshot?.encounters : encounters.snapshot(), {
-      visible: enabled && !pipe?.photo && !capturing && seen(getWalk?.()), walking: !!getWalk?.()?.active, dt, network,
+      visible: enabled && !pipe?.photo && !capturing, walking: !!getWalk?.()?.active, dt, network,
       canSee: canSeeEncounter });
     if (network) {
       hud.hidden = card.hidden = true;
