@@ -199,6 +199,16 @@ test('different texture identities, emissive/scalar parameters or custom shader 
   } finally { f.batches.dispose(); }
 });
 
+test('cached material equivalence detects newly added fields even when another own field disappears', async () => {
+  const f = await fixture();
+  try {
+    f.batches.draw(() => { assert.equal(f.a.visible, false); });
+    delete f.material.name;
+    f.material.extraRenderParameter = { mode: 1 };
+    f.batches.draw(() => { assert.equal(f.a.visible, true); assert.equal(f.b.visible, true); });
+  } finally { f.batches.dispose(); }
+});
+
 test('lighting clones wait for their own patch; shear transforms and changed geometry groups fall back immediately', async () => {
   const f = await fixture();
   try {
@@ -214,5 +224,53 @@ test('lighting clones wait for their own patch; shear transforms and changed geo
     f.batches.draw(() => assert.equal(f.a.visible, true));
     f.geometry.groups[0].count = 3;
     f.batches.draw(() => assert.equal(f.b.visible, true));
+  } finally { f.batches.dispose(); }
+});
+
+test('caller-owned current matrices skip duplicate traversal while movement and unsafe transforms remain guarded', async () => {
+  const f = await fixture();
+  try {
+    const original = f.scene.updateMatrixWorld;
+    let updates = 0;
+    f.scene.updateMatrixWorld = function (...args) { updates++; return original.apply(this, args); };
+    f.a.position.x = 7; f.scene.updateMatrixWorld(); updates = 0;
+    f.batches.draw(() => {
+      const matrix = new THREE.Matrix4(); f.proxies()[0].getMatrixAt(0, matrix);
+      assert.equal(matrix.elements[12], 7); assert.equal(f.a.visible, false);
+    }, { matricesCurrent: true });
+    assert.equal(updates, 0);
+    f.batches.draw(() => {}); assert.equal(updates, 1);
+    f.a.scale.x = -1; f.scene.updateMatrixWorld();
+    for (let i = 0; i < 2; i++) f.batches.draw(() => assert.equal(f.a.visible, true), { matricesCurrent: true });
+  } finally { f.batches.dispose(); }
+});
+
+test('shared geometry and ancestor guard caches refresh on every draw for all matching source objects', async () => {
+  const f = await fixture();
+  try {
+    const parent = new THREE.Group(); f.scene.add(parent); parent.add(f.a, f.b);
+    parent.visible = false;
+    f.batches.draw(() => { assert.equal(f.proxies()[0].getVisibleAt(0), false); assert.equal(f.proxies()[0].getVisibleAt(1), false); });
+    parent.visible = true;
+    f.batches.draw(() => { assert.equal(f.proxies()[0].getVisibleAt(0), true); assert.equal(f.proxies()[0].getVisibleAt(1), true); });
+    f.geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(f.geometry.attributes.position.count * 3).fill(1), 3));
+    f.batches.draw(() => { assert.equal(f.a.visible, true); assert.equal(f.b.visible, true); });
+    f.batches.update(f.camera); await settle();
+    f.geometry.groups[0].count = 3;
+    f.batches.draw(() => { assert.equal(f.a.visible, true); assert.equal(f.b.visible, true); });
+  } finally { f.batches.dispose(); }
+});
+
+test('fully substituted container subtrees are pruned only inside draw and never hide a remaining renderable child', async () => {
+  const f = await fixture();
+  try {
+    const parent = new THREE.Group(), nested = new THREE.Object3D(); f.scene.add(parent); parent.add(f.a, nested); nested.add(f.b);
+    f.batches.draw(() => { assert.equal(parent.visible, false); assert.equal(nested.visible, false); });
+    assert.equal(parent.visible, true); assert.equal(nested.visible, true); assert.equal(f.a.visible, true); assert.equal(f.b.visible, true);
+    assert.throws(() => f.batches.draw(() => { throw Error('render interrupted'); }), /render interrupted/);
+    assert.equal(parent.visible, true); assert.equal(nested.visible, true);
+    const sprite = new THREE.Sprite(); parent.add(sprite);
+    f.batches.draw(() => { assert.equal(parent.visible, true); assert.equal(sprite.visible, true); assert.equal(nested.visible, false); });
+    assert.equal(nested.visible, true);
   } finally { f.batches.dispose(); }
 });

@@ -33,6 +33,7 @@
 import { createBreakables, shotHandlers, networkDamageResetters } from './breakables.js';
 import { stableObjectId, indexNetworkObjects, collectNetworkObjects, isTransient, seededRandom } from './network-objects.js';
 import { createNetworkRaycastAcceleration } from './network-raycast.js';
+import { afterRoom } from './loading.js';
 import { AIM_NDC } from './weapon-aim.js';
 
 const IMP = {
@@ -220,6 +221,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   let damageJournalSignature = '';
   let network = false, pendingAt = 0;
   const acceleration = createNetworkRaycastAcceleration({ THREE, scene });
+  afterRoom(() => acceleration.start());
 
   function clear() {
     pendingEffects.length = 0; appliedShots.clear(); brokenIds.clear();
@@ -636,7 +638,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
 
   return {
     shoot, captureShot, resolveNetworkSurfaces, applyNetworkShot, applyBroken, reconcileNetworkDamage, update, clear, dispose,
-    setNetwork(on) { network = !!on; if (network) acceleration.start(); else acceleration.stop(); },
+    setNetwork(on) { network = !!on; },
     get raycastStatus() { return acceleration.status; },
     get networkDamage() { return { events: networkDamageEvents.size, holes: holes.filter(inScene).length, cracks: cracks.filter(inScene).length, pending: pendingEffects.length }; },
     collectNetworkObjects: () => collectNetworkObjects(scene, THREE, { breakableOf: breaks.breakableOf, dependentIdsOf: breaks.dependentIdsOf }),

@@ -15,6 +15,8 @@ const DEFINES = ['vertexColors', 'side', 'shadowSide', 'alphaHash', 'alphaToCove
 
 export function createEcoMaterials({ THREE, scene, renderer }) {
   const variants = new Map(), geometryLayouts = new WeakMap(), objectLayouts = new WeakMap(), queue = [], queued = new Set();
+  const materialStates = new WeakMap(), replacementArrays = new WeakMap();
+  const changedObjects = [], changedMaterials = [], drawStack = [];
   let frame = 0, depth = 0, compiling = 0, compileEpoch = 0, lost = false, disposed = false, camera = null, lights = '';
   let dirty = true, lastDiscovery = -Infinity;
   let knownLights = [];
@@ -24,19 +26,34 @@ export function createEcoMaterials({ THREE, scene, renderer }) {
     return u.glass || u.mirror || u.mirrorGlass || u.networkMirror || u.screen || u.tvScreen || u.shadowOnly ||
       u.context || u.viewmodel || u.networkAvatar || u.networkEffect || u.impact || u.shard;
   };
-  const objectOK = o => o.isMesh && !o.isSkinnedMesh && !o.isInstancedMesh && !o.morphTargetInfluences?.length &&
-    !Object.keys(o.geometry?.morphAttributes || {}).length &&
-    ['onBeforeRender', 'onAfterRender', 'onBeforeShadow', 'onAfterShadow'].every(key =>
-      o[key] === (o.isBatchedMesh ? THREE.BatchedMesh.prototype[key] : THREE.Object3D.prototype[key]));
+  const meshCallbacks = THREE.Object3D.prototype, batchCallbacks = THREE.BatchedMesh.prototype;
+  function objectOK(o) {
+    if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || o.morphTargetInfluences?.length) return false;
+    for (const key in o.geometry?.morphAttributes) if (Object.hasOwn(o.geometry.morphAttributes, key)) return false;
+    const callbacks = o.isBatchedMesh ? batchCallbacks : meshCallbacks;
+    return o.onBeforeRender === callbacks.onBeforeRender && o.onAfterRender === callbacks.onAfterRender &&
+      o.onBeforeShadow === callbacks.onBeforeShadow && o.onAfterShadow === callbacks.onAfterShadow;
+  }
   const materialOK = m => m?.isMeshStandardMaterial && !m.userData?.ecoMaterial && m.userData?.roomLightingBatchSafe &&
     m.userData?.roomLightingPatched && !m.transparent && !(m.transmission > 0) && !(m.opacity < 1) &&
     m.onBeforeRender === THREE.Material.prototype.onBeforeRender;
+  function materialCurrent(m) {
+    if (!m || typeof m !== 'object') return false;
+    let state = materialStates.get(m);
+    if (!state) { state = { frame: -1, value: false }; materialStates.set(m, state); }
+    if (state.frame !== frame) { state.frame = frame; state.value = materialOK(m); }
+    return state.value;
+  }
   function layout(o) {
     const geometry = o.geometry, attributes = geometry.attributes;
     let shape = geometryLayouts.get(geometry);
     if (!shape || shape.frame !== frame) {
       let count = 0; for (const key in attributes) count++;
-      const same = shape && count === shape.items.length && shape.items.every(([key, attribute, size]) => attributes[key] === attribute && attribute.itemSize === size);
+      let same = shape && count === shape.items.length;
+      if (same) for (let i = 0; i < shape.items.length; i++) {
+        const item = shape.items[i], attribute = item[1];
+        if (attributes[item[0]] !== attribute || attribute.itemSize !== item[2]) { same = false; break; }
+      }
       if (!same) {
         const items = Object.keys(attributes).sort().map(key => [key, attributes[key], attributes[key].itemSize]);
         shape = { frame, items, key: items.map(([key, , size]) => `${key}:${size}`).join(',') }; geometryLayouts.set(geometry, shape);
@@ -159,26 +176,42 @@ export function createEcoMaterials({ THREE, scene, renderer }) {
   }
   function draw(fn) {
     if (disposed || depth) return fn();
-    const changed = []; depth++; frame++;
+    changedObjects.length = changedMaterials.length = drawStack.length = 0;
+    depth++; frame++;
     try {
       function substitute(original, object) {
-        if (!materialOK(original)) return original;
+        if (!materialCurrent(original)) return original;
         const record = variants.get(original); if (!record) { dirty = true; return original; }
         sync(record, original);
         const program = record.programs.get(layout(object));
         if (!program) dirty = true;
         return program?.ready ? record.flat : original;
       }
-      function visit(o) {
-        if (!o.visible || blocked(o)) return;
+      drawStack.push(scene);
+      while (drawStack.length) {
+        const o = drawStack.pop();
+        if (!o.visible || blocked(o)) continue;
         if (objectOK(o)) {
-          const original = o.material, replacement = Array.isArray(original) ? original.map(m => substitute(m, o)) : substitute(original, o);
-          if (Array.isArray(original) ? replacement.some((m, i) => m !== original[i]) : replacement !== original) { changed.push([o, original]); o.material = replacement; }
+          const original = o.material;
+          let replacement, changed = false;
+          if (Array.isArray(original)) {
+            replacement = replacementArrays.get(o);
+            if (!replacement) { replacement = []; replacementArrays.set(o, replacement); }
+            replacement.length = original.length;
+            for (let i = 0; i < original.length; i++) {
+              replacement[i] = substitute(original[i], o);
+              if (replacement[i] !== original[i]) changed = true;
+            }
+          } else { replacement = substitute(original, o); changed = replacement !== original; }
+          if (changed) { changedObjects.push(o); changedMaterials.push(original); o.material = replacement; }
         }
-        for (const child of o.children) visit(child);
+        for (let i = o.children.length - 1; i >= 0; i--) drawStack.push(o.children[i]);
       }
-      visit(scene); return fn();
-    } finally { for (const [o, material] of changed) o.material = material; depth--; }
+      return fn();
+    } finally {
+      for (let i = 0; i < changedObjects.length; i++) changedObjects[i].material = changedMaterials[i];
+      changedObjects.length = changedMaterials.length = drawStack.length = 0; depth--;
+    }
   }
   function resetPrograms() {
     compileEpoch++; compiling = 0; queue.length = 0; queued.clear(); dirty = true;

@@ -54,9 +54,39 @@ function rawSend(connection, packet) {
   if (buffered > MAX_BUFFER) { connection.close(); return false; }
   try { connection.send(packet); return true; } catch { return false; }
 }
+// Decode every reliable delta in order, but present only the newest queued
+// snapshot. Events/results remain ordered barriers. This prevents a recovered
+// guest from rebuilding gameplay/DOM dozens of times for obsolete positions.
+export function createSnapshotReceiver({ decode, onPacket, onError, isClosed = () => false, now = () => performance.now() }) {
+  let chain = Promise.resolve(), pending = 0, snapshot = null, appliedAt = -Infinity, closed = false, failed = false;
+  const stopped = () => closed || failed || isClosed();
+  function flush() {
+    if (!snapshot || stopped()) return;
+    const packet = snapshot; snapshot = null; appliedAt = now(); onPacket(packet);
+  }
+  function fail(error) { if (stopped()) return; failed = true; snapshot = null; onError(error); }
+  return {
+    receive(packet) {
+      if (stopped()) return chain;
+      if (pending >= R.snapshotHz * Math.ceil(R.timeoutMs / 1000)) { fail(new Error('Snapshot receive backlog exceeded')); return chain; }
+      pending++;
+      chain = chain.then(async () => {
+        if (stopped()) return;
+        const value = await decode(packet); if (stopped()) return;
+        if (value.type === 'snapshot') {
+          snapshot = value;
+          if (pending === 1 || now() - appliedAt >= R.interpolationMs) flush();
+        } else { flush(); if (!stopped()) onPacket(value); }
+      }).catch(fail).finally(() => { pending--; if (!pending && !stopped()) { try { flush(); } catch (error) { fail(error); } } });
+      return chain;
+    },
+    close() { closed = true; snapshot = null; },
+    get pending() { return pending; },
+  };
+}
 export function createPeerTransport({ room, hosting, hello, hostKey, createAuthority, onPacket, onError, onState = () => {}, peerOptions = {}, peerScript = '/vendor/peerjs.min.js' } = {}) {
   let peer = null, authority = null, hostConnection = null, identity = null, closed = false, opened = false;
-  let startTimer = null, signallingTimer = null, settleReject = null, signalAttempts = 0;
+  let startTimer = null, signallingTimer = null, settleReject = null, signalAttempts = 0, receiver = null;
   const connections = new Map(), timers = new Set();
   const encoder = createSnapshotEncoder(), outgoing = new WeakMap(), capabilities = new WeakMap();
   function sendConnection(connection, packet) {
@@ -145,8 +175,10 @@ export function createPeerTransport({ room, hosting, hello, hostKey, createAutho
             clearTimeout(startTimer); timers.delete(startTimer); settleReject = null; resolve();
           } else {
             const connection = peer.connect(PEER_PREFIX + room, { serialization: 'binary', reliable: true, metadata: { protocol: PROTOCOL } }); hostConnection = connection;
-            const nonce = encode(crypto.getRandomValues(new Uint8Array(24))); let verified = false, checking = false, incoming = Promise.resolve();
+            const nonce = encode(crypto.getRandomValues(new Uint8Array(24))); let verified = false, checking = false;
             const decoder = createSnapshotDecoder();
+            receiver = createSnapshotReceiver({ decode: packet => decoder.decode(packet), onPacket, isClosed: () => closed,
+              onError: () => fail(error('Не удалось восстановить состояние комнаты. Переподключаемся…', 'snapshot_decode')) });
             connection.on('open', () => sendConnection(connection, { type: 'auth', protocol: PROTOCOL, room, clientId: peer.id, nonce, codec: typeof DecompressionStream === 'undefined' ? 0 : 1 }));
             connection.on('data', async packet => {
               if (closed || !packet || typeof packet !== 'object') return;
@@ -160,8 +192,7 @@ export function createPeerTransport({ room, hosting, hello, hostKey, createAutho
                   sendConnection(connection, hello); clearTimeout(startTimer); timers.delete(startTimer); settleReject = null; resolve();
                 } catch { fail(error('Подпись хозяина не совпала с приглашением. Попросите новую ссылку.', 'host_identity')); }
               } else {
-                incoming = incoming.then(async () => { const decoded = await decoder.decode(packet); if (!closed) onPacket(decoded); })
-                  .catch(() => fail(error('Не удалось восстановить состояние комнаты. Переподключаемся…', 'snapshot_decode')));
+                receiver.receive(packet);
               }
             });
             connection.on('close', () => { if (!closed) fail(error('Связь с хозяином прервалась.', 'host_offline')); });
@@ -190,6 +221,7 @@ export function createPeerTransport({ room, hosting, hello, hostKey, createAutho
       if (closed) return;
       if (hosting) for (const { connection } of connections.values()) rawSend(connection, { type: 'event', event: { kind: 'room-closed', reason: 'host-left' } });
       closed = true; settleReject?.(error('Соединение закрыто.')); settleReject = null;
+      receiver?.close(); receiver = null;
       for (const timer of timers) clearTimeout(timer); timers.clear();
       authority?.dispose(); authority = null; encoder.clear();
       const ownedPeer = peer, ownedConnections = [...connections.values()].map(entry => entry.connection);

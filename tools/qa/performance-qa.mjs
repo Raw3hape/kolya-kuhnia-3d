@@ -8,24 +8,34 @@ const { chromium } = await import(path.isAbsolute(moduleName) ? pathToFileURL(mo
 const url = process.env.QA_URL || 'http://127.0.0.1:8776/';
 const output = path.resolve(process.env.QA_OUTPUT || 'output/playwright/performance');
 fs.mkdirSync(output, { recursive: true });
-const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], results: [], errors: [], cleanup: false };
+const cpuRate = role => Math.max(1, Math.min(8, Number(process.env[role==='guest'?'QA_GUEST_CPU_RATE':'QA_HOST_CPU_RATE'] || process.env.QA_CPU_RATE || 1)));
+const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], cpuRates:{host:cpuRate('host'),guest:cpuRate('guest')}, results: [], errors: [], consoleDiagnostics: [], cleanup: false };
 const pause = ms => new Promise(r => setTimeout(r, ms));
 let browser;
 const watchdog = setTimeout(() => { browser?.close().finally(() => process.exit(2)); }, 240000);
 function save() { fs.writeFileSync(path.join(output, report.label + '.json'), JSON.stringify(report, null, 2)); }
-async function page(target = url) {
+async function page(target = url, role = 'host') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript(() => { localStorage.setItem('kitchen-ui-v1', JSON.stringify({ quality: 'eco', seen: { intro: true } })); });
   const p = await context.newPage();
   p.on('pageerror', e => { if (report.errors.length < 20) report.errors.push(e.message); });
-  p.on('console', m => { if (m.type()==='error' && report.errors.length < 20) report.errors.push(m.text().slice(0,700)); });
+  p.on('console', m => {
+    if(m.type()!=='error') return;
+    const diagnostic={text:m.text().slice(0,700),location:m.location()};
+    if(/^Permissions policy violation: compute-pressure/.test(diagnostic.text)) { if(report.consoleDiagnostics.length<20) report.consoleDiagnostics.push(diagnostic); }
+    else if(report.errors.length<20) report.errors.push(diagnostic);
+  });
   await p.goto(target, { waitUntil: 'domcontentloaded' });
-  await p.waitForFunction(() => window.__kitchen?.hunt?.stats?.ready, { timeout: 90000 });
+  await p.waitForFunction(() => window.__kitchen?.hunt?.stats?.ready, null, { timeout: 90000 });
   await p.getByRole('button', { name: 'Понятно', exact: true }).click({ timeout: 700 }).catch(() => {});
-  await p.evaluate(async () => { await Promise.all([__kitchen.decor?.ready, __kitchen.paper?.ready]); });
-  await p.waitForFunction(() => !__kitchen.lighting.debug.baking, {timeout:45000});
-  await p.waitForFunction(() => !__kitchen.pipe.batches || __kitchen.pipe.batches.ready === __kitchen.pipe.batches.groups, {timeout:30000});
-  await p.waitForFunction(() => !__kitchen.pipe.eco || __kitchen.pipe.eco.ready === __kitchen.pipe.eco.programs, {timeout:30000});
+  await p.evaluate(async () => { await Promise.all([__kitchen.decor?.ready, __kitchen.paper?.ready, __kitchen.party?.ready]); });
+  await p.waitForFunction(() => !__kitchen.lighting.debug.baking, null, {timeout:45000});
+  await p.waitForFunction(() => !__kitchen.pipe.batches || __kitchen.pipe.batches.ready === __kitchen.pipe.batches.groups, null, {timeout:30000});
+  await p.waitForFunction(() => !__kitchen.pipe.eco || __kitchen.pipe.eco.ready === __kitchen.pipe.eco.programs, null, {timeout:30000});
+  if (cpuRate(role)>1) {
+    const throttle = await context.newCDPSession(p);
+    await throttle.send('Emulation.setCPUThrottlingRate',{rate:cpuRate(role)});
+  }
   await pause(2000);
   return p;
 }
@@ -34,7 +44,8 @@ async function measure(p, name) {
   await session.send('Profiler.enable'); await session.send('Profiler.start');
   const metrics = await p.evaluate(async () => {
     const k = __kitchen, renderer = k.renderer, gl = renderer.getContext();
-    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2'), pending = [], gpu = [], cpu = [], gaps = [], calls = [], tris = [];
+    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2'), pending = [], gpu = [], cpu = [], gaps = [], calls = [], tris = [], displayedGaps = [];
+    const started = performance.now(); let lastDisplayed = null;
     const original = k.pipe.render, reset = renderer.info.autoReset, originalShadows = renderer.shadowMap.render;
     const shadowUpdates = window.__performanceShadowUpdates = {}; let last = performance.now(), n = 0;
     renderer.shadowMap.render = function (lights,...args) {
@@ -54,6 +65,7 @@ async function measure(p, name) {
       try { return original.apply(this, args); }
       finally {
         cpu.push(performance.now() - start); calls.push(renderer.info.render.calls); tris.push(renderer.info.render.triangles);
+        if (renderer.info.render.calls>0) { if(lastDisplayed!==null) displayedGaps.push(now-lastDisplayed); lastDisplayed=now; }
         k.requestRender();
         if (query) { gl.endQuery(ext.TIME_ELAPSED_EXT); pending.push(query); }
         while (pending.length && gl.getQueryParameter(pending[0], gl.QUERY_RESULT_AVAILABLE)) {
@@ -70,12 +82,14 @@ async function measure(p, name) {
     let meshes = 0, vertices = 0, lights = 0, shadows = 0;
     k.scene.traverse(o => { if(o.isMesh) {meshes++; vertices += o.geometry?.attributes?.position?.count || 0;} if(o.isLight){lights++; if(o.castShadow) shadows++;} });
     const hardware = gl.getExtension('WEBGL_debug_renderer_info');
+    window.__actualFrameMetrics = { fps:calls.filter(n=>n>0).length*1000/(performance.now()-started), renderedFrames:calls.filter(n=>n>0).length, rafFrames:calls.length, displayedFrameMs:summary(displayedGaps) };
     return { quality: k.pipe.quality, fps: 1000 / summary(gaps).mean, frameMs: summary(gaps), renderCpuMs: summary(cpu), gpuMs: summary(gpu), drawCalls: summary(calls), triangles: summary(tris), scene: {meshes,vertices,lights,shadows}, gpu:hardware ? gl.getParameter(hardware.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), role:k.multiplayer?.client.role, position:k.camera.position.toArray(), size:[gl.drawingBufferWidth,gl.drawingBufferHeight] };
   });
   const { profile } = await session.send('Profiler.stop'); await session.detach();
   metrics.shadowUpdates = await p.evaluate(() => { const v = window.__performanceShadowUpdates; delete window.__performanceShadowUpdates; return v; });
   metrics.batches = await p.evaluate(() => __kitchen.pipe.batches || null);
   metrics.eco = await p.evaluate(() => __kitchen.pipe.eco || null);
+  Object.assign(metrics,await p.evaluate(()=>{const value=window.__actualFrameMetrics;delete window.__actualFrameMetrics;return value;}));
   const nodeMap = new Map(profile.nodes.map(n => [n.id,n])), totals = new Map();
   for (let i=0;i<(profile.samples?.length||0);i++) { const f=nodeMap.get(profile.samples[i])?.callFrame; if(!f)continue; const key=`${f.functionName || '(anonymous)'} ${f.url.split('/').slice(-2).join('/')}:${f.lineNumber+1}`; totals.set(key,(totals.get(key)||0)+(profile.timeDeltas?.[i]||0)/1000); }
   const selfCpu = [...totals].sort((a,b)=>b[1]-a[1]).slice(0,24).map(([fn,ms])=>({fn,ms:Math.round(ms)}));
@@ -94,12 +108,16 @@ try {
   await host.getByRole('button', {name:'Играть вместе',exact:true}).click();
   await host.getByPlaceholder('Как вас зовут?').fill('Performance QA Host');
   await host.getByRole('button',{name:'Создать комнату',exact:true}).click();
-  await host.waitForFunction(()=>__kitchen.multiplayer.client.connected, {timeout:45000});
-  const guest = await page(await host.evaluate(()=>__kitchen.multiplayer.client.inviteUrl));
+  await host.waitForFunction(()=>__kitchen.multiplayer.client.connected, null, {timeout:45000});
+  const guest = await page(await host.evaluate(()=>__kitchen.multiplayer.client.inviteUrl),'guest');
   await guest.getByPlaceholder('Как вас зовут?').fill('Performance QA Guest');
   await guest.getByRole('button',{name:'Войти в квартиру',exact:true}).click();
-  await guest.waitForFunction(()=>__kitchen.multiplayer.client.connected,{timeout:45000});
-  await Promise.all([host,guest].map(p=>p.evaluate(()=>__kitchen.multiplayer.lobby.close()))); await pause(1000);
+  await guest.waitForFunction(()=>__kitchen.multiplayer.client.connected,null,{timeout:45000});
+  await Promise.all([host,guest].map(p=>p.evaluate(()=>__kitchen.multiplayer.lobby.close())));
+  await Promise.all([host,guest].map(p=>p.waitForFunction(()=>__kitchen.walk.active&&!__kitchen.multiplayer.applying&&__kitchen.multiplayer.client.connected,null,{timeout:60000})));
+  await Promise.all([host,guest].map(p=>p.waitForFunction(()=>!__kitchen.pipe.batches||__kitchen.pipe.batches.ready===__kitchen.pipe.batches.groups,null,{timeout:30000})));
+  await Promise.all([host,guest].map(p=>p.waitForFunction(()=>!__kitchen.pipe.eco||__kitchen.pipe.eco.ready===__kitchen.pipe.eco.programs,null,{timeout:30000})));
+  await pause(1000);
   await measure(host,'host-hall'); await measure(guest,'guest-hall');
   await guest.screenshot({path:path.join(output,report.label+'-guest.png')});
   await guest.keyboard.down('KeyW'); await pause(500); await guest.keyboard.up('KeyW');

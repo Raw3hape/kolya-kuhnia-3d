@@ -38,6 +38,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createRasterBatches } from './raster-batches.js';
 import { createEcoMaterials } from './eco-materials.js';
+import { acquireSceneIndex } from './scene-index.js';
 
 // px — бюджет пикселей кадра (плотность снижается до pr[0], если окно большое); pr — [мин, макс] плотности;
 // shadow — карта тени солнца (споты — вчетверо меньше); ao — выборки GTAO (0 — без AO); bloom — свечение.
@@ -80,6 +81,7 @@ export const rasterBusy = renderer => busy.has(renderer);
 // photoPixels — сколько пикселей трассировать (больше — растягивается): 1,5 Мп ≈ 1,5 прохода/с на M5 Pro
 export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 1024, autoExposure = true, photoPixels = 1.5e6, quality: startQuality = DEFAULT_QUALITY }) {
   const canvas = renderer.domElement;
+  const sceneIndex = acquireSceneIndex(scene);
   const batches = createRasterBatches({ THREE, scene, renderer });
   const eco = createEcoMaterials({ THREE, scene, renderer });
   renderer.debug.checkShaderErrors = false;   // ошибки шейдеров проверяет фоновая сборка (startCompile), без журнала на каждую
@@ -121,7 +123,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     }
   }
 
-  function drawRaster() {
+  function drawRaster(matricesCurrent = false) {
     const draw = () => {
       if (!ao.enabled && !bloom.enabled) {
         renderer.setRenderTarget(null);
@@ -131,7 +133,12 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
       composer.readBuffer = rtA; composer.writeBuffer = rtB;   // проходы меняют их местами — сцена всегда в rtA
       composer.render();
     };
-    return batches.draw(() => quality === 'eco' ? eco.draw(draw) : draw());
+    const auto = scene.matrixWorldAutoUpdate;
+    if (!matricesCurrent && auto) scene.updateMatrixWorld();
+    scene.matrixWorldAutoUpdate = false;
+    try {
+      return batches.draw(() => quality === 'eco' ? eco.draw(draw) : draw(), { matricesCurrent: true });
+    } finally { scene.matrixWorldAutoUpdate = auto; }
   }
 
   const frameGaps = [], offered = new Set();
@@ -167,14 +174,14 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   // Карты теней по качеству: солнце — q.shadow, точечные и споты — вчетверо меньше (не больше 2048)
   function applyShadowSizes() {
     const max = Math.min(q.shadow, renderer.capabilities.maxTextureSize);
-    scene.traverse(o => {
-      if (!o.isLight || !o.castShadow || !o.shadow) return;
+    for (const o of sceneIndex.lights()) {
+      if (!o.castShadow || !o.shadow) continue;
       const s = o.isDirectionalLight ? max : Math.min(2048, max / 4);
-      if (o.shadow.mapSize.x === s) return;
+      if (o.shadow.mapSize.x === s) continue;
       o.shadow.mapSize.set(s, s);
       o.shadow.map?.dispose(); o.shadow.map = null;
       renderer.shadowMap.needsUpdate = true;
-    });
+    }
   }
 
   // ---------- тени: только когда что-то сдвинулось ----------
@@ -187,13 +194,13 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   function shadowCasters() {
     scene.updateMatrixWorld();
     let sum = 0, i = 0;
-    scene.traverseVisible(o => {
-      if (!o.castShadow || !(o.isMesh || o.isLight)) return;
+    for (const o of sceneIndex.shadowObjects()) {
+      if (!o.castShadow || !sceneIndex.visible(o)) continue;
       const e = o.matrixWorld.elements, w = ++i;
       sum += w * (e[0] + 3 * e[5] + 7 * e[10] + 11 * e[12] + 13 * e[13] + 17 * e[14] + 19 * e[1] + 23 * e[8]);
       if (o.isInstancedMesh) sum += w * (o.instanceMatrix.version + 31 * o.count);
       if (o.isLight) sum += w * (o.intensity > 0 ? 37 : 41);
-    });
+    }
     return sum + i * 1e-3;
   }
   function refreshShadows() {
@@ -207,33 +214,37 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   let seen = new WeakMap(), lightSig = '', scanNeeded = true, compile = null;
   function lightSignature() {
     const n = {};
-    scene.traverseVisible(o => {
-      if (!o.isLight || !o.layers.test(camera.layers)) return;
+    for (const o of sceneIndex.lights()) {
+      if (!o.layers.test(camera.layers) || !sceneIndex.visible(o)) continue;
       const k = o.type + (o.castShadow ? 's' : '') + (o.map ? 'm' : '');
       n[k] = (n[k] || 0) + 1;
-    });
+    }
     return Object.keys(n).sort().map(k => k + n[k]).join();
   }
   // Прозрачные двусторонние (и стекло с пропусканием) three сам рисует в два прохода, переключая side с needsUpdate:
   // их версия растёт каждый кадр без новых программ — у них считается только появление, не версия.
   const twoPass = m => m.side === THREE.DoubleSide && !m.forceSinglePass && (m.transparent || m.transmission > 0);
+  const freshMaterials = new Set();
   // Возвращает null — нового нет; [] — сменился набор источников (собрать всё); иначе меши с новыми материалами.
   function scanScene() {
     scanNeeded = false;
-    const fresh = [];
+    freshMaterials.clear();
     const check = m => {
       if (!m) return false;
       const v = seen.get(m);
       if (v === m.version || (v !== undefined && twoPass(m))) return false;
       seen.set(m, m.version); return true;
     };
-    scene.traverse(o => {
-      if (!o.material) return;
-      if (Array.isArray(o.material) ? o.material.map(check).includes(true) : check(o.material)) fresh.push(o);
-    });
+    for (const material of sceneIndex.materials()) if (check(material)) freshMaterials.add(material);
     const sig = lightSignature();
     if (sig !== lightSig) { lightSig = sig; return []; }
-    return fresh.length ? fresh : null;
+    if (!freshMaterials.size) return null;
+    const fresh = [];
+    for (const object of sceneIndex.materialObjects) {
+      const materials = object.material;
+      if (Array.isArray(materials) ? materials.some(material => freshMaterials.has(material)) : freshMaterials.has(materials)) fresh.push(object);
+    }
+    return fresh;
   }
   // Собирать только новое: обход всей сцены в renderer.compile — ~60 мс. Меши подаются «тенями» (Object.create)
   // без детей: их источники не попадут в сборку второй раз (иначе ключ программ был бы с лишним светом).
@@ -349,7 +360,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     const want = explicit && !ptFailed && !broken;
     if (want && !pt) loadTracer();
     if (!want || !pt || building || quiet < SETTLE) {
-      if (rasterDirty) { rasterDirty = false; refreshShadows(); drawRaster(); if (ov) overlay.draw(); if (!explicit) watchFrameRate(now); drawnWaiters.splice(0).forEach(f => f()); }
+      if (rasterDirty) { rasterDirty = false; refreshShadows(); drawRaster(true); if (ov) overlay.draw(); if (!explicit) watchFrameRate(now); drawnWaiters.splice(0).forEach(f => f()); }
       report(0, want ? (pt && !building ? 'waiting' : building ? 'building' : 'loading') : 'idle');
       return;
     }
@@ -569,6 +580,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     composer.passes.forEach(p => p.dispose()); composer.dispose();
     batches.dispose();
     eco.dispose();
+    sceneIndex.release();
     if (meter) { meter.rt.dispose(); meter.quad.dispose(); meter.quad.material.dispose(); meter = null; }
     canvas.removeEventListener('webglcontextlost', onLost);
     canvas.removeEventListener('webglcontextrestored', onRestored);

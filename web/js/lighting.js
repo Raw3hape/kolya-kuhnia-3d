@@ -49,6 +49,7 @@ import { outdoorAreas } from './walk.js';
 import { rasterBusy } from './render.js';
 import { assetUrl, track, retry, whenRoom, isRoomReady } from './loading.js';
 import { createFilteredSHGrid } from './filtered-sh-grid.js';
+import { acquireSceneIndex } from './scene-index.js';
 
 // ---------- настройки ----------
 
@@ -451,6 +452,7 @@ function patchedLightsBegin(THREE) {
 // ---------- основное ----------
 
 export function createLighting({ THREE, scene, renderer, plan, M, getState, camera = null, controls = null, requestRender = () => {}, hdriPath = 'textures/hdri/' }) {
+  const sceneIndex = acquireSceneIndex(scene);
   RectAreaLightUniformsLib.init();
   const H = plan.ceiling;
   const Z = buildZones(plan);
@@ -638,10 +640,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     mat.needsUpdate = true;
   }
   function patchScene() {
-    scene.traverse(o => {
-      if (!o.material) return;
-      if (Array.isArray(o.material)) o.material.forEach(patch); else patch(o.material);
-    });
+    for (const material of sceneIndex.materials()) patch(material);
   }
 
   // --- маски источников: тот же порядок, что у three (обход сцены, затем источники с тенью вперёд)
@@ -658,16 +657,12 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     return z?.kind === 'room' ? z.lampMask : 0xffff;
   }
   const collected = [];
-  function collect(o, layers) {
-    if (o.visible === false) return;
-    if (o.isLight && o.layers.test(layers)) collected.push(o);
-    for (const c of o.children) collect(c, layers);
-  }
   const key = l => (l.castShadow ? 2 : 0) + (l.map ? 1 : 0);
   function updateMasks(cam) {
     collected.length = 0;
-    collect(scene, cam.layers);
-    const sorted = collected.map((l, i) => [l, i]).sort((a, c) => key(c[0]) - key(a[0]) || a[1] - c[1]).map(a => a[0]);
+    for (const light of sceneIndex.lights()) if (light.layers.test(cam.layers) && sceneIndex.visible(light)) collected.push(light);
+    // Array.sort is stable: equal priorities retain Three's traversal order.
+    collected.sort((a, c) => key(c) - key(a));
     const n = [0, 0, 0, 0, 0];
     const put = (t, l) => {
       const i = n[t]++;
@@ -675,7 +670,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       const v = lightMask(l), k = t * MASK_W + i;
       if (maskData[k] !== v) { maskData[k] = v; maskChanged = true; }
     };
-    for (const l of sorted) {
+    for (const l of collected) {
       if (l.isPointLight) put(0, l);
       else if (l.isSpotLight) put(1, l);
       else if (l.isDirectionalLight) put(2, l);
@@ -687,14 +682,9 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   const lampLayer = new THREE.Layers(); lampLayer.set(SHADER_LAMP_LAYER);
   const lampList = [], tmpP = new THREE.Vector3(), tmpT = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
   let lampWarned = false;
-  function collectLamps(o) {
-    if (o.visible === false) return;
-    if (o.isLight && o.layers.test(lampLayer) && !o.layers.isEnabled(0) && o.intensity > 0) lampList.push(o);
-    for (const c of o.children) collectLamps(c);
-  }
   function packLamps() {
     lampList.length = 0;
-    collectLamps(scene);
+    for (const light of sceneIndex.lights()) if (light.layers.test(lampLayer) && !light.layers.isEnabled(0) && light.intensity > 0 && sceneIndex.visible(light)) lampList.push(light);
     const n = { spot: 0, point: 0, rect: 0 }, S = U.rlSpot.value, Pt = U.rlPoint.value, R = U.rlRect.value;
     for (const l of lampList) {
       const t = l.isSpotLight ? 'spot' : l.isPointLight ? 'point' : l.isRectAreaLight ? 'rect' : null;
@@ -856,6 +846,9 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
   function renderFaces(job, budget) {
     const t0 = performance.now(), total = nP * 6;
     const bg = scene.background, rt = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate;
+    const autoWorld = scene.matrixWorldAutoUpdate;
+    // All probe faces in this synchronous batch see the same world transforms.
+    // Update once, instead of once for every face of every probe.
     const clearA = renderer.getClearAlpha(); renderer.getClearColor(savedClear);
     const grid = U.rlGrid.value;
     const filteredGrid = U.rlFilteredGrid.value;
@@ -869,6 +862,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     renderer.setRenderTarget(atlas);
     let hidden = false;
     try {
+      scene.updateMatrixWorld(); scene.matrixWorldAutoUpdate = false;
       do {
         if (!job.full) { job.full = true; renderer.shadowMap.needsUpdate = true; }
         else if (!hidden) { hidden = true; for (const o of small) o.visible = false; }
@@ -892,6 +886,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       scene.background = bg;
       renderer.setClearColor(savedClear, clearA);
       renderer.shadowMap.autoUpdate = auto;
+      scene.matrixWorldAutoUpdate = autoWorld;
       renderer.setRenderTarget(rt);
     }
   }
@@ -1055,7 +1050,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
       if (src !== e.bg) src.dispose();
       old.dispose();
     }
-    scene.traverse(o => { if (o.isLight && o.castShadow && o.shadow) o.shadow.needsUpdate = true; });
+    for (const light of sceneIndex.lights()) if (light.castShadow && light.shadow) light.shadow.needsUpdate = true;
     bake = null;
     if (current.mode) apply(current.mode, current.state); else invalidate();
   }
@@ -1093,6 +1088,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     maskTex.dispose(); pmrem.dispose();
     patchedMaterials.clear();
     gl.useProgram = useProgram;
+    sceneIndex.release();
   }
 
   // для проверок из консоли / тестовой страницы
