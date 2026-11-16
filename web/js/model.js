@@ -609,7 +609,7 @@ function buildFridge(kind, m, kit, yTop, M) {
   for(const p of [[.025,.025+wall,bottom,h,z0,z1],[.025,d,bottom,bottom+wall,z0,z1],[.025,d,h-wall,h,z0,z1],
     [.025,d,bottom,h,z0,z0+wall],[.025,d,bottom,h,z1-wall,z1]])g.add(boxAt(...p,lining));
   for(const ratio of [1/3,2/3]){const y=bottom+(h-bottom)*ratio,panel=boxAt(.06,d-.035,y,y+.006,z0+wall,z1-wall,shelf,{cast:false});panel.userData.partyShelf=true;panel.userData.passLight=true;g.add(panel);}
-  const hinge=new THREE.Group();hinge.name='fridge_door_hinge';hinge.userData.partyFridgeDoor=true;hinge.position.set(d-.012,bottom,z1);
+  const hinge=new THREE.Group();hinge.name='fridge_door_hinge';hinge.userData.partyFridgeDoor=true;hinge.userData.noBodyCollider=true;hinge.position.set(d-.012,bottom,z1);
   const door=boxAt(d-.03,D,ph+kit.frontGap,h,z0,z1,kind==='under'?M.fronts:M.fridge,{slot:kind==='under'?'fronts':'fridge',partyFridgeHandle:true});
   door.position.sub(hinge.position);hinge.add(door);
   const handle=vHandle(D,h-.30,z0+.045,.20,M.metal);handle.position.sub(hinge.position);hinge.add(handle);g.add(hinge);

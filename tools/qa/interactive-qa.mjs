@@ -100,7 +100,7 @@ try{
  if(process.env.QA_SOLO_ONLY!=='1'){
   await solo.locator('#kmp-launch').click();await solo.locator('#kmp-name').fill('Тест хозяин');await solo.locator('.kmp-form button[type=submit]').click();await connected(solo);
   await solo.waitForFunction(()=>__kitchen.walk.walking&&!__kitchen.multiplayer.applying);
-  await walkRoute(solo,1.12,2.5);await aim(solo,await solo.evaluate(()=>__kitchen.party.interactionPoint('fridge')));await solo.keyboard.press('e');await solo.waitForFunction(()=>__kitchen.party.debug.state.fridgeOpen);await solo.waitForTimeout(600);
+  await walkRoute(solo,1.35,2.3);await aim(solo,await solo.evaluate(()=>__kitchen.party.interactionPoint('fridge')));await solo.keyboard.press('e');await solo.waitForFunction(()=>__kitchen.party.debug.state.fridgeOpen);await solo.waitForTimeout(600);
   await aim(solo,await solo.evaluate(id=>__kitchen.party.interactionPoint(id),energy));await solo.keyboard.press('e');await solo.waitForFunction(()=>__kitchen.party.held?.kind==='energy');await idle(solo);
   const guest=await page(await solo.evaluate(()=>__kitchen.multiplayer.client.inviteUrl));await guest.locator('#kmp-name').fill('Тест друг');await guest.locator('.kmp-form button[type=submit]').click();await connected(guest);
   await Promise.all([solo,guest].map(async p=>{await p.waitForFunction(()=>!__kitchen.multiplayer.applying&&__kitchen.walk.walking);await p.evaluate(()=>{if(document.querySelector('#panel.open'))document.querySelector('.hide-btn')?.click()})}));

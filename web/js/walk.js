@@ -442,6 +442,8 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     root.updateWorldMatrix?.(true, true);
     root.traverseVisible(o => {
       if (!o.isMesh || o.userData.glass || o.userData.shadowOnly) return;
+      // Authored animated small props never inflate the static walking footprint.
+      for (let node = o; node && node !== root; node = node.parent) if (node.userData.noBodyCollider) return;
       tmpBox.setFromObject(o);
       if (tmpBox.isEmpty() || tmpBox.min.y > bottom || tmpBox.max.y < top) return;
       const w = tmpBox.max.x - tmpBox.min.x, d = tmpBox.max.z - tmpBox.min.z;
