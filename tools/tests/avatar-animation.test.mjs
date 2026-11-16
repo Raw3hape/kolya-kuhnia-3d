@@ -57,9 +57,10 @@ test('Head retains independent yaw and look pitch while seated and carrying eith
   }
 });
 
-test('Pitched ADS support hand remains at the actual rotated weapon foregrip', () => {
-  for (const weapon of ['rifle', 'bolt', 'shotgun']) for (const pitch of [-0.55, 0.55]) {
-    const pose = solveAvatarPose({ weapon, aiming: 1, aimPitch: pitch, shotAge: 10 });
+test('Hip fire and ADS preserve shot pitch and support contact on the rotated foregrip', () => {
+  for (const weapon of Object.keys(W)) for (const pitch of Array.from({ length: 23 }, (_, i) => -1.1 + i * 0.1)) for (const aiming of [0, 0.5, 1]) {
+    const pose = solveAvatarPose({ weapon, aiming, aimPitch: pitch, shotAge: 10 });
+    close(pose.hands.right[0], pitch);
     const v = W[weapon].support, angle = pose.hands.right[0], c = Math.cos(angle), s = Math.sin(angle);
     const expected = [v[0], v[1] * c - v[2] * s, v[1] * s + v[2] * c];
     const actual = pose.arms.left.wrist.map((n, i) => n - pose.arms.right.wrist[i]);
@@ -110,6 +111,13 @@ test('Production rig has real joints, hand-parented props, exact grip contact, m
         const world = object => { const p = object.position.clone(); object.getWorldPosition(p); return p.toArray(); };
         close(distance(world(wrist), world(grip)), 0);
         const muzzle = avatar.getMuzzleWorldPosition(); assert.equal(!!muzzle, Object.hasOwn(W, kind));
+        if (muzzle) for (const aiming of [0, 1]) for (const pitch of [-0.7, 0.7]) {
+          avatar.update({ weapon: kind, aiming, aimPitch: pitch, shotAge: 10 });
+          avatar.root.updateMatrixWorld(true);
+          const node = avatar.root.getObjectByName('avatar_muzzle');
+          const direction = avatar.root.position.clone().set(0, 0, -1).applyQuaternion(node.getWorldQuaternion(avatar.root.quaternion.clone()));
+          close(direction.x, 0); close(direction.y, Math.sin(pitch)); close(direction.z, -Math.cos(pitch));
+        }
         let visible = 1; avatar.root.traverse(o => { if (!o.isMesh) return; for (let p = o; p; p = p.parent) if (!p.visible) return; visible++; });
         assert.ok(visible <= 20, `${AVATAR_ROSTER[slot].id}/${kind} needs ${visible} drawables`);
         finiteTree(avatar.animation);

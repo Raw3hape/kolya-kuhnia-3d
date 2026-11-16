@@ -96,10 +96,14 @@ export function solveAvatarPose(state = {}, slot = 0) {
   const recoil = weapon ? Math.exp(-shotAge * 24) * Math.sin(Math.min(1, shotAge / 0.075) * Math.PI) * weapon.recoil : 0;
   if (weapon) {
     right = mix(weapon.right, weapon.aimed, aiming);
-    right = rotatePitch(right, pitch * (0.25 + aiming * 0.75), [R.shoulderX, R.shoulderY, 0]);
+    right = rotatePitch(right, pitch, [R.shoulderX, R.shoulderY, 0]);
     right[2] += recoil * 0.035; right[1] += recoil * 0.015;
-    handEuler = [pitch * (0.25 + aiming * 0.75) + recoil * 0.12, 0, 0];
+    handEuler = [pitch + recoil * 0.12, 0, 0];
     left = add(right, rotatePitch(weapon.support, handEuler[0], [0, 0, 0]));
+    // Move the rigid two-hand grip inward when a pitched foregrip would exceed
+    // the support arm's reach; never leave the hand floating beside the barrel.
+    const support = solveArm(-1, left).wrist;
+    right = add(right, support.map((v, i) => v - left[i])); left = support;
     leftEuler = [...handEuler];
     if (activeAction && kind === 'draw') {
       const raised = windowed(progress, 0.12, 0.95);

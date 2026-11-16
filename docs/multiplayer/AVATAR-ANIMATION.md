@@ -32,7 +32,7 @@ Feet start at y=0, forward is −Z, and the external root follows the room pose.
 - The head and its hairstyle/accessories rotate independently. Reading adds a downward bias while preserving look-pitch response; head yaw remains independent when seated.
 - Arms use analytic two-bone IK with an outward elbow pole. Requested reach is clamped to anatomical length. Weapon foregrip offsets rotate with aim pitch. The right wrist owns every prop through `avatar_gear`; its explicit grip marker coincides with the hand, including newspaper offsets.
 - Thighs, knees and ankles articulate separately. Walking/running use deterministic room-time gait with foot lift and sagittal leg IK; jumping tucks the legs, landing compresses the knees, and seat/stand cues blend authored hip height and knee flexion.
-- Draw/holster, ADS, recoil/flash and all four reload styles are visible. Rifle/pistol magazines transfer to the free hand; the bolt cycles; double barrels break open.
+- Draw/holster, ADS, recoil/flash and all four reload styles are visible. The barrel follows actual look pitch both at the hip and in ADS; grip fitting keeps the free hand on its support within reach. Rifle/pistol magazines transfer to the free hand; the bolt cycles; double barrels break open.
 - Phone pickup/read/tap/drop and newspaper pickup/read/page-turn/drop have separate gestures and hand-mounted props. During external door/hood/media use, the free hand reaches while the other retains the weapon or item.
 - Holster/drop retain the departing prop only during the accepted transition, using `targetId` after the canonical inventory has changed. The solver never delays ownership or ammo rules.
 
@@ -46,7 +46,7 @@ The public gallery uses one renderer and ten scissor views. It is static on firs
 
 ## Verification on 2026-11-16
 
-`node --test tools/tests/avatar-animation.test.mjs`: **9/9 pass**. Coverage includes 300 deterministic sampled states, finite/anatomically bounded joints (including pole-aligned reaches), sit/jump/land/run poses, carrying/seated look angles, pitched foregrip contact, timed item/weapon cues, external use while armed/holding items, exact real-rig grip contact, muzzle behavior, draw budget and complete resource disposal.
+`node --test tools/tests/avatar-animation.test.mjs`: **9/9 pass**. Coverage includes 300 deterministic sampled states, finite/anatomically bounded joints (including pole-aligned reaches), sit/jump/land/run poses, carrying/seated look angles, hip/ADS foregrip contact, timed item/weapon cues, external use while armed/holding items, exact real-rig grip contact and muzzle directions across all ten rigs/four guns, draw budget and complete resource disposal.
 
 A bounded real-browser smoke opened only `/characters.html`, one fresh profile/page/canvas. All ten models loaded, static default had no RAF, and there were no page errors or horizontal overflow. Each gun/phone/newspaper remained a descendant of `right_wrist` with measured grip error zero; muzzle coordinates existed only for guns. Seated knees measured approximately +1.654/−1.654 radians. The mixed-pose contact sheet was visually reviewed. The renderer/page/profile were closed, and both exact owned Node/Chrome PIDs were verified absent.
 
