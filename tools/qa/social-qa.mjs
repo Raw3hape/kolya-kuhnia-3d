@@ -83,6 +83,7 @@ try {
   check('native shower produces shared flowing water', await solo.evaluate(() => __kitchen.scene.getObjectByName('social_activities').children.some(o => o.isPoints && o.visible)));
   await solo.context().close();
   }
+  if (!process.env.QA_SOLO_ONLY) {
   const host = await page();
   await host.locator('#kmp-launch').click(); await host.locator('#kmp-name').fill('Social host'); await host.locator('.kmp-form button[type=submit]').click(); await connected(host);
   const guest = await page(await host.evaluate(() => __kitchen.multiplayer.client.inviteUrl)); await guest.locator('#kmp-name').fill('Social guest'); await guest.locator('.kmp-form button[type=submit]').click(); await connected(guest);
@@ -118,8 +119,10 @@ try {
   const shared = await Promise.all([host, guest].map(p => p.evaluate(() => __kitchen.social.debug.state.pizza)));
   check('shared contents and position agree after carrying and concurrent eating', shared[0].remaining === shared[1].remaining && shared[0].position.every((n, i) => Math.abs(n - shared[1].position[i]) < .001));
   await guest.context().close(); await host.context().close();
+  }
   if (!process.env.QA_ROOM_ONLY) {
   const mobile = await page(url, true);
+  await mobile.waitForFunction(() => __kitchen.social.debug.state.pizza);
   await mobile.evaluate(() => __kitchen.walk.enter({ x: -2.03, z: 5.25 }, Math.PI)); await mobile.waitForTimeout(1000);
   await mobile.evaluate(() => { const p = __kitchen.social.debug.state.pizza.position, c = __kitchen.camera; c.lookAt(p[0], p[1] + .03, p[2]); });
   // Mobile aiming follows the same view/controller path through a drag.
