@@ -50,6 +50,7 @@ import { rasterBusy } from './render.js';
 import { assetUrl, track, retry, whenRoom, isRoomReady } from './loading.js';
 import { createFilteredSHGrid } from './filtered-sh-grid.js';
 import { acquireSceneIndex } from './scene-index.js';
+import { createMaterialPatchPass } from './lighting-materials.js';
 
 // ---------- настройки ----------
 
@@ -641,9 +642,7 @@ export function createLighting({ THREE, scene, renderer, plan, M, getState, came
     mat.addEventListener('dispose', () => patchedMaterials.delete(mat));
     mat.needsUpdate = true;
   }
-  function patchScene() {
-    for (const material of sceneIndex.materials()) patch(material);
-  }
+  const patchScene = createMaterialPatchPass(sceneIndex, patch);
 
   // --- маски источников: тот же порядок, что у three (обход сцены, затем источники с тенью вперёд)
   const tmpV = new THREE.Vector3(), tmpD = new THREE.Vector3();

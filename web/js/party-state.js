@@ -5,6 +5,17 @@ const finite = Number.isFinite;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const vec = a => Array.isArray(a) && a.length === 3 && a.every(n => finite(n) && Math.abs(n) < 1500);
 const copy = value => structuredClone(value);
+// Freeze detached presentation copies only; simulation objects remain writable.
+function presentationCopy(value) {
+  const result = copy(value);
+  function freeze(object) {
+    if (!object || typeof object !== 'object' || Object.isFrozen(object) || !Array.isArray(object) && Object.getPrototypeOf(object) !== Object.prototype) return;
+    // Freeze before following children to stop cycles without an allocated Set.
+    Object.freeze(object);
+    for (const key in object) if (Object.hasOwn(object, key)) freeze(object[key]);
+  }
+  freeze(result); return result;
+}
 const kinds = new Set(['beer', 'energy', 'vape', 'hookah']);
 export const isDrink = item => item?.kind === 'beer' || item?.kind === 'energy';
 const distance = (a, b) => Math.hypot(...a.map((n, i) => n - b[i]));
@@ -28,23 +39,30 @@ export function createPartySimulation({ spec = {}, collision = null, floorAt = n
   const rules = partyRules(spec), manifest = new Map(), items = new Map();
   let time = 0, serial = 0, fridgeOpen = false;
   const boosts = new Map();
+  const itemCopies = new Map(), dirtyItems = new Set();
+  let presentedItems = null, presentedBoosts = null;
+  // Canonical item writes/replacements must invalidate their detached view.
+  const touch = id => { dirtyItems.add(id); presentedItems = null; };
   for (const item of (Array.isArray(spec.items) ? spec.items : []).slice(0, 64)) {
     if (typeof item.id !== 'string' || !/^[\w-]{1,80}$/.test(item.id) || !kinds.has(item.kind) || !vec(item.position) || manifest.has(item.id)) continue;
     manifest.set(item.id, { id: item.id, kind: item.kind, variant: item.variant ?? null, position: [...item.position] });
   }
   const fresh = base => ({ ...copy(base), owner: null, sips: 0, status: 'ready', action: null, flight: null, brokenAt: null, breakSerial: 0, crushed: false });
   const held = actorId => [...items.values()].find(item => item.owner === actorId) || null;
-  function reset() { fridgeOpen = false; boosts.clear(); for (const base of manifest.values()) items.set(base.id, fresh(base)); }
+  function reset() { fridgeOpen = false; boosts.clear(); presentedBoosts = null; itemCopies.clear(); dirtyItems.clear();
+    for (const base of manifest.values()) { items.set(base.id, fresh(base)); touch(base.id); } }
   reset();
   function release(actorId) {
     const item = held(actorId); if (!item) return;
     item.owner = null; item.status = item.crushed ? 'resting' : 'ready'; item.position = [...manifest.get(item.id).position]; item.flight = null; item.action = null;
+    touch(item.id);
   }
   function breakItem(id, point, at = time) {
     const item = items.get(id);
     if (!item || !isDrink(item) || ['broken','resting'].includes(item.status)) return false;
     if (vec(point)) item.position = [...point];
     item.owner = null; item.status = item.kind === 'energy' ? 'resting' : 'broken'; item.flight = null; item.brokenAt = at; item.breakSerial = ++serial; item.action = null;
+    touch(item.id);
     return true;
   }
   function canTake(player, id) {
@@ -71,7 +89,7 @@ export function createPartySimulation({ spec = {}, collision = null, floorAt = n
       if (verb === 'sip') {
         if (!isDrink(item) || item.sips >= rules.sips || item.crushed) return reject('bottle_empty');
         item.sips++; item.action = { kind: 'sip', at: time, duration: rules.sipSeconds, actorId };
-        if (item.kind === 'energy') boosts.set(actorId,{actorId,variant:item.variant,at:time,until:time+rules.effectSeconds,strength:item.sips/rules.sips});
+        if (item.kind === 'energy') { boosts.set(actorId,{actorId,variant:item.variant,at:time,until:time+rules.effectSeconds,strength:item.sips/rules.sips}); presentedBoosts = null; }
       } else if (verb === 'crush') {
         if (item.kind !== 'energy' || item.sips < rules.sips || item.crushed) return reject('cannot_crush');
         item.crushed=true;item.action={kind:'crush',at:time,duration:rules.crushSeconds,actorId};
@@ -86,6 +104,7 @@ export function createPartySimulation({ spec = {}, collision = null, floorAt = n
         item.flight = { from: [...from], velocity: direction.map((n, i) => n * rules.throwSpeed + (i === 1 ? 1.2 : 0)), at: time };
       } else return reject('invalid_action');
     }
+    touch(item.id);
     return { ok: true, item: copy(item), event: { kind: verb, actorId, itemId: id, at: time } };
   }
   function step(dt, players) {
@@ -97,8 +116,9 @@ export function createPartySimulation({ spec = {}, collision = null, floorAt = n
         const player = players.find(p => p.id === item.owner);
         if (!player || distance(positionOf(player), manifest.get(item.id).position) > rules.hoseLength) release(item.owner);
       }
-      if (!rules.persistentDebris && ['broken','resting'].includes(item.status) && end - item.brokenAt >= rules.respawnSeconds) { items.set(item.id, fresh(manifest.get(item.id))); continue; }
+      if (!rules.persistentDebris && ['broken','resting'].includes(item.status) && end - item.brokenAt >= rules.respawnSeconds) { items.set(item.id, fresh(manifest.get(item.id))); touch(item.id); continue; }
       if (item.status !== 'flying') continue;
+      touch(item.id);
       const flight = item.flight;
       const at = t => flight.from.map((n, i) => n + flight.velocity[i] * t - (i === 1 ? 0.5 * rules.gravity * t * t : 0));
       for (let cursor = time; cursor < end - 1e-9 && item.status === 'flying';) {
@@ -122,7 +142,7 @@ export function createPartySimulation({ spec = {}, collision = null, floorAt = n
       }
     }
     time = end;
-    for(const [id,boost] of boosts)if(boost.until<=time)boosts.delete(id);
+    for(const [id,boost] of boosts)if(boost.until<=time){boosts.delete(id);presentedBoosts=null;}
   }
   function transfer(actorId,targetId,id,players=[]) {
     const item=items.get(id),from=players.find(p=>p.id===actorId),to=players.find(p=>p.id===targetId);
@@ -131,7 +151,7 @@ export function createPartySimulation({ spec = {}, collision = null, floorAt = n
     if(held(targetId))return{ok:false,error:'recipient_busy'};
     if(item.kind==='hookah'&&(!to||distance(positionOf(to),manifest.get(id).position)>rules.hoseLength))return{ok:false,error:'hose_out_of_reach'};
     if(item.action&&time<item.action.at+item.action.duration)return{ok:false,error:'item_busy'};
-    item.owner=targetId;item.action={kind:'pickup',actorId:targetId,at:time,duration:.6};return{ok:true,item:copy(item)};
+    item.owner=targetId;item.action={kind:'pickup',actorId:targetId,at:time,duration:.6};touch(item.id);return{ok:true,item:copy(item)};
   }
   function snapshot() { return { version: 1, time, fridgeOpen, boosts:[...boosts.values()].map(copy), items: [...items.values()].map(copy) }; }
   function restore(value) {
@@ -151,14 +171,29 @@ export function createPartySimulation({ spec = {}, collision = null, floorAt = n
     }
     for (const base of manifest.values()) if (!next.has(base.id)) next.set(base.id, fresh(base));
     items.clear(); for (const [id, item] of next) items.set(id, item);
+    itemCopies.clear(); dirtyItems.clear(); for (const id of items.keys()) touch(id); presentedBoosts = null;
     fridgeOpen=!!value.fridgeOpen;boosts.clear();for(const boost of (value.boosts||[]))if(typeof boost.actorId==='string'&&finite(boost.until)&&finite(boost.at)&&finite(boost.strength))boosts.set(boost.actorId,copy(boost));
     time = value.time; serial = Math.max(0, ...[...items.values()].map(item => finite(item.breakSerial) ? item.breakSerial : 0)); return true;
   }
   function setHome(id, position) {
     const base = manifest.get(id); if (!base || !vec(position)) return false;
     base.position = [...position]; const item = items.get(id);
-    if (item.status === 'ready' || item.kind === 'hookah') item.position = [...position];
+    if (item.status === 'ready' || item.kind === 'hookah') { item.position = [...position]; touch(id); }
     return true;
   }
-  return { rules, canTake, command, step, snapshot, restore, release, reset, held, transfer, breakItem, setHome, status: id => items.get(id)?.status, setCollision(fn) { collision = typeof fn === 'function' ? fn : null; } };
+  const localPresentation = Object.freeze({ version: 1, get time() { return time; }, get fridgeOpen() { return fridgeOpen; },
+    get boosts() { return presentedBoosts ??= Object.freeze([...boosts.values()].map(presentationCopy)); },
+    get items() {
+      if (!presentedItems) {
+        const changed = [];
+        for (const [id, item] of items) if (dirtyItems.has(id) || !itemCopies.has(id)) changed.push(item);
+        // One clone for a moving cohort; keep generic restored fields/cycles
+        // and retain existing detached records for every unchanged item.
+        if (changed.length === 1) itemCopies.set(changed[0].id, presentationCopy(changed[0]));
+        else if (changed.length > 1) for (const item of presentationCopy(changed)) itemCopies.set(item.id, item);
+        presentedItems = Object.freeze([...items.keys()].map(id => itemCopies.get(id))); dirtyItems.clear();
+      }
+      return presentedItems;
+    } });
+  return { rules, canTake, command, step, snapshot, presentation: () => localPresentation, restore, release, reset, held, transfer, breakItem, setHome, status: id => items.get(id)?.status, setCollision(fn) { collision = typeof fn === 'function' ? fn : null; } };
 }

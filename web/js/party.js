@@ -88,7 +88,7 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
       if(version!==generation||verb==='take'&&!active())return{ok:false};
       const result=network?await network.request(payload):sim.command(pose(),verb,id,payload.direction);
       if(version!==generation)return{ok:false};
-      if(!network)accept(sim.snapshot());
+      if(!network)accept(sim.presentation());
       if(result?.ok&&verb==='take')getVM()?.setWeapon('none');
       return result;
     }finally{if(version===generation){pending=false;renderHUD();requestRender();}}
@@ -97,7 +97,7 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
     generation++;pending=false;boost?.clear();litter?.clear();
     if(adapter&&!network)savedSolo=sim?.snapshot();
     network=adapter||null;players=[];heldId=null;clearHand();
-    if(!adapter&&sim){if(savedSolo)sim.restore({...savedSolo,boosts:[]});savedSolo=null;seenAction.clear();seenBreak.clear();accept(sim.snapshot());}
+    if(!adapter&&sim){if(savedSolo)sim.restore({...savedSolo,boosts:[]});savedSolo=null;seenAction.clear();seenBreak.clear();accept(sim.presentation());}
   }
   function updateHomes(){
     if(!ready||(network&&!network.isHost?.()))return;
@@ -189,7 +189,7 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
   function update(dt){
     if(!ready)return false;actionClock+=dt;
     updateHomes();
-    if(!network){sim.step(dt,[pose()]);accept(sim.snapshot());}
+    if(!network){sim.step(dt,[pose()]);accept(sim.presentation());}
     else if(state)state={...state,time:state.time+dt};
     if(!state)return false;
     let fridgeTree=fridge;while(fridgeTree?.parent)fridgeTree=fridgeTree.parent;if(fridgeTree!==scene)fridge=scene.getObjectByName('fridge_door_hinge');
@@ -254,13 +254,13 @@ export function createParty({THREE,scene,camera,renderer,canvas,pipe,plan,site,g
     for(const def of spec.items){
       const o=def.kind==='energy'?energyModels.create({id:def.id}):models[def.kind]({id:def.id});o.position.fromArray(def.position);o.userData.partyId=def.id;
       if(def.kind==='beer'){o.userData.breakable='glass';assignNetworkObjectIds(o,'party:'+def.id);o.userData.networkId='party:'+def.id;
-        o.traverse(mesh=>{if(mesh.isMesh)shotHandlers.set(mesh,()=>{if(!network){sim.breakItem(def.id);accept(sim.snapshot());}return true;});});}
+        o.traverse(mesh=>{if(mesh.isMesh)shotHandlers.set(mesh,()=>{if(!network){sim.breakItem(def.id);accept(sim.presentation());}return true;});});}
       else{o.userData.networkEntity=true;}
       world.add(o);objects.set(def.id,o);
       if(def.kind==='hookah')hose=createPartyHose({THREE,scene:world,recipe:models.recipe.hose});
     }
-    ready=true;accept(network&&state?state:sim.snapshot());
-    unrestore=onRestore(()=>{if(!network){sim.reset();effects.clear();litter.clear();boost.clear();seenBreak.clear();accept(sim.snapshot());}});requestRender();
+    ready=true;accept(network&&state?state:sim.presentation());
+    unrestore=onRestore(()=>{if(!network){sim.reset();effects.clear();litter.clear();boost.clear();seenBreak.clear();accept(sim.presentation());}});requestRender();
   });
   return {ready:loading,snapshot,setNetwork,applyNetworkSnapshot:accept,command,traceCollision,update,clearEffects(){effects?.clear();litter?.clear();},
     interactionPoint(id){const o=id==='fridge'?fridge:objects.get(id);if(!o)return null;o.updateWorldMatrix(true,true);const box=new THREE.Box3().setFromObject(o),point=box.getCenter(V());if(o.userData.energy)point.y=box.max.y-.008;return point.toArray();},

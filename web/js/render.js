@@ -199,8 +199,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   // с тенью, плюс по lighting.invalidate() (смена света, мебели, материалов) и смене размеров карт.
   renderer.shadowMap.autoUpdate = false;
   let shadowSum = NaN;
-  function shadowCasters() {
-    scene.updateMatrixWorld();
+  function shadowCasters(matricesCurrent = false) {
+    if (!matricesCurrent) scene.updateMatrixWorld();
     let sum = 0, i = 0;
     for (const o of sceneIndex.shadowObjects()) {
       if (!o.castShadow || !sceneIndex.visible(o)) continue;
@@ -211,8 +211,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     }
     return sum + i * 1e-3;
   }
-  function refreshShadows() {
-    const s = shadowCasters();
+  function refreshShadows(matricesCurrent = false) {
+    const s = shadowCasters(matricesCurrent);
     if (s !== shadowSum) { shadowSum = s; renderer.shadowMap.needsUpdate = true; }
   }
 
@@ -357,7 +357,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
 
   function render() {
     if (document.hidden || lost) return;   // вкладка скрыта или WebGL сброшен — GPU не трогаем
-    if (!explicit) batches.update(camera);
+    const matricesCurrent = !explicit && batches.update(camera) === true;
+    const matrixRevision = sceneIndex.revision;
     if (!explicit && quality === 'eco') eco.update(camera);
     if (compiling()) return;               // шейдеры собираются фоном — на экране прошлый кадр
     const now = performance.now(), quiet = now - lastChange;
@@ -369,7 +370,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     const want = explicit && !ptFailed && !broken;
     if (want && !pt) loadTracer();
     if (!want || !pt || building || quiet < SETTLE) {
-      if (rasterDirty) { rasterDirty = false; refreshShadows(); drawRaster(true); if (ov) { if (overlay?.active()) overlay.draw(); for (const o of extraOverlays) if (o.active()) o.draw(); } if (!explicit) watchFrameRate(now); drawnWaiters.splice(0).forEach(f => f()); }
+      if (rasterDirty) { rasterDirty = false; refreshShadows(matricesCurrent && matrixRevision === sceneIndex.revision); drawRaster(true); if (ov) { if (overlay?.active()) overlay.draw(); for (const o of extraOverlays) if (o.active()) o.draw(); } if (!explicit) watchFrameRate(now); drawnWaiters.splice(0).forEach(f => f()); }
       report(0, want ? (pt && !building ? 'waiting' : building ? 'building' : 'loading') : 'idle');
       return;
     }

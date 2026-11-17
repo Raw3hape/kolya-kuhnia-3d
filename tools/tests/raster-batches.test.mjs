@@ -40,6 +40,51 @@ async function ecoFixture(compile) {
     close() { batches.dispose(); geometry.dispose(); map.dispose(); for (const m of materials) { m.normalMap.dispose(); m.dispose(); } } };
 }
 
+test('retained material guards follow invalid-to-valid transitions and source replacement without reviving stale signatures', async () => {
+  const f = await ecoFixture();
+  try {
+    const material = f.materials[0]; material.opacity = .4;
+    f.batches.draw(() => { assert.equal(f.objects[0].visible, true); assert.equal(f.objects[2].visible, false); });
+    material.opacity = 1; material.emissive.setRGB(.4, .2, .1);
+    f.batches.draw(() => { assert.equal(f.objects[0].visible, true, 'returning to opaque must still detect a changed live uniform'); });
+    f.batches.update(f.camera); await settle();
+    assert.equal(f.batches.stats.groups, 2);
+    f.batches.draw(() => assert.ok(f.objects.every(object => !object.visible)));
+    assert.ok(f.proxies().some(proxy => proxy.material.emissive.equals(material.emissive)));
+    const replacement = material.clone(); replacement.color.setRGB(1, 0, 0);
+    f.objects[0].material = replacement;
+    f.batches.draw(() => { assert.equal(f.objects[0].visible, true); assert.equal(f.objects[1].visible, false); });
+    f.batches.update(f.camera); await settle();
+    f.batches.draw(() => assert.ok(f.objects.every(object => !object.visible)));
+    replacement.transparent = true;
+    f.batches.draw(() => { assert.equal(f.objects[0].visible, true); assert.equal(f.objects[1].visible, false, 'another source retains its own original material guard'); });
+    replacement.dispose();
+  } finally { f.close(); }
+});
+
+test('retained ancestor guards follow reparenting, direct flags, detachment and visibility without rediscovery', async () => {
+  const f = await fixture();
+  try {
+    const left = new THREE.Group(), right = new THREE.Group(), nested = new THREE.Group();
+    f.scene.add(left, right); left.add(nested, f.b); nested.add(f.a);
+    const proxy = f.proxies()[0];
+    left.visible = false;
+    f.batches.draw(() => { assert.equal(proxy.getVisibleAt(0), false); assert.equal(proxy.getVisibleAt(1), false); });
+    assert.equal(left.visible, false);
+    left.visible = true; right.userData.context = true; right.add(nested);
+    f.batches.draw(() => { assert.equal(f.a.visible, true); assert.equal(f.b.visible, false); assert.equal(proxy.getVisibleAt(0), false); });
+    right.userData.context = false;
+    f.batches.draw(() => { assert.equal(f.a.visible, false); assert.equal(proxy.getVisibleAt(0), true); });
+    right.removeFromParent();
+    f.batches.draw(() => { assert.equal(f.a.visible, true); assert.equal(proxy.getVisibleAt(0), false); });
+    f.scene.add(right); nested.visible = false;
+    f.batches.draw(() => assert.equal(proxy.getVisibleAt(0), false));
+    nested.visible = true;
+    f.batches.draw(() => { assert.equal(proxy.getVisibleAt(0), true); assert.equal(f.a.visible, false); });
+    assert.equal(f.a.parent, nested); assert.equal(nested.parent, right); assert.equal(f.a.visible, true);
+  } finally { f.batches.dispose(); }
+});
+
 test('eco batches group by their actual Lambert state and preserve authored PBR, colors and failure restoration', async () => {
   const f = await ecoFixture();
   try {
@@ -561,6 +606,25 @@ test('caller-owned current matrices skip duplicate traversal while movement and 
     f.batches.draw(() => {}); assert.equal(updates, 1);
     f.a.scale.x = -1; f.scene.updateMatrixWorld();
     for (let i = 0; i < 2; i++) f.batches.draw(() => assert.equal(f.a.visible, true), { matricesCurrent: true });
+  } finally { f.batches.dispose(); }
+});
+
+test('discovery reports its matrix preparation only for that update, never caching across later draws', async () => {
+  const f = await fixture();
+  try {
+    const original = f.scene.updateMatrixWorld;
+    let updates = 0;
+    f.scene.updateMatrixWorld = function (...args) { updates++; return original.apply(this, args); };
+    assert.equal(f.batches.update(f.camera), false); assert.equal(updates, 0);
+    f.a.position.x = 9; f.batches.setQuality('eco');
+    assert.equal(f.batches.update(f.camera), true); assert.equal(updates, 1);
+    assert.equal(f.a.matrixWorld.elements[12], 9);
+    assert.equal(f.batches.update(f.camera), false); assert.equal(updates, 1);
+    await settle();
+    f.a.position.x = 12;
+    f.batches.draw(() => assert.equal(f.a.matrixWorld.elements[12], 12));
+    assert.equal(updates, 2, 'standalone draw must prepare new live transforms');
+    f.batches.dispose(); assert.equal(f.batches.update(f.camera), false);
   } finally { f.batches.dispose(); }
 });
 

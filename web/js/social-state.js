@@ -1,6 +1,14 @@
 // Pure shared rules. The solo adapter and host Worker use the same clock and commands.
 import { courierPose, deliveryEase } from './courier-pose.js';
 const clone = value => structuredClone(value);
+function presentationCopy(value) {
+  const result = clone(value), seen = new WeakSet();
+  function freeze(object) {
+    if (!object || typeof object !== 'object' || seen.has(object) || !Array.isArray(object) && Object.getPrototypeOf(object) !== Object.prototype) return;
+    seen.add(object); for (const child of Object.values(object)) freeze(child); Object.freeze(object);
+  }
+  freeze(result); return result;
+}
 const finite3 = value => Array.isArray(value) && value.length === 3 && value.every(Number.isFinite);
 export function socialLocations(plan, spec) {
   const door = plan.openings.find(o => o.type === 'entry');
@@ -13,14 +21,24 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
   let courier = null, pizza = null, shower = { owner: null, until: 0 }, landingReserved = false, landingClearAt = 0;
   let radio = { station: 0, playing: false, volume: spec.radio.volume, since: 0, position: [...spec.radio.position], yaw: spec.radio.yaw || 0 };
   const cooldowns = new Map();
+  const presented = new Map(), dirty = new Set();
+  // In-place entity writes must invalidate; replacement identities are observed.
+  const touch = key => dirty.add(key);
+  function present(key, value) {
+    if (!value) { presented.delete(key); dirty.delete(key); return value; }
+    let cached = presented.get(key);
+    if (!cached || cached.source !== value || dirty.has(key)) { cached = { source: value, copy: presentationCopy(value) }; presented.set(key, cached); dirty.delete(key); }
+    return cached.copy;
+  }
   const eye = player => [player.x, player.eyeY ?? (player.y || 0) + 1.68, player.z];
   const near = (player, position) => Math.hypot(...eye(player).map((v, i) => v - position[i])) <= rules.reach && !blocked(player, position);
-  const setPhase = phase => { courier.phase = phase; courier.phaseAt = time; };
+  const setPhase = phase => { courier.phase = phase; courier.phaseAt = time; touch('courier'); };
   function startLeaving() { setPhase('leaving'); courier.leaving = time; courier.until = time + spec.courier.leaveSeconds; }
   const transferBusy = () => !!pizza?.owner && time < (pizza.transferUntil || 0);
   function courierWaiting() { setPhase(isEntryOpen() ? 'offering' : 'waiting'); courier.recipient = null; }
   function releaseItem(id) {
     if (pizza?.owner !== id) return;
+    touch('pizza');
     if (transferBusy() && courier?.phase === 'handoff' && courier.recipient === id) {
       pizza.owner = null; pizza.location = 'courier'; pizza.transferUntil = 0; courierWaiting();
       pizza.position = courierPose(spec, locations, courier, time).box;
@@ -39,6 +57,11 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
   function command(player, action) {
     if (!player?.id) return false;
     const verb = action.verb;
+    // Commands are infrequent mutation boundaries; rejected commands may renew
+    // a detached copy, but never expose or mutate a live simulation object.
+    if (verb === 'radio' || verb === 'shower') touch(verb);
+    else touch('pizza');
+    if (verb === 'receive') touch('courier');
     if (verb === 'radio') {
       if (!radio.position || !near(player, radio.position)) return false;
       const { station, volume, playing } = action;
@@ -106,9 +129,10 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
         courier = null; nextDelivery = time + rules.deliveryEvery; landingClearAt = time + spec.courier.clearSeconds;
       }
     }
-    if (courier && pizza?.location === 'courier') pizza.position = courierPose(spec, locations, courier, time).box;
+    if (courier && pizza?.location === 'courier') { pizza.position = courierPose(spec, locations, courier, time).box; touch('pizza'); }
     if (!courier && time >= landingClearAt && !isEntryOpen()) landingReserved = false;
     if (pizza?.owner) {
+      touch('pizza');
       const owner = players.find(p => p.id === pizza.owner);
       if (!owner) release(pizza.owner);
       else {
@@ -121,15 +145,20 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     if (shower.owner && (time >= shower.until || !players.some(p => p.id === shower.owner && Math.hypot(p.x - shower.point[0], p.z - shower.point[2]) < rules.showerReach))) shower = { owner: null, until: 0 };
     for (const [id, until] of cooldowns) if (time > until + 5) cooldowns.delete(id);
   }
-  return { step, canTake, command, release, releaseItem, heldBy: id => pizza?.owner === id, reservesLanding: () => landingReserved,
+  const localPresentation = Object.freeze({ get time() { return time; }, get nextDelivery() { return nextDelivery; }, get serial() { return serial; },
+    get bell() { return bell; }, get nextBell() { return nextBell; }, get courier() { return present('courier', courier); }, get pizza() { return present('pizza', pizza); },
+    get shower() { return present('shower', shower); }, get radio() { return present('radio', radio); }, get landingReserved() { return landingReserved; },
+    get landingClearAt() { return landingClearAt; }, get entryOpen() { return !!isEntryOpen(); } });
+  return { step, canTake, command, release, releaseItem, presentation: () => localPresentation, heldBy: id => pizza?.owner === id, reservesLanding: () => landingReserved,
     transfer(from, to, id) {
       if (id !== 'pizza' || pizza?.owner !== from || !to || to === from || transferBusy()) return { ok: false };
-      pizza.owner = to; pizza.open = false; return { ok: true };
+      pizza.owner = to; pizza.open = false; touch('pizza'); return { ok: true };
     },
     reconcileSupport(lookup) {
       if (!pizza?.support) return;
       const before = pizza.support.bounds, after = lookup(pizza.support.id), margin = spec.pizza.size / 2 - 0.015;
       if (after && before.every((n, i) => Math.abs(n - after[i]) < 1e-6)) return;
+      touch('pizza');
       const position = [...pizza.safePosition];
       if (after && after[3] - after[0] >= margin * 2 && after[5] - after[2] >= margin * 2) {
         position[0] = Math.max(after[0] + margin, Math.min(after[3] - margin, position[0] + (after[0] + after[3] - before[0] - before[3]) / 2));
@@ -141,5 +170,5 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     },
     setRadioPose(pose) { const position = finite3(pose?.position) ? [...pose.position] : null; radio = { ...radio, position, yaw: Number.isFinite(pose?.yaw) ? pose.yaw : 0, playing: position ? radio.playing : false }; },
     snapshot: () => clone({ time, nextDelivery, serial, bell, nextBell, courier, pizza, shower, radio, landingReserved, landingClearAt, entryOpen: !!isEntryOpen() }),
-    restore(value) { if (value) { ({ time, nextDelivery, serial, bell, nextBell = 0, courier, pizza, shower, radio, landingReserved = false, landingClearAt = 0 } = clone(value)); cooldowns.clear(); } } };
+    restore(value) { if (value) { ({ time, nextDelivery, serial, bell, nextBell = 0, courier, pizza, shower, radio, landingReserved = false, landingClearAt = 0 } = clone(value)); cooldowns.clear(); presented.clear(); dirty.clear(); } } };
 }

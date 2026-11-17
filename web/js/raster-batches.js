@@ -12,7 +12,7 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
   Object.assign(root.userData, { networkEntity: true, rasterOnly: true, noPick: true, noNetwork: true });
   const groups = new Map(), ids = new WeakMap();
   const materialKeys = new WeakMap(), geometryKeys = new WeakMap(), ecoHooks = new WeakMap();
-  const geometryGuards = new WeakMap(), chainStates = new WeakMap(), opaqueStates = new WeakMap();
+  const geometryGuards = new WeakMap(), chainStates = new WeakMap();
   const hidden = [], shown = [], collapsed = [];
   let sources = [], descriptions = new Map(), serial = 0, lastScan = -Infinity, dirty = true, disposed = false, depth = 0;
   let vertices = 0, rebuilds = 0, camera = null, materialFrame = 0;
@@ -28,38 +28,46 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
   const plainCallbacks = o => o.onBeforeRender === callbacks.onBeforeRender && o.onAfterRender === callbacks.onAfterRender &&
     o.onBeforeShadow === callbacks.onBeforeShadow && o.onAfterShadow === callbacks.onAfterShadow;
   const opaque = m => m && !m.isShaderMaterial && !m.isRawShaderMaterial && !m.transparent && !(m.transmission > 0) && !(m.opacity < 1);
-  function opaqueCurrent(m) {
-    let state = opaqueStates.get(m);
-    if (!state) { state = { frame: -1, value: false }; opaqueStates.set(m, state); }
-    if (state.frame !== materialFrame) { state.frame = materialFrame; state.value = opaque(m); }
-    return state.value;
+  function materialState(material) {
+    let state = materialKeys.get(material);
+    if (!state) { state = { material, frame: -1, key: null, opaqueFrame: -1, opaqueValue: false }; materialKeys.set(material, state); }
+    return state;
   }
-  function chainState(o) {
-    let state = chainStates.get(o);
-    if (!state) { state = { frame: -1, bits: 0 }; chainStates.set(o, state); }
+  function opaqueCurrent(state) {
+    if (state.opaqueFrame !== materialFrame) { state.opaqueFrame = materialFrame; state.opaqueValue = opaque(state.material); }
+    return state.opaqueValue;
+  }
+  function chainRecord(object) {
+    let state = chainStates.get(object);
+    if (!state) { state = { object, frame: -1, bits: 0, parentObject: null, parent: null }; chainStates.set(object, state); }
+    return state;
+  }
+  function chainState(state) {
     if (state.frame === materialFrame) return state.bits;
-    let bits = o === scene ? 3 : o.parent ? chainState(o.parent) : 0;
+    const o = state.object;
+    // Parent identity is still checked every draw: direct reparenting must be
+    // visible immediately, without waiting for structural rediscovery.
+    if (state.parentObject !== o.parent) { state.parentObject = o.parent; state.parent = o.parent ? chainRecord(o.parent) : null; }
+    let bits = o === scene ? 3 : state.parent ? chainState(state.parent) : 0;
     if (!o.visible) bits &= ~2;
     if (marked(o)) bits |= 4;
     state.frame = materialFrame; state.bits = bits; return bits;
   }
-  function collapseParents(object) {
+  function collapseParents(state) {
     // After all guards run, a non-rendering container whose children are all
     // hidden contributes nothing. Prune that exact empty subtree for the actual
     // renderer and the nested eco pass; restore its original flag in finally.
+    let object = state?.object;
     while (object && object !== scene && object.visible && (object.isGroup || object.type === 'Object3D') &&
       !object.isMesh && !object.isLine && !object.isPoints && !object.isSprite && !object.isLight && !object.isLOD) {
-      let state = chainStates.get(object);
-      if (!state) { state = { frame: -1, bits: 0 }; chainStates.set(object, state); }
       if (state.collapseFrame === materialFrame) return;
       state.collapseFrame = materialFrame;
       for (let i = 0; i < object.children.length; i++) if (object.children[i].visible) return;
       collapsed.push(object); object.visible = false;
-      object = object.parent;
+      state = state.parent; object = state?.object;
       // A child container just changed visibility, so a previous unsuccessful
       // ancestor attempt may now succeed. Leaf-source attempts remain cached.
-      const parentState = object && chainStates.get(object);
-      if (parentState) parentState.collapseFrame = -1;
+      if (state) state.collapseFrame = -1;
     }
   }
   function attributeState(a) {
@@ -149,9 +157,9 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
       return Object.keys(v).sort().map(key => [key, semanticValue(v[key])]);
     return ['identity', id(v)]; // unknown objects/functions never become accidentally equivalent.
   }
-  function semanticKey(m) {
-    let cached = materialKeys.get(m);
-    if (cached?.frame === materialFrame) return cached.key;
+  function semanticKey(cached) {
+    if (cached.frame === materialFrame) return cached.key;
+    const m = cached.material;
     const defaultHooks = m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile && m.customProgramCacheKey === THREE.Material.prototype.customProgramCacheKey;
     const roomHooks = m.userData.roomLightingPatched && m.userData.roomLightingBatchSafe;
     const flat = ecoMode && ecoMaterialEligible(THREE, m);
@@ -160,8 +168,11 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
       m.onBeforeRender === THREE.Material.prototype.onBeforeRender) {
       const ownKeys = flat ? ECO_BATCH_KEYS : Object.keys(m);
       if (cached?.checks && cached.flat === flat && cached.hook === m.onBeforeCompile && cached.programKey === m.customProgramCacheKey && cached.roomHooks === !!roomHooks) {
-        let unchanged = ownKeys.length === cached.ownKeys.length;
-        if (unchanged) for (let i=0;i<ownKeys.length;i++) if (ownKeys[i] !== cached.ownKeys[i]) { unchanged=false; break; }
+        let unchanged = ownKeys === cached.ownKeys;
+        if (!unchanged) {
+          unchanged = ownKeys.length === cached.ownKeys.length;
+          if (unchanged) for (let i=0;i<ownKeys.length;i++) if (ownKeys[i] !== cached.ownKeys[i]) { unchanged=false; break; }
+        }
         if (unchanged) for (const check of cached.checks) {
           const next = m[check.name], state = check.state;
           if (state.kind === 0 ? !Object.is(next, state.value) : !valueMatches(next, state)) { unchanged = false; break; }
@@ -187,9 +198,10 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
           `${id(m.onBeforeCompile)}:${id(m.customProgramCacheKey)}`]);
       }
       values.push(['roomLighting', !!roomHooks]); key = JSON.stringify(values);
-      materialKeys.set(m, { frame: materialFrame, key, flat, channels, checks, ownKeys, hook: m.onBeforeCompile, programKey: m.customProgramCacheKey, roomHooks: !!roomHooks }); return key;
+      // Sources retain this record, so signature transitions update it in place.
+      Object.assign(cached, { frame: materialFrame, key, flat, channels, checks, ownKeys, hook: m.onBeforeCompile, programKey: m.customProgramCacheKey, roomHooks: !!roomHooks }); return key;
     }
-    materialKeys.set(m, { frame: materialFrame, key }); return key;
+    cached.frame = materialFrame; cached.key = key; cached.checks = null; return key;
   }
   function safeMatrix(m) {
     const e = m.elements, a = e[0] ** 2 + e[1] ** 2 + e[2] ** 2, b = e[4] ** 2 + e[5] ** 2 + e[6] ** 2, c = e[8] ** 2 + e[9] ** 2 + e[10] ** 2;
@@ -239,17 +251,19 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
     };
     if (Array.isArray(o.material)) for (const p of g.groups) add(o.material[p.materialIndex], p.start, p.count);
     else add(o.material, start, end - start);
-    const source = { object: o, geometry: g, material: o.material, materials: Array.isArray(o.material) ? [...o.material] : null, ecoMode,
+    const source = { object: o, chain: chainRecord(o), geometry: g, material: o.material, materials: Array.isArray(o.material) ? [...o.material] : null, ecoMode,
       version: geometryVersion(g), entries: [], matrix: new THREE.Matrix4(), matrixValid: false, matrixSafe: true,
       guard: geometryGuard(g), savedVisible: true,
       cast: o.castShadow, receive: o.receiveShadow, layers: o.layers.mask, order: o.renderOrder };
+    source.materialStates = source.materials ? source.materials.map(materialState) : null;
+    source.materialState = source.materials ? null : materialState(o.material);
     const layout = source.layout = geometryKey(g);
     for (const [material, parts] of ranges) {
       const whole = parts.length === 1 && parts[0][0] === 0 && parts[0][1] === size;
       const indexed = !!g.index || !whole;
-      const semantic = semanticKey(material);
+      const state = materialState(material), semantic = semanticKey(state);
       const key = `${semantic == null ? 'material:' + id(material) : 'semantic:' + semantic}|${layout}|${indexed}|${o.castShadow}|${o.receiveShadow}|${o.layers.mask}|${o.renderOrder}`;
-      source.entries.push({ source, material, semantic, flat: ecoMode && ecoMaterialEligible(THREE, material), parts, whole, indexed, key,
+      source.entries.push({ source, material, materialState: state, semantic, flat: ecoMode && ecoMaterialEligible(THREE, material), parts, whole, indexed, key,
         viewKey: `${source.version}|${parts.map(p => p.join(',')).join(';')}`,
         indexCount: indexed ? parts.reduce((n, p) => n + p[1], 0) : 0, draws: parts.length });
     }
@@ -265,7 +279,7 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
     }
     // Uniform edits need not bump Material.version. Check the same complete
     // semantics as the draw guard, including transitions to/from identity keys.
-    for (const entry of source.entries) if (semanticKey(entry.material) !== entry.semantic) return false;
+    for (const entry of source.entries) if (semanticKey(entry.materialState) !== entry.semantic) return false;
     return true;
   }
   function viewGeometry(entry) {
@@ -395,15 +409,19 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
     lastScan = performance.now(); dirty = false;
   }
   function update(nextCamera) {
-    if (disposed || !supported) return;
+    if (disposed || !supported) return false;
     if (nextCamera) camera = nextCamera;
-    if (dirty || performance.now() - lastScan >= SCAN_MS) discover();
+    const matricesUpdated = dirty || performance.now() - lastScan >= SCAN_MS;
+    if (matricesUpdated) discover();
     for (const group of groups.values()) {
       if (group.materialVersion !== group.mesh.material.version) {
         group.materialVersion = group.mesh.material.version; group.ready = false; group.failed = false; group.retryAt = group.compileFailures = 0;
       }
       if (!group.failed) compile(group);
     }
+    // Only the caller's current synchronous preparation may reuse this pass.
+    // A later update/draw must still observe live authored transforms.
+    return matricesUpdated;
   }
   function draw(fn, options) {
     if (disposed || lost || !supported || depth || !sources.length) return fn();
@@ -415,7 +433,7 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
     try {
       for (const source of sources) {
         const o = source.object;
-        const chain = chainState(o), visible = !!(chain & 2);
+        const chain = chainState(source.chain), visible = !!(chain & 2);
         let materialSame = o.material === source.material;
         if (materialSame && source.materials) {
           materialSame = o.material.length === source.materials.length;
@@ -426,8 +444,8 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
         const geometrySame = o.geometry === g && geometryCurrent(source.guard);
         let materialsOpaque = materialSame;
         if (materialsOpaque && source.materials) {
-          for (let i = 0; i < source.materials.length; i++) if (!opaqueCurrent(source.materials[i])) { materialsOpaque = false; break; }
-        } else if (materialsOpaque) materialsOpaque = opaqueCurrent(o.material);
+          for (let i = 0; i < source.materials.length; i++) if (!opaqueCurrent(source.materialStates[i])) { materialsOpaque = false; break; }
+        } else if (materialsOpaque) materialsOpaque = opaqueCurrent(source.materialState);
         const valid = (chain & 5) === 1 && !o.children.length && o.frustumCulled !== false && materialSame && geometrySame && plainCallbacks(o) &&
           !o.customDepthMaterial && !o.customDistanceMaterial && !o.morphTargetInfluences?.length && materialsOpaque &&
           o.castShadow === source.cast && o.receiveShadow === source.receive && o.layers.mask === source.layers && o.renderOrder === source.order &&
@@ -438,8 +456,8 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
           const e = source.entries[i];
           if (!e.group?.ready || e.group.dead || e.group.ecoMode !== ecoMode) ready = false;
           if (e.semantic != null) {
-            const cached = materialKeys.get(e.material);
-            if ((cached?.frame === materialFrame ? cached.key : semanticKey(e.material)) !== e.semantic) equivalent = false;
+            const cached = e.materialState;
+            if ((cached.frame === materialFrame ? cached.key : semanticKey(cached)) !== e.semantic) equivalent = false;
           }
         }
         if (!equivalent) dirty = true;
@@ -455,7 +473,7 @@ export function createRasterBatches({ THREE, scene, renderer, quality = 'high' }
         if (moved) { source.matrix.copy(o.matrixWorld); source.matrixValid = true; }
         if (replace) { source.savedVisible = o.visible; hidden.push(source); o.visible = false; }
       }
-      for (let i = 0; i < hidden.length; i++) collapseParents(hidden[i].object.parent);
+      for (let i = 0; i < hidden.length; i++) collapseParents(hidden[i].chain.parent);
       for (const group of groups.values()) if (group.ready && group.ecoMode === ecoMode) { shown.push(group.mesh); group.mesh.visible = true; }
       root.visible = true;
       // Matrices are current (updated here or supplied by the caller); avoid a

@@ -6,7 +6,7 @@ const indices = new WeakMap();
 function makeIndex(scene) {
   const nodes = new Set(), materialObjects = new Set(), lightObjects = new Set();
   const materialRefs = new WeakMap(), materials = new Set();
-  let revision = 0, orderedRevision = -1, orderedLights = [], orderedShadows = [], refreshRevision = -1, fresh = false;
+  let revision = 0, materialsRevision = 0, orderedRevision = -1, orderedLights = [], orderedShadows = [], refreshRevision = -1, fresh = false;
   const expire = () => { fresh = false; };
   function addTree(object) {
     if (nodes.has(object)) return;
@@ -41,12 +41,16 @@ function makeIndex(scene) {
       }
     }
     if (changed) {
-      materials.clear();
+      const next = new Set();
       for (const object of materialObjects) {
         const value = object.material;
-        if (Array.isArray(value)) { for (const material of value) if (material) materials.add(material); }
-        else if (value) materials.add(value);
+        if (Array.isArray(value)) { for (const material of value) if (material) next.add(material); }
+        else if (value) next.add(value);
       }
+      let membershipChanged = next.size !== materials.size;
+      if (!membershipChanged) for (const material of next) if (!materials.has(material)) { membershipChanged = true; break; }
+      if (membershipChanged) materialsRevision++;
+      materials.clear(); for (const material of next) materials.add(material);
       refreshRevision = revision;
     }
     if (!fresh) { fresh = true; queueMicrotask(expire); }
@@ -74,7 +78,8 @@ function makeIndex(scene) {
   }
   return { refs: 0, materialObjects, materials: refreshMaterials, lights, shadowObjects, visible,
     get revision() { return revision; },
-    dispose() { removeTree(scene); materialObjects.clear(); lightObjects.clear(); materials.clear(); orderedLights = []; orderedShadows = []; } };
+    get materialsRevision() { return materialsRevision; },
+    dispose() { removeTree(scene); materialObjects.clear(); lightObjects.clear(); if (materials.size) materialsRevision++; materials.clear(); orderedLights = []; orderedShadows = []; } };
 }
 
 export function acquireSceneIndex(scene) {
@@ -83,5 +88,8 @@ export function acquireSceneIndex(scene) {
   index.refs++; let released = false;
   return { materialObjects: index.materialObjects, materials: index.materials, lights: index.lights, shadowObjects: index.shadowObjects, visible: index.visible,
     get revision() { return index.revision; },
+    // Refreshed by materials(force); material property/version edits stay live
+    // without changing this revision of the unique material identities.
+    get materialsRevision() { return index.materialsRevision; },
     release() { if (released) return; released = true; if (--index.refs === 0) { index.dispose(); indices.delete(scene); } } };
 }

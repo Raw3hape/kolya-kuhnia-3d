@@ -12,7 +12,8 @@ fs.mkdirSync(output, { recursive: true });
 const cpuRate = role => Math.max(1, Math.min(8, Number(process.env[role==='guest'?'QA_GUEST_CPU_RATE':'QA_HOST_CPU_RATE'] || process.env.QA_CPU_RATE || 1)));
 const disableMultiDraw=process.env.QA_NO_MULTIDRAW==='1';
 const softwareGPU = process.env.QA_GL_BACKEND === 'swiftshader';
-const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], cpuRates:{host:cpuRate('host'),guest:cpuRate('guest')}, disableMultiDraw, softwareGPU, cameraSweep: process.env.QA_CAMERA_SWEEP === '1', results: [], errors: [], consoleDiagnostics: [], cleanup: false };
+const trackClones = process.env.QA_TRACK_CLONES === '1';
+const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], cpuRates:{host:cpuRate('host'),guest:cpuRate('guest')}, disableMultiDraw, softwareGPU, trackClones, cameraSweep: process.env.QA_CAMERA_SWEEP === '1', results: [], errors: [], consoleDiagnostics: [], cleanup: false };
 const pause = ms => new Promise(r => setTimeout(r, ms));
 let browser;
 const watchdog = setTimeout(() => { browser?.close().finally(() => process.exit(2)); }, 240000);
@@ -20,6 +21,10 @@ function save() { fs.writeFileSync(path.join(output, report.label + '.json'), JS
 async function page(target = url, role = 'host') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript(() => { localStorage.setItem('kitchen-ui-v1', JSON.stringify({ quality: 'eco', seen: { intro: true } })); });
+  if (trackClones) await context.addInitScript(() => {
+    const original = globalThis.structuredClone, stats = globalThis.__qaCloneStats = { calls: 0 };
+    globalThis.structuredClone = function (...args) { stats.calls++; return Reflect.apply(original, this, args); };
+  });
   if(disableMultiDraw)await context.addInitScript(()=>{const proto=WebGL2RenderingContext.prototype,original=proto.getExtension;proto.getExtension=function(name){return name==='WEBGL_multi_draw'?null:original.call(this,name);};});
   const p = await context.newPage();
   p.on('pageerror', e => { if (report.errors.length < 20) report.errors.push(e.message); });
@@ -49,10 +54,14 @@ async function measure(p, name) {
   await session.send('Profiler.enable'); await session.send('Profiler.start');
   const metrics = await p.evaluate(async cameraSweep => {
     const k = __kitchen, renderer = k.renderer, gl = renderer.getContext();
-    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2'), pending = [], gpu = [], cpu = [], gaps = [], calls = [], tris = [], displayedGaps = [];
+    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2'), pending = [], gpu = [], cpu = [], gaps = [], calls = [], tris = [], displayedGaps = [], matrixPasses = [];
     const started = performance.now(); let lastDisplayed = null;
+    const cloneStart = window.__qaCloneStats?.calls ?? null;
+    const noDraw = { hidden: 0, preparing: 0, other: 0 };
     const originalQuaternion = k.camera.quaternion.clone(), sweptQuaternion = originalQuaternion.clone();
     const original = k.pipe.render, reset = renderer.info.autoReset, originalShadows = renderer.shadowMap.render;
+    const originalMatrices = k.scene.updateMatrixWorld; let matrixUpdates = 0;
+    k.scene.updateMatrixWorld = function (...args) { matrixUpdates++; return originalMatrices.apply(this, args); };
     const shadowUpdates = window.__performanceShadowUpdates = {}; let last = performance.now(), n = 0;
     renderer.shadowMap.render = function (lights,...args) {
       if(this.autoUpdate || this.needsUpdate) for(const l of lights) if(l.shadow.autoUpdate || l.shadow.needsUpdate) {
@@ -71,11 +80,13 @@ async function measure(p, name) {
       }
       let query;
       if (ext && n++ % 4 === 0) { query = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, query); }
-      const start = performance.now();
+      const start = performance.now(), matricesBefore = matrixUpdates;
       try { return original.apply(this, args); }
       finally {
         cpu.push(performance.now() - start); calls.push(renderer.info.render.calls); tris.push(renderer.info.render.triangles);
+        matrixPasses.push(matrixUpdates - matricesBefore);
         if (renderer.info.render.calls>0) { if(lastDisplayed!==null) displayedGaps.push(now-lastDisplayed); lastDisplayed=now; }
+        else noDraw[document.hidden ? 'hidden' : k.pipe.preparing ? 'preparing' : 'other']++;
         k.requestRender();
         if (query) { gl.endQuery(ext.TIME_ELAPSED_EXT); pending.push(query); }
         while (pending.length && gl.getQueryParameter(pending[0], gl.QUERY_RESULT_AVAILABLE)) {
@@ -86,15 +97,16 @@ async function measure(p, name) {
       }
     };
     await new Promise(r => setTimeout(r, 4000));
-    k.pipe.render = original; renderer.info.autoReset = reset; renderer.shadowMap.render=originalShadows;
+    k.pipe.render = original; renderer.info.autoReset = reset; renderer.shadowMap.render=originalShadows; k.scene.updateMatrixWorld = originalMatrices;
     if (cameraSweep) { k.camera.quaternion.copy(originalQuaternion); k.camera.updateMatrixWorld(); }
     for (const q of pending) gl.deleteQuery(q);
     const summary = a => { const s = a.filter(Number.isFinite).sort((a,b) => a-b); return { mean: s.reduce((a,b)=>a+b,0)/s.length, p50:s[s.length>>1], p95:s[Math.floor(s.length*.95)], count:s.length }; };
     let meshes = 0, vertices = 0, lights = 0, shadows = 0;
     k.scene.traverse(o => { if(o.isMesh) {meshes++; vertices += o.geometry?.attributes?.position?.count || 0;} if(o.isLight){lights++; if(o.castShadow) shadows++;} });
     const hardware = gl.getExtension('WEBGL_debug_renderer_info');
-    window.__actualFrameMetrics = { fps:calls.filter(n=>n>0).length*1000/(performance.now()-started), renderedFrames:calls.filter(n=>n>0).length, rafFrames:calls.length, displayedFrameMs:summary(displayedGaps) };
-    return { quality: k.pipe.quality, fps: 1000 / summary(gaps).mean, frameMs: summary(gaps), renderCpuMs: summary(cpu), gpuMs: summary(gpu), drawCalls: summary(calls), triangles: summary(tris), scene: {meshes,vertices,lights,shadows}, gpu:hardware ? gl.getParameter(hardware.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), role:k.multiplayer?.client.role, position:k.camera.position.toArray(), size:[gl.drawingBufferWidth,gl.drawingBufferHeight] };
+    window.__actualFrameMetrics = { fps:calls.filter(n=>n>0).length*1000/(performance.now()-started), renderedFrames:calls.filter(n=>n>0).length, rafFrames:calls.length, noDraw, displayedFrameMs:summary(displayedGaps) };
+    const cloneCalls = cloneStart === null ? null : window.__qaCloneStats.calls - cloneStart;
+    return { quality: k.pipe.quality, fps: 1000 / summary(gaps).mean, frameMs: summary(gaps), renderCpuMs: summary(cpu), gpuMs: summary(gpu), worldMatrixPasses: summary(matrixPasses), clones: cloneCalls === null ? null : { scope: 'main-thread', calls: cloneCalls, perRafFrame: cloneCalls / calls.length }, drawCalls: summary(calls), triangles: summary(tris), scene: {meshes,vertices,lights,shadows}, gpu:hardware ? gl.getParameter(hardware.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), role:k.multiplayer?.client.role, position:k.camera.position.toArray(), size:[gl.drawingBufferWidth,gl.drawingBufferHeight] };
   }, report.cameraSweep);
   const { profile } = await session.send('Profiler.stop'); await session.detach();
   metrics.shadowUpdates = await p.evaluate(() => { const v = window.__performanceShadowUpdates; delete window.__performanceShadowUpdates; return v; });

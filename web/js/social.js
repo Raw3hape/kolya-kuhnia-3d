@@ -97,7 +97,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
       const result = network ? await network.request(payload) : { ok: sim.command(pose(), payload) };
       lastCommand = { verb, ok: !!result?.ok, error: result?.error || null };
       if (version !== generation) return { ok: false };
-      if (!network) accept(sim.snapshot());
+      if (!network) accept(sim.presentation());
       if (result?.ok && ['take', 'receive'].includes(verb)) {
         getVM()?.setWeapon('none');
         if (!network && !beforeCarry) { if (getParty()?.held) await getParty().command('return'); getTV()?.hold(false); getPaper()?.drop(); }
@@ -203,7 +203,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     } });
     models = createSocialModels({ THREE: T, scene, spec, locations });
     audio = createSocialAudio({ camera, spec, locations, isAudible: () => active() && !getLife()?.muted && !document.hidden });
-    accept(sim.snapshot(), true);
+    accept(sim.presentation(), true);
   });
   return { ready, command,
     get spec() { return spec; }, get target() { return target ? { id: `social:${target}`, label: target } : null; }, get held() { return held(); },
@@ -215,7 +215,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
       if (!network && active()) {
         sim.step(dt, [pose()]);
         sim.reconcileSupport(id => { meshes(); const object = supportObjects.get(id); if (!object || !index.visible(object)) return null; const box = new T.Box3().setFromObject(object); return [...box.min.toArray(), ...box.max.toArray()]; });
-        state = sim.snapshot(); if (held() && (getVM()?.armed || getParty()?.held || getTV()?.status?.held || getPaper()?.held)) { sim.command(pose(), { verb: 'return' }); state = sim.snapshot(); }
+        state = sim.presentation(); if (held() && (getVM()?.armed || getParty()?.held || getTV()?.status?.held || getPaper()?.held)) { sim.command(pose(), { verb: 'return' }); state = sim.presentation(); }
       }
       if (lastBell !== null && state.bell > lastBell) { audio.bell(); show('Дзынь! Курьер Żabka ждёт с пиццей'); } lastBell = state.bell;
       audio.sync(state); audio.update(state, showerPoint);
@@ -227,7 +227,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     setNetwork(adapter) {
       generation++; pending = false; target = null; lastBell = null; players = [];
       if (adapter && !network) savedSolo = sim?.snapshot(); network = adapter || null;
-      if (!adapter && sim && savedSolo) { sim.restore(savedSolo); savedSolo = null; accept(sim.snapshot(), true); }
+      if (!adapter && sim && savedSolo) { sim.restore(savedSolo); savedSolo = null; accept(sim.presentation(), true); }
     },
     applyNetwork(value, roomPlayers = []) { players = roomPlayers; accept(value, lastBell === null); },
     get debug() { return { state, ready: !!state, target, pending, lastCommand, placement, audio: audio?.debug, showerPoint, locations, sliceCount: models?.pizza.children.filter(o => o.isMesh && o.material?.vertexColors && o.visible).length }; },
