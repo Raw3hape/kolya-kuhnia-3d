@@ -92,7 +92,11 @@ export function collectNetworkObjects(scene, THREE, { breakableOf = () => null, 
   scene.updateMatrixWorld(true);
   const objects = [], known = new Set(), box = new THREE.Box3();
   scene.traverse(o => {
-    if (objects.length >= maxObjects || !o.isMesh || isTransient(o) || o.userData?.noNetwork) return;
+    // An instance draw batch has no single world-space position or ownership.
+    // Its base geometry bounds would manufacture a blocker at the template
+    // origin. Trusted host ray traces still resolve the actual instance surfaces;
+    // interactive instance domains publish their own logical network entities.
+    if (objects.length >= maxObjects || !o.isMesh || o.isInstancedMesh || isTransient(o) || o.userData?.noNetwork) return;
     for (let x = o.parent; x; x = x.parent) if (isTransient(x)) return;
     const id = stableObjectId(o);
     if (!id || known.has(id)) return;
