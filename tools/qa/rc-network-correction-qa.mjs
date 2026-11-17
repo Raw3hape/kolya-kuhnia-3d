@@ -35,7 +35,7 @@ async function navigationState(p){return p.evaluate(()=>{
   reconciliationDistance:self?Math.hypot(body.x-self.x,body.z-self.z):null,controlling:api.rc.controlling,controlMode:api.rc.held?.controlMode};
 });}
 async function walkTo(p,x,z){
- const deadline=Date.now()+18000;let best=Infinity,progressAt=Date.now();
+ const deadline=Date.now()+18000,speed=await p.evaluate(async()=> (await import('/js/multiplayer/collision.js')).WALK.walk);let best=Infinity,progressAt=Date.now();
  while(Date.now()<deadline){
   const state=await navigationState(p);if(!state.connected)throw Error('network disconnected during native walk '+JSON.stringify(state));
   const s=state.body,d=Math.hypot(s.x-x,s.z-z);
@@ -43,7 +43,7 @@ async function walkTo(p,x,z){
   if(d<best-.02){best=d;progressAt=Date.now();}
   else if(Date.now()-progressAt>2200){await p.keyboard.up('w');await p.waitForTimeout(250);return{reached:false,reason:'stalled',target:{x,z},best,state:await navigationState(p)};}
   await aim(p,[x,state.self?.y?state.self.y+1.6794:1.6794,z]);
-  await p.keyboard.down('w');try{await p.waitForTimeout(Math.max(30,Math.min(180,d/3*1000)));}finally{await p.keyboard.up('w');}
+  await p.keyboard.down('w');try{await p.waitForTimeout(Math.max(80,Math.min(260,Math.max(0,d-.04)/speed*1000)));}finally{await p.keyboard.up('w');}
   await p.waitForTimeout(120);
  }
  return{reached:false,reason:'waypoint_deadline',target:{x,z},best,state:await navigationState(p)};
@@ -165,7 +165,7 @@ try{
  // Carry is a real, authoritative mode. No fixture pose mutation is used to
  // free the controller table or to test a second player's access to it.
  await host.getByRole('button',{name:'Отойти с пультом',exact:true}).click();
- await host.waitForFunction(id=>{const c=__kitchen.rc.snapshot().cars.find(c=>c.id===id);return c?.controlMode==='carry'&&!__kitchen.rc.controlling&&Math.abs(c.speed)<.2;},carId);
+ await host.waitForFunction(id=>{const c=__kitchen.rc.snapshot().cars.find(c=>c.id===id);return c?.controlMode==='carry'&&c.parked&&!__kitchen.rc.controlling&&Math.abs(c.speed)<.2;},carId);
  const paused=await witness(host),parkedPosition=paused.rc.cars.find(c=>c.id===carId).position;
  check('native pause brakes the car and keeps the same controller in carry mode',paused.self.held===carId&&paused.rc.cars.find(c=>c.id===carId).owner===hostId&&!paused.controlling,{body:paused.self,car:paused.rc.cars.find(c=>c.id===carId)});
  await stepAside(host);const hostWalked=await witness(host);

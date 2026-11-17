@@ -24,6 +24,8 @@ const movementKeys=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','A
 export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,getSeats,getVM,getParty,getTV,getPaper,beforeCarry,requestRender=()=>{}}){
  let spec=null,sim=null,predictor=null,state=null,network=null,source=null,disposed=false,pending=false,generation=0,aimed=null,heldId=null,heldMode=null,players=[],clock=0,sendClock=0,seq=0,lastInput='',savedSolo=null,statusMessage='',exitRequested=false,viewControls=null,focusPending=false;
  const sceneIndex=acquireSceneIndex(scene),bounds=new THREE.Box3();
+ const ownsCanvasTabIndex=!canvas.hasAttribute('tabindex');if(ownsCanvasTabIndex)canvas.tabIndex=0;
+ function focusViewport(){if(!document.activeElement?.matches?.('input,textarea,select,[contenteditable="true"]'))canvas.focus({preventScroll:true});}
  const root=new THREE.Group();root.name='rc_world';root.userData.rasterOnly=true;root.userData.networkEntity=true;root.userData.networkDynamic=true;scene.add(root);
  const remoteRoot=new THREE.Group();remoteRoot.name='rc_remote_controllers';remoteRoot.userData.networkEntity=true;remoteRoot.userData.rasterOnly=true;scene.add(remoteRoot);
  const handRoot=new THREE.Group();handRoot.name='rc_held_controller';handRoot.userData.viewmodel=true;handRoot.userData.rasterOnly=true;
@@ -32,7 +34,7 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
  const originBuffer=new Float64Array(3);
  const carViews=new Map(),controllerViews=new Map(),remoteViews=new Map(),keys=new Set(),pendingInputs=[],predictionOffset=new THREE.Vector3(),coarse=matchMedia('(pointer:coarse)');let overlay=null,detachTarget=null,table=null,boundary=null,driverRing=null;const runtimeResources=new Set();let uiKey='',markerKey='';
  injectStyle('rc-style',CSS);
- const hud=createRCHud({onExit:()=>command('release'),onReset:()=>command('respawn'),onFocus:()=>focusCar(),onMode:()=>switchControlMode()}),panel=hud.panel;
+ const hud=createRCHud({onExit:()=>command('release'),onReset:()=>command('respawn'),onFocus:()=>focusCar(),onMode:()=>switchControlMode(),onDismiss:()=>focusViewport()}),panel=hud.panel;
  const take=document.createElement('button');take.type='button';take.className='rc-take kw-float';take.hidden=true;document.body.append(take);
  let markerTop=160;
  const hudObserver=new ResizeObserver(()=>{markerTop=Math.max(88,panel.getBoundingClientRect().bottom+44);});hudObserver.observe(panel);
@@ -41,7 +43,7 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
  const controls=[['left','←','Повернуть влево','KeyA'],['right','→','Повернуть вправо','KeyD'],['gas','Вперёд ↑','Ехать вперёд','KeyW'],['reverse','Назад ↓','Ехать назад','KeyS'],['brake','Тормоз','Тормоз','Space']];
  for(const [name,label,aria,key]of controls){const b=document.createElement('button');b.type='button';b.className='rc-control rc-'+name;b.textContent=label;b.setAttribute('aria-label',aria);b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(key);sendInput(true);});for(const event of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(event,()=>{keys.delete(key);sendInput(true);});touch.append(b);}
  const active=()=>!!getWalk?.()?.walking&&!getSeats?.()?.active&&!pipe.photo;
- const presenting=()=>!!(getWalk?.()?.walking||getSeats?.()?.active)&&!pipe.photo;
+ const presenting=()=>!!(getWalk?.()?.active||getSeats?.()?.active)&&!pipe.photo;
  const selfId=()=>network?(typeof network.selfId==='function'?network.selfId():network.selfId):'solo';
  const held=()=>state?.cars.find(c=>c.owner===selfId())||null;
  const isDriving=()=>held()?.controlMode==='drive'&&!exitRequested;
@@ -84,7 +86,7 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
    if(token!==generation)return{ok:false,error:'rc_generation'};
    if(!network)accept(sim.snapshot());
    if(!result?.ok&&verb!=='input')statusMessage=result?.error==='rc_repairing'?'Механик ещё чинит машинку':result?.error==='rc_owned'?'Этот пульт уже взяли':'Не получилось. Попробуйте ещё раз';
-   if(result?.ok)statusMessage='';else if(verb==='release'&&(!network?.ready||network.ready()))exitRequested=false;return result;
+   if(result?.ok){statusMessage='';if(verb!=='input')focusViewport();}else if(verb==='release'&&(!network?.ready||network.ready()))exitRequested=false;return result;
   }catch{if(token===generation)statusMessage='Связь прервалась. Попробуйте ещё раз';return{ok:false,error:'rc_network'};}
   finally{if(token===generation&&verb!=='input'){pending=false;renderUI();requestRender();}}
  }
@@ -190,11 +192,11 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
  function focusCar(){
   const h=held();if(!h||!spec)return false;
   const point=[...h.position];point[1]+=spec.view.focusHeight;
-  return getWalk?.()?.lookAtPoint?.(point)||false;
+  const changed=getWalk?.()?.lookAtPoint?.(point)||false;if(changed)focusViewport();return changed;
  }
  function onPointer(e){
   if(e.target!==canvas)return;
-  if(isDriving()){if(e.button===0||e.button===2){viewControls?.down(e.pointerId,e.clientX,e.clientY,e.pointerType==='touch'?'touch':'mouse');try{canvas.setPointerCapture(e.pointerId);}catch{}stop(e);}}
+  if(isDriving()){if(e.button===0||e.button===2){canvas.focus({preventScroll:true});viewControls?.down(e.pointerId,e.clientX,e.clientY,e.pointerType==='touch'?'touch':'mouse');try{canvas.setPointerCapture(e.pointerId);}catch{}stop(e);}}
   else if(aimed&&e.button===0&&getVM?.()?.weapon==='none'){command('take',aimed.id);stop(e);}
  }
  function onPointerMove(e){
@@ -225,7 +227,7 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   accept(state);requestRender();
  });
  function releaseResources(){const resources=new Set();source?.traverse(o=>{if(o.geometry)resources.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){resources.add(m);for(const v of Object.values(m))if(v?.isTexture)resources.add(v);}});for(const r of resources)r.dispose?.();source=null;}
- return{ready,update,command,setNetwork,applyNetwork:accept,get config(){return spec;},snapshot:()=>state,get controlling(){return held()?.controlMode==='drive';},get isDriving(){return held()?.controlMode==='drive';},get held(){return held();},get target(){return aimed;},get viewCamera(){return isDriving()?camera:null;},get controllers(){return sim?.controllers||[];},get colliders(){if(!spec)return[];const t=spec.table,p=t.position,w=t.size[0]/2,d=t.size[2]/2;return[{x0:p[0]-w,x1:p[0]+w,z0:p[2]-d,z1:p[2]+d}];},dispose(){disposed=true;generation++;stopDriving();sceneIndex.release();window.removeEventListener('keydown',onKey,true);window.removeEventListener('keyup',onUp,true);window.removeEventListener('blur',onBlur);window.removeEventListener('pointerdown',onPointer,true);window.removeEventListener('pointermove',onPointerMove,true);window.removeEventListener('mousemove',onLockedMouseMove,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerCancel,true);window.removeEventListener('wheel',onWheel,true);detachTarget?.();overlay?.dispose();sim?.dispose();predictor?.dispose();for(const o of [...controllerViews.values(),...remoteViews.values(),...handRoot.children])releaseController(o);root.removeFromParent();remoteRoot.removeFromParent();hud.dispose();take.remove();touch.remove();marker.remove();hudObserver.disconnect();for(const resource of runtimeResources)resource.dispose();runtimeResources.clear();releaseResources();}};
+ return{ready,update,command,setNetwork,applyNetwork:accept,get config(){return spec;},snapshot:()=>state,get controlling(){return held()?.controlMode==='drive';},get isDriving(){return held()?.controlMode==='drive';},get held(){return held();},get target(){return aimed;},get viewCamera(){return isDriving()?camera:null;},get controllers(){return sim?.controllers||[];},get colliders(){if(!spec)return[];const t=spec.table,p=t.position,w=t.size[0]/2,d=t.size[2]/2;return[{x0:p[0]-w,x1:p[0]+w,z0:p[2]-d,z1:p[2]+d}];},dispose(){disposed=true;generation++;if(ownsCanvasTabIndex&&canvas.getAttribute('tabindex')==='0')canvas.removeAttribute('tabindex');stopDriving();sceneIndex.release();window.removeEventListener('keydown',onKey,true);window.removeEventListener('keyup',onUp,true);window.removeEventListener('blur',onBlur);window.removeEventListener('pointerdown',onPointer,true);window.removeEventListener('pointermove',onPointerMove,true);window.removeEventListener('mousemove',onLockedMouseMove,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerCancel,true);window.removeEventListener('wheel',onWheel,true);detachTarget?.();overlay?.dispose();sim?.dispose();predictor?.dispose();for(const o of [...controllerViews.values(),...remoteViews.values(),...handRoot.children])releaseController(o);root.removeFromParent();remoteRoot.removeFromParent();hud.dispose();take.remove();touch.remove();marker.remove();hudObserver.disconnect();for(const resource of runtimeResources)resource.dispose();runtimeResources.clear();releaseResources();}};
 }
 const CSS=`
 .rc-driver-marker{position:fixed;left:0;top:0;z-index:12;max-width:170px;padding:5px 9px;border:1px solid;border-radius:12px;background:#18382de8;color:#fff;font:600 11px/1.3 system-ui;cursor:pointer;will-change:transform}.rc-driver-marker[hidden]{display:none}.rc-driver-marker[data-offscreen="true"]{background:#203e35f2}.rc-take[hidden],.rc-touch[hidden]{display:none!important}.rc-take,.rc-control{font:600 13px system-ui;color:#f1f5ee;border:1px solid #ffffff35;border-radius:11px;padding:10px 14px;background:#31454d;cursor:pointer;touch-action:none}.rc-take:focus-visible,.rc-control:focus-visible{outline:3px solid #c9ec70;outline-offset:3px}.rc-take{position:fixed;z-index:12;left:50%;bottom:calc(var(--hud-bottom,76px) + 20px);transform:translateX(-50%);background:#163830f0;max-width:92vw}.rc-control{position:fixed;z-index:31;min-height:58px;min-width:64px;background:#213a40ed}.rc-left{left:16px;bottom:160px}.rc-right{left:92px;bottom:160px}.rc-gas{right:16px;bottom:225px;min-width:110px;background:#487b42ed}.rc-reverse{right:16px;bottom:160px;min-width:110px}.rc-brake{right:16px;bottom:95px;min-width:110px;background:#86543bed}.rc-control:active{filter:brightness(1.3);transform:scale(.97)}body.rc-holding .title-card,body.rc-holding #hud-bottom,body.rc-holding #panel,body.rc-holding #panel-toggle,body.rc-holding #kh-score,body.rc-holding .kh-score,body.rc-holding #kh-hud,body.rc-holding .kh-hud,body.rc-holding #coach,body.rc-holding .party-hud,body.rc-holding .social-hud,body.rc-holding .social-radio,body.rc-holding .party-touch,body.rc-holding .khh-btn,body.rc-holding .khh-hint,body.rc-holding #kw-dock,body.rc-holding .tv-layer,body.rc-controlling .kw-jump,body.rc-controlling .kw-joy,body.rc-holding .kd-hint,body.rc-holding .ks-hint{visibility:hidden!important}
