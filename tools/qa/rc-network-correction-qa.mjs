@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { awaitPlayable } from './await-playable.mjs';
+import {isFree,roomOf,WALK} from '../../web/js/multiplayer/collision.js';
 const moduleName=process.env.PLAYWRIGHT_MODULE||'playwright';
 const {chromium}=await import(path.isAbsolute(moduleName)?pathToFileURL(moduleName).href:moduleName);
 const url=process.env.QA_URL||'http://127.0.0.1:8765/';
@@ -48,19 +49,9 @@ async function walkTo(p,x,z){
  }
  return{reached:false,reason:'waypoint_deadline',target:{x,z},best,state:await navigationState(p)};
 }
-async function walkRoute(p,x,z){
- console.log(JSON.stringify({nativeRouteGoal:{x,z}}));
- // Each retry starts at the actual predicted body and reads fresh door/player
- // colliders. Only native inputs move the player; no wall or physics is relaxed.
- const deadline=Date.now()+110000,stalls=[];let lastFailure=null;
- for(let attempt=0;attempt<5&&Date.now()<deadline;attempt++){
-  const before=await navigationState(p);if(!before.connected)throw Error('network disconnected before native route '+JSON.stringify(before));
-  if(Math.hypot(before.body.x-x,before.body.z-z)<.14)return;
-  const planned=await p.evaluate(async({x,z,stalls})=>{
-    const {isFree,roomOf,WALK}=await import('/js/multiplayer/collision.js');
-    const plan=await fetch('/spec/plan.generated.json').then(r=>r.json()),col=__kitchen.walk.collisionSnapshot(),start=__kitchen.walk.getNetworkPose(),step=.12;
+function planNativeRoute({plan,col,start,others},{x,z,stalls}){
+ const step=.12;
     const point=(i,j)=>({x:start.x+i*step,z:start.z+j*step}),key=(i,j)=>`${i},${j}`;
-    const others=(__kitchen.multiplayer.client.state?.players||[]).filter(p=>p.id!==__kitchen.multiplayer.client.id).map(p=>({x:p.x,z:p.z,radius:WALK.radius}));
     // Authority spawns bodies 45 cm apart. A 4 cm artificial planner inflation
     // falsely seals that spawn, but route cost should prefer wider corridors.
     const free=q=>roomOf(plan,q.x,q.z)&&isFree(q,col,others,WALK.radius+.004);
@@ -82,18 +73,26 @@ async function walkRoute(p,x,z){
     }
     if(!last)return{error:'no_collision_free_route',start,goal:{x,z},goalFree:free({x,z}),others,visited:cost.size};
     const path=[];while(last!=='0,0'){const [i,j]=last.split(',').map(Number);path.unshift(point(i,j));last=parents.get(last);}path.unshift({x:start.x,z:start.z});
-    // Preserve A* corners instead of drawing multi-metre lines past door leaves.
-    // Collinear compression is limited to 48 cm, or 24 cm in tight passages.
-    const out=[];for(let i=0;i<path.length-1;){
-      const dx=path[i+1].x-path[i].x,dz=path[i+1].z-path[i].z;let j=i+1;
-      while(j+1<path.length&&Math.abs((path[j+1].x-path[j].x)-dx)<1e-6&&Math.abs((path[j+1].z-path[j].z)-dz)<1e-6){
-        const distance=Math.hypot(path[j+1].x-path[i].x,path[j+1].z-path[i].z),tight=clearance(path[j+1])<.08||clearance(path[i])<.08;
-        if(distance>(tight?.24:.48)+1e-6)break;j++;
-      }
-      out.push({...path[j],clearance:clearance(path[j])});i=j;
-    }
+    // Shortcut only through a verified padded corridor; retain tight A* corners.
+    // Two-metre maximum avoids accumulating yaw error along the full balcony.
+    const clear=(a,b)=>{const distance=Math.hypot(b.x-a.x,b.z-a.z),count=Math.ceil(distance/.05);if(distance>2)return false;for(let n=1;n<=count;n++){const q={x:a.x+(b.x-a.x)*n/count,z:a.z+(b.z-a.z)*n/count},pad=Math.hypot(q.x-start.x,q.z-start.z)<.24?.004:.04;if(!roomOf(plan,q.x,q.z)||!isFree(q,col,others,WALK.radius+pad))return false;}return true;};
+    const out=[];for(let i=0;i<path.length-1;){let j=path.length-1;while(j>i+1&&!clear(path[i],path[j]))j--;out.push({...path[j],clearance:clearance(path[j])});i=j;}
     return{points:out,start,visited:cost.size};
-  },{x,z,stalls});
+}
+async function walkRoute(p,x,z){
+ console.log(JSON.stringify({nativeRouteGoal:{x,z}}));
+ // Each retry starts at the actual predicted body and reads fresh door/player
+ // colliders. Only native inputs move the player; no wall or physics is relaxed.
+ const deadline=Date.now()+110000,stalls=[];let lastFailure=null;
+ for(let attempt=0;attempt<5&&Date.now()<deadline;attempt++){
+  const before=await navigationState(p);if(!before.connected)throw Error('network disconnected before native route '+JSON.stringify(before));
+  if(Math.hypot(before.body.x-x,before.body.z-z)<.14)return;
+  // Path search belongs to the QA process, never the game's render/network thread.
+  const setup=await p.evaluate(async()=>{
+    const {WALK}=await import('/js/multiplayer/collision.js'),plan=await fetch('/spec/plan.generated.json').then(r=>r.json());
+    return{plan,col:__kitchen.walk.collisionSnapshot(),start:__kitchen.walk.getNetworkPose(),others:(__kitchen.multiplayer.client.state?.players||[]).filter(q=>q.id!==__kitchen.multiplayer.client.id).map(q=>({x:q.x,z:q.z,radius:WALK.radius}))};
+  });
+  const planned=planNativeRoute(setup,{x,z,stalls});
   if(planned.error){lastFailure={...planned,attempt,state:await navigationState(p)};report.navigation??=[];report.navigation.push(lastFailure);await p.waitForTimeout(250);continue;}
   let retry=false;
   for(const q of planned.points){
@@ -105,15 +104,23 @@ async function walkRoute(p,x,z){
  }
  throw Error('bounded native route failed '+JSON.stringify({goal:{x,z},lastFailure,state:await navigationState(p)}));
 }
-async function stepAside(p,minDistance=1.05,maxDistance=1.75){
- const goal=await p.evaluate(async({minDistance,maxDistance})=>{
-  const {isFree,roomOf,WALK}=await import('/js/multiplayer/collision.js'),plan=await fetch('/spec/plan.generated.json').then(r=>r.json()),col=__kitchen.walk.collisionSnapshot(),start=__kitchen.walk.getNetworkPose(),table=__kitchen.rc.config.table.position;
-  const others=__kitchen.multiplayer.client.state.players.filter(q=>q.id!==__kitchen.multiplayer.client.id).map(q=>({x:q.x,z:q.z,radius:WALK.radius}));
-  const preferred={x:start.x+Math.sign(start.x-table[0]||1)*Math.min(1.2,maxDistance),z:start.z},candidates=[];
-  for(let dx=-maxDistance;dx<=maxDistance;dx+=.1)for(let dz=-maxDistance;dz<=maxDistance;dz+=.1){const d=Math.hypot(dx,dz),q={x:start.x+dx,z:start.z+dz};if(d<minDistance||d>maxDistance||roomOf(plan,q.x,q.z)!=='balcony'||!isFree(q,col,others,WALK.radius+.035))continue;candidates.push({...q,score:(q.x-preferred.x)**2+(q.z-preferred.z)**2});}
-  candidates.sort((a,b)=>a.score-b.score);if(!candidates.length)throw Error('No real free balcony place to carry controller');return candidates[0];
- },{minDistance,maxDistance});
- console.log(JSON.stringify({nativeStepAsideGoal:goal}));await walkRoute(p,goal.x,goal.z);return goal;
+async function stepAside(p,minDistance=1.05,maxDistance=1.75,clearApproach=false){
+ const setup=await p.evaluate(async()=>{
+  const plan=await fetch('/spec/plan.generated.json').then(r=>r.json()),players=__kitchen.multiplayer.client.state.players;
+  return{plan,col:__kitchen.walk.collisionSnapshot(),start:__kitchen.walk.getNetworkPose(),table:__kitchen.rc.config.table.position,others:players.filter(q=>q.id!==__kitchen.multiplayer.client.id).map(q=>({x:q.x,z:q.z,radius:.22}))};
+ });
+ setup.others=setup.others.map(q=>({...q,radius:WALK.radius}));
+ const {plan,col,start,table,others}=setup,preferred={x:start.x+Math.sign(start.x-table[0]||1)*Math.min(1.2,maxDistance),z:start.z},candidates=[];
+ for(let dx=-maxDistance;dx<=maxDistance;dx+=.1)for(let dz=-maxDistance;dz<=maxDistance;dz+=.1){const d=Math.hypot(dx,dz),q={x:start.x+dx,z:start.z+dz};if(d<minDistance||d>maxDistance||roomOf(plan,q.x,q.z)!=='balcony'||!isFree(q,col,others,WALK.radius+.035))continue;candidates.push({...q,score:(q.x-preferred.x)**2+(q.z-preferred.z)**2});}
+ candidates.sort((a,b)=>a.score-b.score);let goal;
+ for(const candidate of candidates){
+  if(!clearApproach){goal=candidate;break;}
+  const peer=others[0];if(!peer)throw Error('missing approaching friend');
+  const route=planNativeRoute({plan,col,start:peer,others:[{x:candidate.x,z:candidate.z,radius:WALK.radius+.18}]},{x:start.x,z:start.z,stalls:[]});
+  if(!route.error){goal=candidate;break;}
+ }
+ if(!goal)throw Error('No real free balcony place that leaves the controller approach open');
+ console.log(JSON.stringify({nativeStepAsideGoal:goal,approachRemainsOpen:clearApproach}));await walkRoute(p,goal.x,goal.z);return goal;
 }
 async function installRecorder(p){
  await p.evaluate(()=>{
@@ -150,12 +157,13 @@ try{
  browser=await chromium.launch({channel:'chrome',headless:true,args:['--mute-audio','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
  host=await page();await host.locator('#kmp-launch').click();await host.locator('#kmp-name').fill('RC независимый хозяин');await host.locator('.kmp-form button[type=submit]').click();await connected(host);
  await host.waitForFunction(()=>__kitchen.walk.walking&&!__kitchen.multiplayer.applying);await host.evaluate(()=>{if(document.querySelector('#panel.open'))document.querySelector('.hide-btn')?.click()});
+ // The room owner reaches the table before inviting the next player.
+ await walkRoute(host,4.8,.9);await aim(host,[5.02,1.1,0]);await host.evaluate(()=>__kitchen.doors.setOpen('kitchen_balcony_door',true));await host.waitForTimeout(1000);
+ await walkRoute(host,4.9,-1.18);await walkRoute(host,-1.32,-.92);
  const invite=await host.evaluate(()=>__kitchen.multiplayer.client.inviteUrl);guest=await page(invite);await guest.locator('#kmp-name').fill('RC независимый друг');await guest.locator('.kmp-form button[type=submit]').click();await connected(guest);
  await guest.waitForFunction(()=>__kitchen.walk.walking&&!__kitchen.multiplayer.applying);await guest.evaluate(()=>{if(document.querySelector('#panel.open'))document.querySelector('.hide-btn')?.click()});
  check('two independent rendered clients join through real WebRTC',await guest.evaluate(()=>__kitchen.multiplayer.client.state.players.length===2));
  // Walk through the actual apartment and the validated open balcony door.
- await walkRoute(host,4.8,.9);await aim(host,[5.02,1.1,0]);await host.evaluate(()=>__kitchen.doors.setOpen('kitchen_balcony_door',true));await host.waitForTimeout(1000);
- await walkRoute(host,4.9,-1.18);await walkRoute(host,-1.32,-.92);
  await walkRoute(guest,4.9,-1.18);
  await Promise.all([installRecorder(host),installRecorder(guest)]);
  const control=await host.evaluate(()=>__kitchen.rc.controllers[0]);await aim(host,control.position);await host.waitForFunction(()=>!!__kitchen.rc.target);
@@ -168,7 +176,7 @@ try{
  await host.waitForFunction(id=>{const c=__kitchen.rc.snapshot().cars.find(c=>c.id===id);return c?.controlMode==='carry'&&c.parked&&!__kitchen.rc.controlling&&Math.abs(c.speed)<.2;},carId);
  const paused=await witness(host),parkedPosition=paused.rc.cars.find(c=>c.id===carId).position;
  check('native pause brakes the car and keeps the same controller in carry mode',paused.self.held===carId&&paused.rc.cars.find(c=>c.id===carId).owner===hostId&&!paused.controlling,{body:paused.self,car:paused.rc.cars.find(c=>c.id===carId)});
- await stepAside(host);const hostWalked=await witness(host);
+ await stepAside(host,1.05,1.75,true);const hostWalked=await witness(host);
  check('host walks away from the table with controller while its parked car stays still',Math.hypot(hostWalked.self.x-paused.self.x,hostWalked.self.z-paused.self.z)>.8&&hostWalked.self.held===carId&&hostWalked.rc.cars.find(c=>c.id===carId).controlMode==='carry'&&planarDistance(hostWalked.rc.cars.find(c=>c.id===carId).position,parkedPosition)<.15,{before:paused.self,after:hostWalked.self,parkedPosition,car:hostWalked.rc.cars.find(c=>c.id===carId)});
  await walkRoute(guest,-1.32,-.92);
  const freeControl=await guest.evaluate(()=>__kitchen.rc.controllers.find(c=>!__kitchen.rc.snapshot().cars.find(car=>car.id===c.id)?.owner));
@@ -217,6 +225,9 @@ try{
  const passed=await witness(guest);check('native handoff gives one controller in carry mode without forcing the recipient into driving',passed.rc.cars.filter(c=>c.owner===passed.id).length===1&&passed.rc.cars.find(c=>c.id===carId)?.owner===passed.id&&passed.rc.cars.find(c=>c.id===carId)?.controlMode==='carry'&&!passed.controlling&&Math.hypot(...passed.camera.map((v,i)=>v-recipientBefore.camera[i]))<.06,{before:recipientBefore.self,receiver:passed.self,owners:passed.rc.cars.map(c=>({id:c.id,owner:c.owner,controlMode:c.controlMode}))});
  const carryParked=passed.rc.cars.find(c=>c.id===carId).position;await stepAside(guest,.45,1.0);const recipientWalked=await witness(guest);
  check('handoff recipient freely walks with the controller while its car remains parked',Math.hypot(recipientWalked.self.x-passed.self.x,recipientWalked.self.z-passed.self.z)>.2&&recipientWalked.self.held===carId&&!recipientWalked.controlling&&recipientWalked.rc.cars.find(c=>c.id===carId).controlMode==='carry'&&planarDistance(recipientWalked.rc.cars.find(c=>c.id===carId).position,carryParked)<.15,{before:passed.self,after:recipientWalked.self,carBefore:carryParked,carAfter:recipientWalked.rc.cars.find(c=>c.id===carId)});
+ // Let the last native walking input be acknowledged before measuring the frozen
+ // authoritative body. Comparing an unacknowledged pose creates a false drift.
+ await guest.waitForFunction(()=>{const api=__kitchen,s=api.multiplayer.client.self,b=api.walk.getNetworkPose();return s&&Math.hypot(s.x-b.x,s.z-b.z)<.004;});await guest.waitForTimeout(250);
  const guestAnchor=await witness(guest);await clearEyes(guest);await guest.getByRole('button',{name:'Управлять машинкой',exact:true}).click();await guest.waitForFunction(()=>__kitchen.rc.controlling&&__kitchen.rc.held?.controlMode==='drive');await guest.waitForTimeout(500);
  const explicitDriver=await witness(guest);check('recipient explicitly enters drive and freezes only at their chosen balcony position',explicitDriver.self.held===carId&&anchored(explicitDriver,guestAnchor),{anchor:guestAnchor.self,driver:explicitDriver.self,eyes:explicitDriver.renderEyes});
  const receivedPosition=explicitDriver.rc.cars.find(c=>c.id===carId).position;await guest.keyboard.down('w');await guest.waitForTimeout(900);await guest.keyboard.up('w');await guest.waitForTimeout(250);
