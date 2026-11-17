@@ -4,10 +4,10 @@
   "generator": "tools/rc/build.py",
   "recipe": "web/spec/rc.json",
   "asset": "models/rc/garage.glb",
-  "sha256": "eafb77d16b5bac0564942813f9de58fef01ac282c7ca87519cad6cea8749179e",
-  "bytes": 2162756,
+  "sha256": "8940588152093be0e4fc3aba382d9d5a835c0973941b8e4f15fab8f645291bc9",
+  "bytes": 2160932,
   "modelScale": 1.25,
-  "sourceSpecSha256": "d080c1d15e86614ab5ce2898cb05229bb8bfcc68ce1b27a30ce0744d9e8638e4",
+  "sourceSpecSha256": "05cdb1eb7c08f0b9a3e065692ee1f75e531d810e98847b589a6fe128c7ad3f91",
   "units": "metres",
   "coordinateSystem": {
     "up": "+Y",

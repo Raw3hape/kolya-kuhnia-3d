@@ -232,6 +232,11 @@ try{
  const explicitDriver=await witness(guest);check('recipient explicitly enters drive and freezes only at their chosen balcony position',explicitDriver.self.held===carId&&anchored(explicitDriver,guestAnchor),{anchor:guestAnchor.self,driver:explicitDriver.self,eyes:explicitDriver.renderEyes});
  const receivedPosition=explicitDriver.rc.cars.find(c=>c.id===carId).position;await guest.keyboard.down('w');await guest.waitForTimeout(900);await guest.keyboard.up('w');await guest.waitForTimeout(250);
  const guestDriven=await witness(guest);check('new driver controls the same car and cannot walk during explicit drive mode',anchored(guestDriven,guestAnchor)&&Math.hypot(...guestDriven.rc.cars.find(c=>c.id===carId).position.map((v,i)=>v-receivedPosition[i]))>.25,{anchor:guestAnchor.self,driver:guestDriven.self});await screenshot(guest,'receiver-balcony-driver');
+ if(process.env.QA_ACCELERATION==='1'){
+  let max=0;await guest.keyboard.down('w');try{for(let i=0;i<8;i++){await guest.waitForTimeout(500);max=Math.max(max,Math.abs(await guest.evaluate(()=>__kitchen.rc.held.speed)));}}finally{await guest.keyboard.up('w');}
+  const fast=await witness(guest),remote=await witness(host),a=fast.rc.cars.find(c=>c.id===carId),b=remote.rc.cars.find(c=>c.id===carId);
+  check('remote driver reaches doubled authoritative speed while both clients agree on ramp state',max>23.5&&max<24.3&&b.owner===fast.id&&Number.isFinite(a.driveThrottle)&&Number.isFinite(b.driveThrottle)&&anchored(fast,guestAnchor),{max,local:a.speed,observer:b.speed,localDemand:a.driveThrottle,observerDemand:b.driveThrottle});
+ }
  await guest.keyboard.press('Escape');await guest.waitForFunction(()=>!__kitchen.rc.controlling);await host.waitForFunction(()=>!__kitchen.rc.snapshot().cars.some(c=>c.owner));
  check('native exit releases controller for both clients and removes driving HUD',await guest.evaluate(()=>!__kitchen.rc.controlling&&document.querySelector('.rc-hud').hidden&&!document.body.classList.contains('rc-controlling')));
  check('no uncaught browser errors',report.errors.length===0,report.errors);

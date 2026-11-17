@@ -53,7 +53,7 @@
     "mass": 42,
     "engineForce": 110,
     "reverseForce": 68,
-    "maxSpeed": 12,
+    "maxSpeed": 24,
     "reverseMaxSpeed": 5,
     "brakeForce": 8,
     "idleBrake": 0.3,
@@ -82,7 +82,9 @@
     ],
     "linearDamping": 0.1,
     "angularDamping": 0.65,
-    "spawnClearance": 0.08
+    "spawnClearance": 0.08,
+    "throttleRiseRate": 2.5,
+    "steerSpeed": 12
   },
   "view": {
     "controllerPosition": [
