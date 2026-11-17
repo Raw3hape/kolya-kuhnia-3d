@@ -16,10 +16,12 @@ const trackClones = process.env.QA_TRACK_CLONES === '1';
 const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], cpuRates:{host:cpuRate('host'),guest:cpuRate('guest')}, disableMultiDraw, softwareGPU, trackClones, cameraSweep: process.env.QA_CAMERA_SWEEP === '1', results: [], errors: [], consoleDiagnostics: [], cleanup: false };
 const pause = ms => new Promise(r => setTimeout(r, ms));
 let browser;
+const trackedPages = [];
 const watchdog = setTimeout(() => { browser?.close().finally(() => process.exit(2)); }, 240000);
 function save() { fs.writeFileSync(path.join(output, report.label + '.json'), JSON.stringify(report, null, 2)); }
 async function page(target = url, role = 'host') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  if (process.env.QA_ACCESS_URL_FILE) await context.request.get(fs.readFileSync(process.env.QA_ACCESS_URL_FILE, 'utf8').trim(), { timeout: 30000 });
   await context.addInitScript(() => { localStorage.setItem('kitchen-ui-v1', JSON.stringify({ quality: 'eco', seen: { intro: true } })); });
   if (trackClones) await context.addInitScript(() => {
     const original = globalThis.structuredClone, stats = globalThis.__qaCloneStats = { calls: 0 };
@@ -27,6 +29,7 @@ async function page(target = url, role = 'host') {
   });
   if(disableMultiDraw)await context.addInitScript(()=>{const proto=WebGL2RenderingContext.prototype,original=proto.getExtension;proto.getExtension=function(name){return name==='WEBGL_multi_draw'?null:original.call(this,name);};});
   const p = await context.newPage();
+  trackedPages.push(p);
   p.on('pageerror', e => { if (report.errors.length < 20) report.errors.push(e.message); });
   p.on('console', m => {
     if(m.type()!=='error') return;
@@ -47,6 +50,16 @@ async function page(target = url, role = 'host') {
     await throttle.send('Emulation.setCPUThrottlingRate',{rate:cpuRate(role)});
   }
   await pause(2000);
+  await p.evaluate(() => {
+    const statuses = window.__qaNetworkStatuses = [];
+    __kitchen.multiplayer?.client?.subscribe(event => {
+      if (event.type !== 'status') return;
+      statuses.push({ at:Date.now(), status:event.status, attempt:event.attempt,
+        error:event.error ? String(event.error.message || event.error) : null,
+        quality:__kitchen.pipe.quality, hidden:document.hidden, preparing:__kitchen.pipe.preparing });
+      if (statuses.length > 32) statuses.shift();
+    });
+  });
   return p;
 }
 async function measure(p, name) {
@@ -200,5 +213,14 @@ try {
   if(!report.finalState.every(s=>s.connected&&s.players===2))throw new Error('Final multiplayer state lost a player');
   await host.evaluate(()=>__kitchen.multiplayer.client.leave());
   }
-} catch (error) { report.failure = error.stack; console.error(error.stack); process.exitCode=1; }
+} catch (error) {
+  report.failure = error.stack; console.error(error.stack); process.exitCode=1;
+  report.failureState = await Promise.all(trackedPages.map(async p => {
+    if (p.isClosed()) return { closed: true };
+    try { return await p.evaluate(() => { const k=window.__kitchen, c=k?.multiplayer?.client;
+      return { hidden:document.hidden, quality:k?.pipe?.quality, preparing:k?.pipe?.preparing,
+        connected:c?.connected, status:c?.status, players:c?.state?.players?.length, networkStatuses:window.__qaNetworkStatuses || [] }; }); }
+    catch { return { unavailable: true }; }
+  }));
+}
 finally { clearTimeout(watchdog); await browser?.close(); report.cleanup=true; if(report.failure || report.errors.length) process.exitCode=1; save(); }
