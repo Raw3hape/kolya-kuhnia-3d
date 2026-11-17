@@ -11,7 +11,8 @@ const output = path.resolve(process.env.QA_OUTPUT || 'output/playwright/performa
 fs.mkdirSync(output, { recursive: true });
 const cpuRate = role => Math.max(1, Math.min(8, Number(process.env[role==='guest'?'QA_GUEST_CPU_RATE':'QA_HOST_CPU_RATE'] || process.env.QA_CPU_RATE || 1)));
 const disableMultiDraw=process.env.QA_NO_MULTIDRAW==='1';
-const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], cpuRates:{host:cpuRate('host'),guest:cpuRate('guest')}, disableMultiDraw, results: [], errors: [], consoleDiagnostics: [], cleanup: false };
+const softwareGPU = process.env.QA_GL_BACKEND === 'swiftshader';
+const report = { url, label: process.env.QA_LABEL || 'candidate', viewport: [1280, 720], cpuRates:{host:cpuRate('host'),guest:cpuRate('guest')}, disableMultiDraw, softwareGPU, cameraSweep: process.env.QA_CAMERA_SWEEP === '1', results: [], errors: [], consoleDiagnostics: [], cleanup: false };
 const pause = ms => new Promise(r => setTimeout(r, ms));
 let browser;
 const watchdog = setTimeout(() => { browser?.close().finally(() => process.exit(2)); }, 240000);
@@ -46,10 +47,11 @@ async function page(target = url, role = 'host') {
 async function measure(p, name) {
   const session = await p.context().newCDPSession(p);
   await session.send('Profiler.enable'); await session.send('Profiler.start');
-  const metrics = await p.evaluate(async () => {
+  const metrics = await p.evaluate(async cameraSweep => {
     const k = __kitchen, renderer = k.renderer, gl = renderer.getContext();
     const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2'), pending = [], gpu = [], cpu = [], gaps = [], calls = [], tris = [], displayedGaps = [];
     const started = performance.now(); let lastDisplayed = null;
+    const originalQuaternion = k.camera.quaternion.clone(), sweptQuaternion = originalQuaternion.clone();
     const original = k.pipe.render, reset = renderer.info.autoReset, originalShadows = renderer.shadowMap.render;
     const shadowUpdates = window.__performanceShadowUpdates = {}; let last = performance.now(), n = 0;
     renderer.shadowMap.render = function (lights,...args) {
@@ -63,6 +65,10 @@ async function measure(p, name) {
     renderer.info.autoReset = false;
     k.pipe.render = function (...args) {
       const now = performance.now(); gaps.push(now - last); last = now; renderer.info.reset();
+      if (cameraSweep) {
+        sweptQuaternion.set(0, Math.sin(Math.sin((now - started) / 650) * .18 / 2), 0, Math.cos(Math.sin((now - started) / 650) * .18 / 2));
+        k.camera.quaternion.copy(originalQuaternion).premultiply(sweptQuaternion); k.camera.updateMatrixWorld(); k.pipe.invalidate();
+      }
       let query;
       if (ext && n++ % 4 === 0) { query = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, query); }
       const start = performance.now();
@@ -81,6 +87,7 @@ async function measure(p, name) {
     };
     await new Promise(r => setTimeout(r, 4000));
     k.pipe.render = original; renderer.info.autoReset = reset; renderer.shadowMap.render=originalShadows;
+    if (cameraSweep) { k.camera.quaternion.copy(originalQuaternion); k.camera.updateMatrixWorld(); }
     for (const q of pending) gl.deleteQuery(q);
     const summary = a => { const s = a.filter(Number.isFinite).sort((a,b) => a-b); return { mean: s.reduce((a,b)=>a+b,0)/s.length, p50:s[s.length>>1], p95:s[Math.floor(s.length*.95)], count:s.length }; };
     let meshes = 0, vertices = 0, lights = 0, shadows = 0;
@@ -88,11 +95,12 @@ async function measure(p, name) {
     const hardware = gl.getExtension('WEBGL_debug_renderer_info');
     window.__actualFrameMetrics = { fps:calls.filter(n=>n>0).length*1000/(performance.now()-started), renderedFrames:calls.filter(n=>n>0).length, rafFrames:calls.length, displayedFrameMs:summary(displayedGaps) };
     return { quality: k.pipe.quality, fps: 1000 / summary(gaps).mean, frameMs: summary(gaps), renderCpuMs: summary(cpu), gpuMs: summary(gpu), drawCalls: summary(calls), triangles: summary(tris), scene: {meshes,vertices,lights,shadows}, gpu:hardware ? gl.getParameter(hardware.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), role:k.multiplayer?.client.role, position:k.camera.position.toArray(), size:[gl.drawingBufferWidth,gl.drawingBufferHeight] };
-  });
+  }, report.cameraSweep);
   const { profile } = await session.send('Profiler.stop'); await session.detach();
   metrics.shadowUpdates = await p.evaluate(() => { const v = window.__performanceShadowUpdates; delete window.__performanceShadowUpdates; return v; });
   metrics.batches = await p.evaluate(() => __kitchen.pipe.batches || null);
   metrics.eco = await p.evaluate(() => __kitchen.pipe.eco || null);
+  metrics.contextInstances = await p.evaluate(() => __kitchen.pipe.contextInstances || null);
   Object.assign(metrics,await p.evaluate(()=>{const value=window.__actualFrameMetrics;delete window.__actualFrameMetrics;return value;}));
   const nodeMap = new Map(profile.nodes.map(n => [n.id,n])), totals = new Map();
   for (let i=0;i<(profile.samples?.length||0);i++) { const f=nodeMap.get(profile.samples[i])?.callFrame; if(!f)continue; const key=`${f.functionName || '(anonymous)'} ${f.url.split('/').slice(-2).join('/')}:${f.lineNumber+1}`; totals.set(key,(totals.get(key)||0)+(profile.timeDeltas?.[i]||0)/1000); }
@@ -101,7 +109,7 @@ async function measure(p, name) {
   console.log(JSON.stringify({name,fps:metrics.fps,renderCpu:metrics.renderCpuMs.mean,gpu:metrics.gpuMs.mean,drawCalls:metrics.drawCalls.mean}));
 }
 try {
-  browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
+  browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', ...(softwareGPU ? ['--use-angle=swiftshader'] : [])] });
   report.browser = browser.version();
   const host = await page();
   if (process.env.QA_ROOMS === '1') {

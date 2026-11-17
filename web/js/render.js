@@ -38,6 +38,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createRasterBatches } from './raster-batches.js';
 import { createEcoMaterials } from './eco-materials.js';
+import { createContextInstanceView } from './context-instance-view.js';
 import { acquireSceneIndex } from './scene-index.js';
 
 // px — бюджет пикселей кадра (плотность снижается до pr[0], если окно большое); pr — [мин, макс] плотности;
@@ -79,11 +80,13 @@ const busy = new WeakSet();   // рендереры, у которых идёт 
 export const rasterBusy = renderer => busy.has(renderer);
 
 // photoPixels — сколько пикселей трассировать (больше — растягивается): 1,5 Мп ≈ 1,5 прохода/с на M5 Pro
-export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 1024, autoExposure = true, photoPixels = 1.5e6, quality: startQuality = DEFAULT_QUALITY }) {
+export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 1024, autoExposure = true, photoPixels = 1.5e6, quality: startQuality = DEFAULT_QUALITY, instanceCulling = true }) {
   const canvas = renderer.domElement;
   const sceneIndex = acquireSceneIndex(scene);
   const batches = createRasterBatches({ THREE, scene, renderer });
   const eco = createEcoMaterials({ THREE, scene, renderer });
+  const contextInstances = instanceCulling ? createContextInstanceView({ THREE, scene }) : null;
+  let capturingRaster = 0;
   renderer.debug.checkShaderErrors = false;   // ошибки шейдеров проверяет фоновая сборка (startCompile), без журнала на каждую
   let quality = 'high', q = QUALITY.high;
   let size = { w: 1, h: 1, dpr: 1 };
@@ -127,7 +130,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     const draw = () => {
       if (!ao.enabled && !bloom.enabled) {
         renderer.setRenderTarget(null);
-        renderer.render(scene, camera);
+        drawWorld(camera);
         return;
       }
       composer.readBuffer = rtA; composer.writeBuffer = rtB;   // проходы меняют их местами — сцена всегда в rtA
@@ -139,6 +142,11 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     try {
       return batches.draw(() => quality === 'eco' ? eco.draw(draw) : draw(), { matricesCurrent: true });
     } finally { scene.matrixWorldAutoUpdate = auto; }
+  }
+
+  function drawWorld(viewCamera) {
+    const draw = () => renderer.render(scene, viewCamera);
+    return contextInstances && quality === 'eco' && !explicit && !capturingRaster ? contextInstances.draw(viewCamera, draw) : draw();
   }
 
   const frameGaps = [], offered = new Set();
@@ -528,8 +536,9 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
   // YouTube-плеер не попала в PNG прозрачностью: на снимке экран показывает постер.
   const liveFns = new Set();
   async function capture(minSamples = 0) {
-    liveFns.forEach(fn => fn(false));
-    try { return await captureFrame(minSamples); } finally { liveFns.forEach(fn => fn(true)); }
+    capturingRaster++;
+    try { liveFns.forEach(fn => fn(false)); return await captureFrame(minSamples); }
+    finally { capturingRaster--; liveFns.forEach(fn => fn(true)); }
   }
 
   async function captureFrame(minSamples) {
@@ -582,6 +591,7 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     composer.passes.forEach(p => p.dispose()); composer.dispose();
     batches.dispose();
     eco.dispose();
+    contextInstances?.dispose();
     sceneIndex.release();
     if (meter) { meter.rt.dispose(); meter.quad.dispose(); meter.quad.material.dispose(); meter = null; }
     canvas.removeEventListener('webglcontextlost', onLost);
@@ -635,6 +645,8 @@ export function createPipeline({ THREE, renderer, scene, camera, maxSamples = 10
     get quality() { return quality; },
     get batches() { return batches.stats; },
     get eco() { return eco.stats; },
+    drawWorld,
+    get contextInstances() { return contextInstances?.stats || null; },
     get preparing() { const b = batches.stats, e = eco.stats; return lost || !!compile || b.ready + b.failed < b.groups ||
       quality === 'eco' && (e.compiling > 0 || e.ready + e.failed < e.programs); },
     get photo() { return explicit; },

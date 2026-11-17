@@ -19,6 +19,8 @@
 // three не импортируется статически: THREE передаётся аргументом (модуль проверяется в node);
 // загрузчик GLB машин подгружается динамически и только в браузере.
 
+import { markContextInstances } from './context-instance-view.js';
+import { indexExactGeneratedGeometry } from './exact-generated-index.js';
 const RAD = Math.PI / 180;
 const WARSAW = { lat: 52.2002, lon: 20.9392, windowBearingDeg: 180, city: 'Варшава' };
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа',
@@ -263,7 +265,7 @@ class Geo {
     const g = new THREE.BufferGeometry();
     for (const [k, n] of Object.entries(this.size)) g.setAttribute(k, new THREE.Float32BufferAttribute(this.a[k], n));
     g.computeBoundingSphere();
-    return g;
+    return indexExactGeneratedGeometry(THREE, g);
   }
 }
 
@@ -1132,6 +1134,7 @@ export function buildContext(site, THREE, opts = {}) {
       const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), S = new THREE.Vector3(1, 1, 1);
       lamps.forEach(([x, z, a], i) => m.setMatrixAt(i, M4.compose(new THREE.Vector3(x, ground, z), Q.setFromAxisAngle(Y, a * RAD_DEG), S)));
       m.computeBoundingSphere(); m.name = name; m.userData.context = true; m.receiveShadow = true;
+      markContextInstances(m);
       return add(name, m);
     };
     im(pole, poleMat, 'lamps');
@@ -1186,6 +1189,7 @@ export function buildContext(site, THREE, opts = {}) {
       const m = new THREE.InstancedMesh(geo, mat, n);
       mats.forEach((M, k) => m.setMatrixAt(k, M));
       m.computeBoundingSphere(); m.name = name; m.castShadow = cast; m.receiveShadow = true; m.userData.context = true;
+      markContextInstances(m);
       return add(name, m);
     };
     barkMat[sp] = outdoor(std({ map: tex.bark, color: def.bark, roughness: 0.95 }), 'plain', shared);
@@ -1213,6 +1217,7 @@ export function buildContext(site, THREE, opts = {}) {
     const M4 = new THREE.Matrix4();
     blobs.forEach(([x, z, r, k], i) => blobMesh.setMatrixAt(i, M4.makeScale(r * k, 1, r * k).setPosition(x, ground + 0.02, z)));
     blobMesh.computeBoundingSphere(); blobMesh.name = 'tree_shadows'; blobMesh.userData.context = true;
+    markContextInstances(blobMesh);
     blobMesh.renderOrder = 1;
     add('treeShadows', blobMesh);
   }
@@ -1242,6 +1247,7 @@ export function buildContext(site, THREE, opts = {}) {
           m.setColorAt(i, colours[c] ?? new THREE.Color(0x888888));
         });
         m.computeBoundingSphere(); m.name = `cars_${name}`; m.receiveShadow = true; m.userData.context = true;
+        markContextInstances(m);
         add(`cars_${name}`, m);
         skipInProbes(m);
       });

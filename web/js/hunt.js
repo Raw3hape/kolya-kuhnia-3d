@@ -25,8 +25,8 @@ import { collectFieldOccluders, fieldRayBlocked } from './field-events-visibilit
 // Звери — два InstancedMesh (кабаны и птицы, по одному вызову отрисовки) + пятна тени под кабанами. Геометрия своя,
 // процедурная (поза в вершинном шейдере: шаг, рысь, галоп, пасутся, тревога, падение; взмахи крыльев, полнота гуся) —
 // без скелетов и без загрузки моделей. Появление и затухание — сеткой отбрасывания (без прозрачности). Шейдеры
-// компилируются один раз при старте, новые звери берут свободные экземпляры. В покое ничего не выделяется; звери вне
-// кадра схлопнуты (не рисуются).
+// компилируются один раз при старте, новые звери берут свободные игровые слоты. Видимые звери занимают плотный
+// префикс GPU-буферов; остальные экземпляры не отправляются на рисование. Игровые индексы остаются прежними.
 // Кадры: звери видны — в кадре камеры, а из квартиры — сквозь окно или балконную дверь; иначе живут грубо (4 шага
 // в секунду) и кадров не просят. Плавно (каждый кадр, в облёте — spec.orbitFps) — только пока идёт раунд, кто-то
 // бежит или падает. В покое шагают в кадрах, которые и так рисуются (камера сдвинулась), а сами просят кадр лишь
@@ -227,12 +227,13 @@ void hRotZ( inout vec3 p, inout vec3 n, vec3 piv, float a ) { mat2 m = hRot( a )
 // aMot: фаза шага, аллюр 0..3 (стоит, шаг, рысь, галоп), пасётся 0..1, тревога 0..1
 // aSt: падение 0..1, растворение 0..1, поросёнок 0/1, вспышка попадания 0..1
 const BOAR_VERT = `
+attribute float aSeed;
 uniform vec3 uHip[ 4 ];
 void hDeform( inout vec3 p, inout vec3 n ) {
 	float ph = aMot.x, g = aMot.y, part = aPart;
 	float amp = 0.32 * clamp( g, 0.0, 1.0 ) + 0.1 * clamp( g - 1.0, 0.0, 1.0 ) + 0.22 * clamp( g - 2.0, 0.0, 1.0 );
 	float gf = clamp( g - 2.0, 0.0, 1.0 );
-	float seed = float( gl_InstanceID ) * 1.7;
+	float seed = aSeed * 1.7;
 	if ( part > 10.5 ) p = mix( p, vec3( 0.0, 0.5, 0.62 ), aSt.z );   // у поросят клыков нет
 	if ( part > 2.5 && part < 10.5 ) {
 		float li = floor( ( part - 3.0 ) * 0.5 ), lower = mod( part - 3.0, 2.0 );
@@ -300,7 +301,7 @@ function animalMaterial(THREE, kind, uniforms) {
       .replace('#include <color_fragment>', `#include <color_fragment>${paint}
 	diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 1.0, 0.92, 0.85 ), vHSt.w * 0.7 );`);
   };
-  m.customProgramCacheKey = () => `hunt-${kind}`;
+  m.customProgramCacheKey = () => `hunt-${kind}-packed1`;
   return m;
 }
 
@@ -364,7 +365,9 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     return !blocked;
   }
   let boarMesh = null, blobMesh = null, birdMesh = null;
-  let boarMot, boarSt, birdMot, birdSt;
+  let boarMot, boarSt, birdMot, birdSt, boarSeed;
+  // Canonical pool colors never alias the compact, camera-dependent GPU slots.
+  let boarColors, birdColors;
   const owned = [];   // что освобождать в dispose
 
   // --- DOM: табло и всплывающие очки
@@ -412,7 +415,8 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     const bg = boarGeometry(THREE);
     boarMot = new THREE.InstancedBufferAttribute(new Float32Array(nB * 4), 4); boarMot.setUsage(THREE.DynamicDrawUsage);
     boarSt = new THREE.InstancedBufferAttribute(new Float32Array(nB * 4), 4); boarSt.setUsage(THREE.DynamicDrawUsage);
-    bg.setAttribute('aMot', boarMot); bg.setAttribute('aSt', boarSt);
+    boarSeed = new THREE.InstancedBufferAttribute(new Float32Array(nB), 1); boarSeed.setUsage(THREE.DynamicDrawUsage);
+    bg.setAttribute('aMot', boarMot); bg.setAttribute('aSt', boarSt); bg.setAttribute('aSeed', boarSeed);
     const bm = animalMaterial(THREE, 'boar', uniforms);
     boarMesh = new THREE.InstancedMesh(bg, bm, nB);
     // пятна тени
@@ -434,6 +438,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       m.raycast = () => {};               // лучи сцены (клик, следы пуль) зверей не видят — свой raycast()
       m.userData.noPick = true;
       m.instanceMatrix.array.fill(0);
+      m.count = 0;
       skipInPasses(m);
       root.add(m);
       owned.push(m.geometry, m.material);
@@ -441,6 +446,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     owned.push(blobTex);
     boarMesh.setColorAt(0, new THREE.Color(1, 1, 1)); birdMesh.setColorAt(0, new THREE.Color(1, 1, 1));
     boarMesh.instanceColor.setUsage(THREE.DynamicDrawUsage); birdMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    boarColors = new Float32Array(nB * 3).fill(1); birdColors = new Float32Array(NB * 3).fill(1);
     // у каждого зверя — короткая история положений (для попаданий с учётом запаздывания глаза и экрана)
     for (let i = 0; i < nB; i++) boars.push({ i, active: false, dead: false, hist: new Float32Array(HIST * 5), histN: 0, histT: -1 });
     for (let i = 0; i < NB; i++) birds.push({ i, active: false, dead: false, hist: new Float32Array(HIST * 5), histN: 0, histT: -1 });
@@ -497,7 +503,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       });
       if (pig) { b.ox *= 0.4; b.oz = rand(-2.5, -0.8); }
       const c = pig ? [1.9 * rand(0.95, 1.05), 1.45, 1.0] : [rand(0.85, 1.18), rand(0.85, 1.12), rand(0.82, 1.1)];
-      boarMesh.setColorAt(b.i, tmpColor.setRGB(...c));
+      boarColors.set(c, b.i * 3);
       g.members.push(b);
       if (!g.leader && !pig) g.leader = b;
     }
@@ -506,9 +512,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     if (walkIn) { const [hx, hz] = reg.point(); g.tx = hx; g.tz = hz; g.wait = 0; }
     if (reg.kind === 'balcony') pickTarget(g, g.leader);
     groups.push(g);
-    boarMesh.instanceColor.needsUpdate = true;
   }
-  const tmpColor = new THREE.Color();
 
   function alertBoar(b, x, z, t) { if (b.mode === CALM) { b.mode = ALERT; b.t = t; } b.tx = x; b.tz = z; }
   function fleeBoar(b, x, z, delay = 0, gallop = true) {
@@ -681,7 +685,6 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
       f.members.push(b);
     }
     flocks.push(f);
-    birdMesh.instanceColor.needsUpdate = true;
     return f;
   }
   function initBird(b, f, k, spec) {
@@ -695,7 +698,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     });
     if (f.kind === 'local' && !region.inside(b.x, b.z)) { b.x = f.lx; b.z = f.lz; }
     const c = lin(spec.color).map(v => v / BIRD_BASE);   // цвет вершин тела -> оперение вида
-    birdMesh.setColorAt(b.i, tmpColor.setRGB(c[0] * rand(0.9, 1.1), c[1] * rand(0.9, 1.1), c[2] * rand(0.9, 1.1)));
+    birdColors.set([c[0] * rand(0.9, 1.1), c[1] * rand(0.9, 1.1), c[2] * rand(0.9, 1.1)], b.i * 3);
   }
   function spawnPass() {
     const P = S.birds.pass, sp = P.species[Math.floor(Math.random() * P.species.length)];
@@ -745,7 +748,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
             const b = f.members.find(m => !m.active) || freeBird();
             if (b) {
               if (!f.members.includes(b)) f.members.push(b);
-              initBird(b, f, f.members.indexOf(b), spec); birdMesh.instanceColor.needsUpdate = true;
+              initBird(b, f, f.members.indexOf(b), spec);
               const a = rand(0, TAU); b.x = f.cx + Math.cos(a) * 250; b.z = f.cz + Math.sin(a) * 250; b.y = ground + 45; b.mode = 'fly'; b.fold = 0;
               if (f.mode === 'ground') b.mode = 'land';
             }
@@ -841,34 +844,41 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
 
   function writeBuffers() {
     const E = boarMesh.instanceMatrix.array, L = blobMesh.instanceMatrix.array, M = boarMot.array, T = boarSt.array;
+    const C = boarMesh.instanceColor.array, seeds = boarSeed.array;
+    let boarCount = 0, birdCount = 0;
     box.makeEmpty();
     for (const b of boars) {
-      const o = b.i * 16, q = b.i * 4;
-      if (!b.active) { if (E[o + 15]) { E.fill(0, o, o + 16); L.fill(0, o, o + 16); } continue; }
+      if (!b.active) continue;
       expand(b.x, ground, b.z, 1.2 * b.scale);
-      // вне кадра — экземпляр схлопнут (не рисуется), поза не пишется
+      // Pack only visible actors: a zero matrix still executes every vertex.
       cull.center.set(b.x, ground + 0.6 * b.scale, b.z); cull.radius = 1.2 * b.scale;
-      if (!frustum.intersectsSphere(cull)) { if (E[o + 15]) { E.fill(0, o, o + 16); L.fill(0, o, o + 16); } continue; }
+      if (!frustum.intersectsSphere(cull)) continue;
+      const slot = boarCount++, o = slot * 16, q = slot * 4, color = slot * 3, palette = b.i * 3;
       writeMatrix(E, o, b.x, ground, b.z, b.yaw, 0, 0, b.scale);
       const bs = b.scale * (1 - b.fade);
       writeMatrix(L, o, b.x, ground + 0.02, b.z, b.yaw, 0, 0, 1);
       L[o] *= bs * 0.75; L[o + 2] *= bs * 0.75; L[o + 8] *= bs * 1.55; L[o + 10] *= bs * 1.55;
       M[q] = b.phase; M[q + 1] = b.gait; M[q + 2] = b.graze; M[q + 3] = b.alert;
       T[q] = b.fall; T[q + 1] = b.fade; T[q + 2] = b.pig ? 1 : 0; T[q + 3] = b.flash;
+      C[color] = boarColors[palette]; C[color + 1] = boarColors[palette + 1]; C[color + 2] = boarColors[palette + 2];
+      seeds[slot] = b.i; // Shader phase stays tied to the canonical animal, not the packed slot.
     }
-    const W = birdMesh.instanceMatrix.array, BM = birdMot.array, BS = birdSt.array;
+    const W = birdMesh.instanceMatrix.array, BM = birdMot.array, BS = birdSt.array, BC = birdMesh.instanceColor.array;
     for (const b of birds) {
-      const o = b.i * 16, q = b.i * 4;
-      if (!b.active) { if (W[o + 15]) W.fill(0, o, o + 16); continue; }
+      if (!b.active) continue;
       if (b.f.kind === 'local' || Math.abs(b.x - home[0]) < 250) expand(b.x, b.y, b.z, b.scale);
       cull.center.set(b.x, b.y, b.z); cull.radius = b.scale;
-      if (!frustum.intersectsSphere(cull)) { if (W[o + 15]) W.fill(0, o, o + 16); continue; }
+      if (!frustum.intersectsSphere(cull)) continue;
+      const slot = birdCount++, o = slot * 16, q = slot * 4, color = slot * 3, palette = b.i * 3;
       writeMatrix(W, o, b.x, b.y + (b.mode === 'perch' ? 0.07 * b.scale : 0), b.z, b.yaw, b.pitch, b.roll, b.scale);
       BM[q] = b.phase; BM[q + 1] = b.amp; BM[q + 2] = b.fold; BM[q + 3] = b.peck;
       BS[q] = b.fat; BS[q + 1] = b.fade; BS[q + 2] = b.kind; BS[q + 3] = b.flash;
+      BC[color] = birdColors[palette]; BC[color + 1] = birdColors[palette + 1]; BC[color + 2] = birdColors[palette + 2];
     }
+    boarMesh.count = blobMesh.count = boarCount; birdMesh.count = birdCount;
     boarMesh.instanceMatrix.needsUpdate = blobMesh.instanceMatrix.needsUpdate = birdMesh.instanceMatrix.needsUpdate = true;
     boarMot.needsUpdate = boarSt.needsUpdate = birdMot.needsUpdate = birdSt.needsUpdate = true;
+    boarMesh.instanceColor.needsUpdate = birdMesh.instanceColor.needsUpdate = boarSeed.needsUpdate = true;
     uniforms.uTime.value = time;
   }
   function boundsOnly() {   // габарит стада без записи в буферы (пока зверей не видно)
@@ -924,6 +934,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
   function syncWildlifeVisible(visible) {
     const changed = boarMesh.visible !== visible || birdMesh.visible !== visible;
     boarMesh.visible = blobMesh.visible = birdMesh.visible = visible;
+    if (!visible) boarMesh.count = blobMesh.count = birdMesh.count = 0;
     return changed;
   }
 
@@ -974,7 +985,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     if (!alarm) {
       // покой (пасутся, летят): шаг в кадре, который и так рисуется (камера сдвинулась), иначе редко — в прогулке
       // spec.idleFps и свой кадр, в облёте раз в COARSE и без своего кадра (рендер по требованию)
-      const moved = camMoved(), walking = !!walk?.active;
+      const moved = camMoved() || !wasSeen, walking = !!walk?.active;
       if (!moved && acc < (walking ? 1 / S.idleFps : COARSE)) return need || eventFrame;
       step(Math.min(acc, COARSE), walk); acc = 0;
       writeBuffers(); wasSeen = true;
@@ -1123,6 +1134,7 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     const a = best, zone = bz;
     const normal = new THREE.Vector3(-dx, -dy, -dz);
     let used = false;
+    // This custom hit uses the canonical animal slot, never the packed GPU slot.
     return {
       distance: bt, point, normal, object: bird ? birdMesh : boarMesh, instanceId: a.i, animalId: a.id, zone, animal: bird ? a.sp : a.pig ? 'piglet' : 'boar',
       hit(weaponId, damage) {
@@ -1194,6 +1206,9 @@ export function createHunt({ THREE, scene, camera, renderer, pipe, requestRender
     else {
       const clock = restoreLocalWildlife(localWildlife);
       if (clock) { time = clock.time; acc = clock.acc; alarm = clock.alarm; wasSeen = clock.wasSeen; }
+      // GPU prefixes still contain the network view; rebuild even for an
+      // unchanged camera before the next solo idle tick, using local bounds.
+      wasSeen = false; boundsOnly();
       localWildlife = null;
       enabled = previousEnabled; networkSnapshot = null; networkTargets.clear();
     }

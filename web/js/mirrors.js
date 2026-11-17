@@ -216,12 +216,13 @@ export function createMirrors({ THREE, scene, camera, renderer, pipe, requestRen
     const vis = mirrors.map(x => x.surface.visible);
     mirrors.forEach(x => { x.surface.visible = false; });
     const prev = renderer.getRenderTarget();
-    renderer.setRenderTarget(m.rt);
-    renderer.clear();
-    renderer.render(scene, cam);
-    renderer.setRenderTarget(prev);
-    mirrors.forEach((x, i) => { x.surface.visible = vis[i]; });
-    busy = false;
+    try {
+      renderer.setRenderTarget(m.rt); renderer.clear();
+      if (pipe?.drawWorld) pipe.drawWorld(cam); else renderer.render(scene, cam);
+    } finally {
+      try { renderer.setRenderTarget(prev); }
+      finally { mirrors.forEach((x, i) => { x.surface.visible = vis[i]; }); busy = false; }
+    }
     m.lastCam.copy(camera.matrixWorld); m.lastProj.copy(camera.projectionMatrix); m.lastWorld.copy(s.matrixWorld);
     m.last = now; m.force = false;
   }
