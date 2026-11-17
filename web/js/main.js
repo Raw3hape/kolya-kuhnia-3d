@@ -44,7 +44,6 @@ import { createPartyProps } from './party-props.js';
 import { createSocial } from './social.js';
 import { createRC } from './rc.js';
 import { createCarryCoordinator } from './carry-coordinator.js';
-import { createViewCameraAdapter } from './render-view-camera.js';
 
 const [plan, kit, viewSpec, site, bathSpec, socialSpec] = await Promise.all([
   fetch('spec/plan.generated.json').then(r => r.json()),
@@ -173,8 +172,6 @@ controls.screenSpacePanning = true;
 
 // Растр, качество и фото-режим (трассировка пути) живут в render.js; тон-маппинг ставит он же.
 const pipe = createPipeline({ THREE, renderer, scene, camera });
-const viewCamera = createViewCameraAdapter(camera);
-pipe.setViewCamera = value => { viewCamera.set(value); requestRender(); };
 
 // ---------- материалы слотов ----------
 
@@ -487,10 +484,8 @@ function frame(now) {
   if (!walk?.active && !seats?.active && controls.update()) needs = true;
   if (lighting.update()) needs = true;
   const dirty = needs;
-  viewCamera.render(() => {
-    if (needs) { needs = false; updateCutaway(); pipe.invalidate(); }
-    pipe.render();
-  });
+  if (needs) { needs = false; updateCutaway(); pipe.invalidate(); }
+  pipe.render();
   if (!dirty) return;
   tv?.sync();
   paper?.sync();   // BEDROOM: газета в руке

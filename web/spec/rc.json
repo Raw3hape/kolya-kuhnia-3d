@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "asset": "models/rc/garage.glb",
-  "_about": "Original ten-car RC garage. Metres; glTF +Z nose, +Y up. Vehicle forces are cannon-es RaycastVehicle, not a bespoke physics model. Authoring sources tools/rc/.",
+  "_about": "Original detailed RC garage v2. SI metres. Neutral wheel-pivot groups; vehicle layout is shared by Blender, cannon-es and rendering. Player remains on balcony.",
   "table": {
     "position": [
       -1.43,
@@ -32,47 +32,42 @@
       1.67,
       -1.31
     ],
-    "minDistance": 12,
-    "maxDistance": 150,
-    "margin": 1.0,
+    "margin": 0.55,
     "spawn": {
       "center": [
         0,
-        -44
+        -28
       ],
       "columns": 5,
       "spacing": [
-        2.5,
-        3.5
-      ]
+        3.1,
+        4.2
+      ],
+      "heading": 3.141592653589793
+    },
+    "seamTolerance": 1.2,
+    "boundaryWall": {
+      "height": 0.55,
+      "thickness": 0.14
     }
   },
   "physics": {
     "fixedStep": 0.016666666666666666,
     "maxSubSteps": 6,
     "mass": 42,
-    "engineForce": 90,
-    "reverseForce": 55,
+    "engineForce": 110,
+    "reverseForce": 68,
     "maxSpeed": 12,
     "reverseMaxSpeed": 5,
     "brakeForce": 8,
     "idleBrake": 0.3,
-    "wheelRadius": 0.17,
-    "track": 0.69,
-    "wheelbase": 0.94,
-    "chassisHalf": [
-      0.33,
-      0.13,
-      0.61
-    ],
-    "chassisOffset": 0.27,
     "maxSteer": 0.48,
     "steerResponse": 13,
     "highSpeedSteer": 0.42,
     "suspension": {
       "stiffness": 48,
-      "restLength": 0.16,
-      "travel": 0.14,
+      "restLength": 0.2,
+      "travel": 0.175,
       "compression": 4.4,
       "relaxation": 2.8,
       "frictionSlip": 3.7,
@@ -91,16 +86,12 @@
     ],
     "linearDamping": 0.1,
     "angularDamping": 0.65,
-    "shapeOffset": [
-      0,
-      0.1,
-      0
-    ]
+    "spawnClearance": 0.08
   },
   "view": {
     "controllerPosition": [
-      0.0,
-      -0.34,
+      0,
+      -0.22,
       -0.52
     ],
     "controllerRotation": [
@@ -108,21 +99,23 @@
       0,
       0
     ],
-    "lookHeight": 0.36,
-    "followResponse": 11,
-    "cameraFov": 65,
-    "orbit": {
-      "pitch": 0.46,
-      "minPitch": 0.12,
-      "maxPitch": 1.15,
-      "distance": 5.8,
-      "minDistance": 3.0,
-      "maxDistance": 12,
-      "sensitivity": 0.006,
-      "manualSeconds": 3.0,
-      "recenterResponse": 2.8,
-      "zoomSensitivity": 0.0018
-    }
+    "focusHeight": 0.35,
+    "zoom": {
+      "initial": 1.35,
+      "min": 1,
+      "max": 3.2,
+      "wheelSensitivity": 0.0018
+    },
+    "markerHeight": 1.0,
+    "lookSensitivity": {
+      "mouse": 0.0042,
+      "touch": 0.0065,
+      "locked": 0.0022
+    },
+    "boundaryColor": "#d9e8cc",
+    "boundaryOpacity": 0.42,
+    "controllerFov": 55,
+    "controllerMaxFov": 100
   },
   "designs": [
     {
@@ -132,10 +125,10 @@
       "color": "#ef4d41",
       "accent": "#fff2d1",
       "number": "01",
-      "length": 1.5,
-      "width": 0.78,
-      "roof": 0.69,
-      "wheel": 0.17,
+      "length": 1.875,
+      "width": 0.975,
+      "roof": 0.8625,
+      "wheel": 0.2125,
       "spoiler": true,
       "lights": 4,
       "cabin": [
@@ -149,27 +142,27 @@
         [
           -0.5,
           0.41,
-          0.43
+          0.5375
         ],
         [
           -0.37,
           0.47,
-          0.45
+          0.5625
         ],
         [
           0,
           0.47,
-          0.44
+          0.55
         ],
         [
           0.33,
           0.47,
-          0.45
+          0.5625
         ],
         [
           0.5,
           0.43,
-          0.42
+          0.525
         ]
       ],
       "features": [
@@ -179,7 +172,81 @@
         "white multi-spoke rims",
         "rally skid plate",
         "four spotlights"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.26875,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.43875,
+            0.1625,
+            0.7875
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "rally_wheel_FL",
+            "position": [
+              -0.43875,
+              0.2125,
+              0.61875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "rally_wheel_FR",
+            "position": [
+              0.43875,
+              0.2125,
+              0.61875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "rally_wheel_RL",
+            "position": [
+              -0.43875,
+              0.2125,
+              -0.61875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "rally_wheel_RR",
+            "position": [
+              0.43875,
+              0.2125,
+              -0.61875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "rally_body"
+      }
     },
     {
       "id": "gt",
@@ -188,10 +255,10 @@
       "color": "#25bada",
       "accent": "#14293c",
       "number": "02",
-      "length": 1.63,
-      "width": 0.84,
-      "roof": 0.6,
-      "wheel": 0.16,
+      "length": 2.0375,
+      "width": 1.05,
+      "roof": 0.75,
+      "wheel": 0.2,
       "spoiler": true,
       "lights": 2,
       "cabin": [
@@ -205,32 +272,32 @@
         [
           -0.5,
           0.4,
-          0.36
+          0.45
         ],
         [
           -0.38,
           0.48,
-          0.42
+          0.525
         ],
         [
           -0.2,
           0.46,
-          0.43
+          0.5375
         ],
         [
           0.05,
           0.43,
-          0.43
+          0.5375
         ],
         [
           0.3,
           0.5,
-          0.46
+          0.575
         ],
         [
           0.5,
           0.44,
-          0.38
+          0.475
         ]
       ],
       "features": [
@@ -240,7 +307,81 @@
         "side intake",
         "rear diffuser",
         "large elevated wing"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.25625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.4725,
+            0.1625,
+            0.85575
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "gt_wheel_FL",
+            "position": [
+              -0.4725,
+              0.2,
+              0.672375
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "gt_wheel_FR",
+            "position": [
+              0.4725,
+              0.2,
+              0.672375
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "gt_wheel_RL",
+            "position": [
+              -0.4725,
+              0.2,
+              -0.672375
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "gt_wheel_RR",
+            "position": [
+              0.4725,
+              0.2,
+              -0.672375
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "gt_body"
+      }
     },
     {
       "id": "jeep",
@@ -249,10 +390,10 @@
       "color": "#82bb47",
       "accent": "#fff0bf",
       "number": "03",
-      "length": 1.48,
-      "width": 0.82,
-      "roof": 0.79,
-      "wheel": 0.2,
+      "length": 1.85,
+      "width": 1.025,
+      "roof": 0.9875,
+      "wheel": 0.25,
       "spare": true,
       "rack": true,
       "lights": 2,
@@ -267,27 +408,27 @@
         [
           -0.5,
           0.43,
-          0.44
+          0.55
         ],
         [
           -0.34,
           0.47,
-          0.47
+          0.5875
         ],
         [
           0,
           0.47,
-          0.45
+          0.5625
         ],
         [
           0.36,
           0.47,
-          0.45
+          0.5625
         ],
         [
           0.5,
           0.44,
-          0.43
+          0.5375
         ]
       ],
       "features": [
@@ -297,7 +438,81 @@
         "seven-slot grille",
         "offroad bumper",
         "snorkel"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.30625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.46125,
+            0.1625,
+            0.777
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "jeep_wheel_FL",
+            "position": [
+              -0.46125,
+              0.25,
+              0.58275
+            ],
+            "radius": 0.25,
+            "width": 0.175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "jeep_wheel_FR",
+            "position": [
+              0.46125,
+              0.25,
+              0.58275
+            ],
+            "radius": 0.25,
+            "width": 0.175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "jeep_wheel_RL",
+            "position": [
+              -0.46125,
+              0.25,
+              -0.58275
+            ],
+            "radius": 0.25,
+            "width": 0.175,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "jeep_wheel_RR",
+            "position": [
+              0.46125,
+              0.25,
+              -0.58275
+            ],
+            "radius": 0.25,
+            "width": 0.175,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "jeep_body"
+      }
     },
     {
       "id": "buggy",
@@ -306,10 +521,10 @@
       "color": "#ffb52e",
       "accent": "#22283e",
       "number": "04",
-      "length": 1.56,
-      "width": 0.87,
-      "roof": 0.61,
-      "wheel": 0.19,
+      "length": 1.95,
+      "width": 1.0875,
+      "roof": 0.7625,
+      "wheel": 0.2375,
       "cage": true,
       "lights": 2,
       "features": [
@@ -319,7 +534,81 @@
         "rear engine",
         "rally light bar",
         "knobby tires"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.29375,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.489375,
+            0.1625,
+            0.819
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "buggy_wheel_FL",
+            "position": [
+              -0.467625,
+              0.2375,
+              0.6435
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "buggy_wheel_FR",
+            "position": [
+              0.467625,
+              0.2375,
+              0.6435
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "buggy_wheel_RL",
+            "position": [
+              -0.467625,
+              0.2375,
+              -0.6435
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "buggy_wheel_RR",
+            "position": [
+              0.467625,
+              0.2375,
+              -0.6435
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "buggy_body"
+      }
     },
     {
       "id": "drift",
@@ -328,10 +617,10 @@
       "color": "#b283ed",
       "accent": "#ffed78",
       "number": "05",
-      "length": 1.65,
-      "width": 0.8,
-      "roof": 0.6,
-      "wheel": 0.16,
+      "length": 2.0625,
+      "width": 1.0,
+      "roof": 0.75,
+      "wheel": 0.2,
       "spoiler": true,
       "lights": 2,
       "cabin": [
@@ -345,27 +634,27 @@
         [
           -0.5,
           0.43,
-          0.4
+          0.5
         ],
         [
           -0.31,
           0.48,
-          0.45
+          0.5625
         ],
         [
           0.03,
           0.46,
-          0.44
+          0.55
         ],
         [
           0.32,
           0.5,
-          0.45
+          0.5625
         ],
         [
           0.5,
           0.44,
-          0.41
+          0.5125
         ]
       ],
       "features": [
@@ -374,7 +663,81 @@
         "exposed intercooler",
         "ducktail and tall wing",
         "twin tailpipes"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.25625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.45,
+            0.1625,
+            0.86625
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "drift_wheel_FL",
+            "position": [
+              -0.45,
+              0.2,
+              0.680625
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "drift_wheel_FR",
+            "position": [
+              0.45,
+              0.2,
+              0.680625
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "drift_wheel_RL",
+            "position": [
+              -0.45,
+              0.2,
+              -0.680625
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "drift_wheel_RR",
+            "position": [
+              0.45,
+              0.2,
+              -0.680625
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "drift_body"
+      }
     },
     {
       "id": "pickup",
@@ -383,10 +746,10 @@
       "color": "#f17fa3",
       "accent": "#f7efdf",
       "number": "06",
-      "length": 1.64,
-      "width": 0.82,
-      "roof": 0.69,
-      "wheel": 0.19,
+      "length": 2.05,
+      "width": 1.025,
+      "roof": 0.8625,
+      "wheel": 0.2375,
       "bed": true,
       "lights": 2,
       "cabin": [
@@ -400,22 +763,22 @@
         [
           -0.5,
           0.43,
-          0.43
+          0.5375
         ],
         [
           -0.33,
           0.48,
-          0.46
+          0.575
         ],
         [
           0,
           0.47,
-          0.44
+          0.55
         ],
         [
           0.5,
           0.46,
-          0.43
+          0.5375
         ]
       ],
       "features": [
@@ -424,7 +787,81 @@
         "rear roll bar",
         "stout offroad tires",
         "toolbox"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.29375,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.46125,
+            0.1625,
+            0.861
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "pickup_wheel_FL",
+            "position": [
+              -0.46125,
+              0.2375,
+              0.66625
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "pickup_wheel_FR",
+            "position": [
+              0.46125,
+              0.2375,
+              0.66625
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "pickup_wheel_RL",
+            "position": [
+              -0.46125,
+              0.2375,
+              -0.66625
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "pickup_wheel_RR",
+            "position": [
+              0.46125,
+              0.2375,
+              -0.66625
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "pickup_body"
+      }
     },
     {
       "id": "formula",
@@ -433,10 +870,10 @@
       "color": "#f3e64d",
       "accent": "#253b37",
       "number": "07",
-      "length": 1.75,
-      "width": 0.9,
-      "roof": 0.42,
-      "wheel": 0.17,
+      "length": 2.1875,
+      "width": 1.125,
+      "roof": 0.525,
+      "wheel": 0.2125,
       "spoiler": true,
       "openWheel": true,
       "lights": 0,
@@ -447,7 +884,81 @@
         "cockpit halo",
         "front multi element wing",
         "rear endplates"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.26875,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.50625,
+            0.1625,
+            0.91875
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "formula_wheel_FL",
+            "position": [
+              -0.46125,
+              0.2125,
+              0.7875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "formula_wheel_FR",
+            "position": [
+              0.46125,
+              0.2125,
+              0.7875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "formula_wheel_RL",
+            "position": [
+              -0.46125,
+              0.2125,
+              -0.7875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "formula_wheel_RR",
+            "position": [
+              0.46125,
+              0.2125,
+              -0.7875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "formula_body"
+      }
     },
     {
       "id": "van",
@@ -456,10 +967,10 @@
       "color": "#42bba3",
       "accent": "#ffdf78",
       "number": "08",
-      "length": 1.53,
-      "width": 0.81,
-      "roof": 0.79,
-      "wheel": 0.17,
+      "length": 1.9125,
+      "width": 1.0125,
+      "roof": 0.9875,
+      "wheel": 0.2125,
       "box": true,
       "lights": 2,
       "cabin": [
@@ -473,22 +984,22 @@
         [
           -0.5,
           0.44,
-          0.44
+          0.55
         ],
         [
           -0.34,
           0.48,
-          0.47
+          0.5875
         ],
         [
           0.4,
           0.48,
-          0.47
+          0.5875
         ],
         [
           0.5,
           0.44,
-          0.45
+          0.5625
         ]
       ],
       "features": [
@@ -497,7 +1008,81 @@
         "rear barn doors",
         "sliding door tracks",
         "parcel decals"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.26875,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.455625,
+            0.1625,
+            0.80325
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "van_wheel_FL",
+            "position": [
+              -0.455625,
+              0.2125,
+              0.612
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "van_wheel_FR",
+            "position": [
+              0.455625,
+              0.2125,
+              0.612
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "van_wheel_RL",
+            "position": [
+              -0.455625,
+              0.2125,
+              -0.612
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "van_wheel_RR",
+            "position": [
+              0.455625,
+              0.2125,
+              -0.612
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "van_body"
+      }
     },
     {
       "id": "classic",
@@ -506,10 +1091,10 @@
       "color": "#ef8a42",
       "accent": "#f7f4e4",
       "number": "09",
-      "length": 1.33,
-      "width": 0.76,
-      "roof": 0.65,
-      "wheel": 0.16,
+      "length": 1.6625,
+      "width": 0.95,
+      "roof": 0.8125,
+      "wheel": 0.2,
       "lights": 2,
       "cabin": [
         -0.3,
@@ -522,27 +1107,27 @@
         [
           -0.5,
           0.36,
-          0.39
+          0.4875
         ],
         [
           -0.35,
           0.47,
-          0.44
+          0.55
         ],
         [
           0,
           0.46,
-          0.44
+          0.55
         ],
         [
           0.32,
           0.46,
-          0.43
+          0.5375
         ],
         [
           0.5,
           0.36,
-          0.38
+          0.475
         ]
       ],
       "features": [
@@ -551,7 +1136,81 @@
         "chrome bumpers",
         "rear engine vents",
         "small sport rims"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.25625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.4275,
+            0.1625,
+            0.69825
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "classic_wheel_FL",
+            "position": [
+              -0.4275,
+              0.2,
+              0.523688
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "classic_wheel_FR",
+            "position": [
+              0.4275,
+              0.2,
+              0.523688
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "classic_wheel_RL",
+            "position": [
+              -0.4275,
+              0.2,
+              -0.523688
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "classic_wheel_RR",
+            "position": [
+              0.4275,
+              0.2,
+              -0.523688
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "classic_body"
+      }
     },
     {
       "id": "prototype",
@@ -560,10 +1219,10 @@
       "color": "#6c8beb",
       "accent": "#d2fffb",
       "number": "10",
-      "length": 1.72,
-      "width": 0.87,
-      "roof": 0.55,
-      "wheel": 0.16,
+      "length": 2.15,
+      "width": 1.0875,
+      "roof": 0.6875,
+      "wheel": 0.2,
       "spoiler": true,
       "lights": 2,
       "cabin": [
@@ -577,27 +1236,27 @@
         [
           -0.5,
           0.32,
-          0.31
+          0.3875
         ],
         [
           -0.33,
           0.49,
-          0.39
+          0.4875
         ],
         [
           -0.1,
           0.44,
-          0.42
+          0.525
         ],
         [
           0.25,
           0.5,
-          0.42
+          0.525
         ],
         [
           0.5,
           0.39,
-          0.33
+          0.4125
         ]
       ],
       "features": [
@@ -606,7 +1265,82 @@
         "razor LED strip",
         "floating aero wings",
         "rear light bar"
-      ]
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.25625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.489375,
+            0.1625,
+            0.903
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "prototype_wheel_FL",
+            "position": [
+              -0.489375,
+              0.2,
+              0.731
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "prototype_wheel_FR",
+            "position": [
+              0.489375,
+              0.2,
+              0.731
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "prototype_wheel_RL",
+            "position": [
+              -0.489375,
+              0.2,
+              -0.731
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "prototype_wheel_RR",
+            "position": [
+              0.489375,
+              0.2,
+              -0.731
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "prototype_body"
+      }
     }
-  ]
+  ],
+  "modelScale": 1.25
 }

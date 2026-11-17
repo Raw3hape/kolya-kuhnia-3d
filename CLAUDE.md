@@ -183,7 +183,7 @@ blender -b -P blender/render.py -- --glb exports/<file>.glb --view living --out 
 `party-state.js` / `rc-state.js` общие с Worker authority; не создавать отдельные правила для соло.
 Передача любой вещи — атомарная команда `handoff`, `rc` ввод — только намерения, не позиция/HP.
 `tools/rc/` и `tools/party/build-energy.blender.py` — источники моделей; GLB в `web/models/`.
-Камера гонки действует только на отрисовку через `render-view-camera.js`; тело остаётся на балконе.
+В RC и тело, и мировая камера остаются на балконе; `rc-camera.js` обрабатывает только поворот головы и оптический масштаб. `C` наводит взгляд на свою машинку без переноса камеры.
 
 ## Порядок
 

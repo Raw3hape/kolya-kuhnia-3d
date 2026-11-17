@@ -80,15 +80,15 @@ try{
  const before=await solo.evaluate(()=>({body:__kitchen.walk.getNetworkPose(),car:__kitchen.rc.held.position}));await solo.keyboard.down('w');await solo.waitForTimeout(1400);await solo.keyboard.down('a');await solo.waitForTimeout(600);await solo.keyboard.up('a');await solo.keyboard.up('w');await solo.keyboard.down('Space');await solo.waitForTimeout(300);await solo.keyboard.up('Space');
  const after=await solo.evaluate(()=>({body:__kitchen.walk.getNetworkPose(),car:__kitchen.rc.held.position,speed:__kitchen.rc.held.speed}));
  check('native RC gas, turn and brake move car and freeze avatar',Math.hypot(...after.car.map((v,i)=>v-before.car[i]))>1&&Math.hypot(after.body.x-before.body.x,after.body.z-before.body.z)<.001,{before,after});
- const cameraBefore=await solo.evaluate(()=>({camera:__kitchen.rc.viewCamera.position.toArray(),body:__kitchen.walk.getNetworkPose()}));
+ const cameraBefore=await solo.evaluate(()=>({camera:__kitchen.rc.viewCamera.position.toArray(),quaternion:__kitchen.rc.viewCamera.quaternion.toArray(),body:__kitchen.walk.getNetworkPose()}));
  await solo.keyboard.down('w');await solo.mouse.move(730,450);await solo.mouse.down();await solo.mouse.move(980,390,{steps:14});await solo.mouse.up();await solo.keyboard.up('w');await solo.waitForTimeout(400);
- const cameraAfter=await solo.evaluate(()=>({camera:__kitchen.rc.viewCamera.position.toArray(),body:__kitchen.walk.getNetworkPose(),car:__kitchen.rc.held.position}));
- check('touchpad-style primary drag orbits while keyboard drives without moving avatar',Math.hypot(...cameraAfter.camera.map((v,i)=>v-cameraBefore.camera[i]))>.3&&Math.hypot(cameraAfter.body.x-cameraBefore.body.x,cameraAfter.body.z-cameraBefore.body.z)<.001);
- const distanceBefore=await solo.evaluate(()=>__kitchen.rc.viewCamera.position.distanceTo(__kitchen.scene.getObjectByName('rc_car_'+__kitchen.rc.held.id).position));
+ const cameraAfter=await solo.evaluate(()=>({camera:__kitchen.rc.viewCamera.position.toArray(),quaternion:__kitchen.rc.viewCamera.quaternion.toArray(),body:__kitchen.walk.getNetworkPose(),car:__kitchen.rc.held.position}));
+ check('touchpad-style primary drag turns balcony head while keyboard drives without moving camera or avatar',Math.hypot(...cameraAfter.quaternion.map((v,i)=>v-cameraBefore.quaternion[i]))>.02&&Math.hypot(...cameraAfter.camera.map((v,i)=>v-cameraBefore.camera[i]))<.01&&Math.hypot(cameraAfter.body.x-cameraBefore.body.x,cameraAfter.body.z-cameraBefore.body.z)<.001);
+ const fovBefore=await solo.evaluate(()=>__kitchen.camera.fov);
  await solo.mouse.move(700,450);await solo.mouse.wheel(0,-140);await solo.waitForTimeout(600);
- check('trackpad two-finger wheel zoom stays bounded and keyboard C recenters',await solo.evaluate(before=>{const distance=__kitchen.rc.viewCamera.position.distanceTo(__kitchen.scene.getObjectByName('rc_car_'+__kitchen.rc.held.id).position);return distance<before&&distance>=2},distanceBefore));
+ check('trackpad wheel optically zooms from the balcony and keyboard C locates the car',await solo.evaluate(before=>__kitchen.camera.fov<before&&__kitchen.camera.fov>8,fovBefore));
  await solo.keyboard.press('c');await solo.waitForTimeout(800);await screenshot(solo,'rc-driving');
- await solo.getByRole('button',{name:'Закончить гонку и вернуться на балкон',exact:true}).click();await solo.waitForFunction(()=>!__kitchen.rc.controlling);check('clear exit returns camera and player to balcony',await solo.evaluate(()=>!document.body.classList.contains('rc-controlling')&&__kitchen.camera.position.y>1));
+ await solo.getByRole('button',{name:'Положить пульт и закончить управление машинкой',exact:true}).click();await solo.waitForFunction(()=>!__kitchen.rc.controlling);check('clear exit returns camera and player to balcony',await solo.evaluate(()=>!document.body.classList.contains('rc-controlling')&&__kitchen.camera.position.y>1));
  }
  if(process.env.QA_ROOM_ONLY!=='1'){
   await solo.waitForFunction(()=>__kitchen.social.debug.state.pizza?.location==='courier',null,{timeout:55000});
@@ -121,15 +121,15 @@ try{
  }
  await solo.context().close();
  const mobile=await page(url,true);await mobile.evaluate(()=>{__kitchen.viewmodel.setWeapon('none');__kitchen.doors.setOpen('room3_balcony_door',true,{instant:true});__kitchen.walk.enter({x:-1.37,z:-.9},0)});await mobile.waitForTimeout(1100);await mobile.evaluate(()=>__kitchen.rc.command('take','rc-0'));await mobile.waitForFunction(()=>__kitchen.rc.controlling);await mobile.waitForTimeout(700);
- const gas=mobile.getByRole('button',{name:'Ехать вперёд',exact:true});const box=await gas.boundingBox();await mobile.mouse.move(box.x+box.width/2,box.y+box.height/2);await mobile.mouse.down();await mobile.waitForTimeout(900);await mobile.mouse.up();const mobileBefore=await mobile.evaluate(()=>__kitchen.rc.viewCamera.position.toArray());
+ const gas=mobile.getByRole('button',{name:'Ехать вперёд',exact:true});const box=await gas.boundingBox();await mobile.mouse.move(box.x+box.width/2,box.y+box.height/2);await mobile.mouse.down();await mobile.waitForTimeout(900);await mobile.mouse.up();const mobileBefore=await mobile.evaluate(()=>({position:__kitchen.camera.position.toArray(),quaternion:__kitchen.camera.quaternion.toArray()}));
  const touchSession=await mobile.context().newCDPSession(mobile);const gx=box.x+box.width/2,gy=box.y+box.height/2;
  await touchSession.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:gx,y:gy,id:1},{x:180,y:350,id:2}]});
  await touchSession.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:gx,y:gy,id:1},{x:275,y:390,id:2}]});await mobile.waitForTimeout(650);
  await touchSession.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await mobile.waitForTimeout(250);
- check('mobile simultaneous gas and camera drag respond independently',await mobile.evaluate(before=>Math.hypot(...__kitchen.rc.viewCamera.position.toArray().map((v,i)=>v-before[i]))>.4,mobileBefore));
+ check('mobile gas and balcony head-look respond independently without moving the camera position',await mobile.evaluate(before=>Math.hypot(...__kitchen.camera.quaternion.toArray().map((v,i)=>v-before.quaternion[i]))>.01&&Math.hypot(...__kitchen.camera.position.toArray().map((v,i)=>v-before.position[i]))<.01,mobileBefore));
  await screenshot(mobile,'mobile-rc');
  check('mobile has visible touch gas and clear exit without overflow',await mobile.evaluate(()=>{const r=document.querySelector('.rc-exit').getBoundingClientRect();return r.width>=100&&r.left>=0&&r.right<=innerWidth&&document.documentElement.scrollWidth<=innerWidth}));
- await mobile.getByRole('button',{name:'Закончить гонку и вернуться на балкон',exact:true}).click();await mobile.waitForFunction(()=>!__kitchen.rc.controlling);
+ await mobile.getByRole('button',{name:'Положить пульт и закончить управление машинкой',exact:true}).click();await mobile.waitForFunction(()=>!__kitchen.rc.controlling);
  check('browser has no uncaught errors',report.errors.length===0,report.errors);
 }catch(error){report.failure=error.stack;console.error(error.stack);process.exitCode=1;for(const c of contexts)for(const p of c.pages())await screenshot(p,'failure-'+contexts.indexOf(c)).catch(()=>{});}
 finally{for(const c of contexts)await c.close().catch(()=>{});await browser?.close();clearTimeout(watchdog);report.cleanup=true;fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({checks:report.checks.length,pass:!report.failure&&report.checks.every(c=>c.pass),failure:report.failure,cleanup:report.cleanup}));}

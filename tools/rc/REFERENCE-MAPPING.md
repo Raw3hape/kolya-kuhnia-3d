@@ -3,7 +3,7 @@
 All ten reference sheets were generated in ChatGPT Images for this project.
 Exact prompts and source images: [generation.json](concepts/generation.json).
 The reproducible game meshes implement their silhouettes and key features at
-boar scale. Reference-sheet text dimensions are illustrative; SI dimensions in
+boar scale, enlarged coherently by 25% in art version 2. Reference-sheet text dimensions are illustrative; SI dimensions in
 `web/spec/rc.json` control both authoring and gameplay.
 
 | Car | Adapted geometry |
@@ -19,7 +19,12 @@ boar scale. Reference-sheet text dimensions are illustrative; SI dimensions in
 | Малюх Турбо | Compact retro body, round chrome lamps, chrome bumpers/roof rack, cooling louvres, small wheels, cream race panels |
 | Варшава 2077 | Pointed endurance body, curved bubble canopy, mint rear aero arches, roof intake/dorsal fin, front canards, LED bars and rear air tunnels |
 
-Shared details: independent moving wheel pivots, tire tread blocks, open-spoke
+Version 2 uses continuous lofted body shells with four real wheel cavities,
+curved roofs, framed glazing, detailed interiors and large conforming bonnet
+numbers. Tire positions, cavities, arch lips and suspension share the exact
+recipe wheel sockets.
+
+Shared details: neutral empty wheel pivots with separate geometry, rounded hollow tires, directional tread, open-spoke
 rims/hubs/lug bolts/brake discs, mirror housings, panel gaps, wipers, antenna,
 metal and rubber materials, painted/livery surface separation. These are
 lightweight geometry adaptations of the design references, with bounded

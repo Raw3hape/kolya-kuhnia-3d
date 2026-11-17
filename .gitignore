@@ -16,3 +16,4 @@ output/independent-qa/
 # Disposable RC authoring validation outputs.
 tools/rc/.staging/
 tools/rc/garage-preview.jpg
+tools/rc/.art-staging/

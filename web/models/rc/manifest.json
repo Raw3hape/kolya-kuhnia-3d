@@ -1,25 +1,230 @@
 {
-  "version": 1,
+  "version": 2,
   "seed": 20261116,
   "generator": "tools/rc/build.py",
   "recipe": "web/spec/rc.json",
-  "asset": "garage.glb",
-  "sha256": "d25c3a0f64c425bf4b995ca4853b4644d106607e0924a68fd9327ad5f7c0d7e1",
-  "bytes": 1997252,
+  "asset": "models/rc/garage.glb",
+  "sha256": "9d1aca7304e036d6f83f9a802a854f025cb5ed382f2d386fb9ceb1b42e3f4d72",
+  "bytes": 1997352,
+  "modelScale": 1.25,
+  "sourceSpecSha256": "c4702cf0a162ea4c37c96b8607509327d94e385f7a6d04441cf03aae32b63cfc",
+  "units": "metres",
+  "coordinateSystem": {
+    "up": "+Y",
+    "nose": "+Z",
+    "wheelAxle": "+X",
+    "origin": "ground-contact centre"
+  },
   "cars": [
     {
       "id": "rally",
       "node": "rc_rally",
-      "triangles": 17652,
+      "triangles": 34878,
       "wheelNodes": [
-        "wheel_FL",
-        "wheel_FR",
-        "wheel_RL",
-        "wheel_RR"
+        "rally_wheel_FL",
+        "rally_wheel_FR",
+        "rally_wheel_RL",
+        "rally_wheel_RR"
       ],
-      "length": 1.5,
-      "width": 0.78,
-      "height": 0.96,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "rally_wheel_FL",
+          "position": [
+            -0.43875,
+            0.2125,
+            0.61875
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "rally_wheel_FR",
+          "position": [
+            0.43875,
+            0.2125,
+            0.61875
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "rally_wheel_RL",
+          "position": [
+            -0.43875,
+            0.2125,
+            -0.61875
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "rally_wheel_RR",
+          "position": [
+            0.43875,
+            0.2125,
+            -0.61875
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.26875,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.43875,
+            0.1625,
+            0.7875
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "rally_wheel_FL",
+            "position": [
+              -0.43875,
+              0.2125,
+              0.61875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "rally_wheel_FR",
+            "position": [
+              0.43875,
+              0.2125,
+              0.61875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "rally_wheel_RL",
+            "position": [
+              -0.43875,
+              0.2125,
+              -0.61875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "rally_wheel_RR",
+            "position": [
+              0.43875,
+              0.2125,
+              -0.61875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "rally_body"
+      },
+      "length": 1.875,
+      "width": 0.975,
+      "height": 1.1081249713897705,
+      "boundsBlender": {
+        "min": [
+          -0.5496249198913574,
+          -1.058250069618225,
+          0
+        ],
+        "max": [
+          0.5496249794960022,
+          1.0393750667572021,
+          1.1081249713897705
+        ]
+      },
       "features": [
         "bolted wide arches",
         "hood louvres",
@@ -28,21 +233,229 @@
         "rally skid plate",
         "four spotlights"
       ],
-      "reference": "tools/rc/concepts/rally.jpg"
+      "reference": "tools/rc/concepts/rally.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "gt",
       "node": "rc_gt",
-      "triangles": 13880,
+      "triangles": 31184,
       "wheelNodes": [
-        "wheel_FL.001",
-        "wheel_FR.001",
-        "wheel_RL.001",
-        "wheel_RR.001"
+        "gt_wheel_FL",
+        "gt_wheel_FR",
+        "gt_wheel_RL",
+        "gt_wheel_RR"
       ],
-      "length": 1.63,
-      "width": 0.84,
-      "height": 0.87,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "gt_wheel_FL",
+          "position": [
+            -0.4725,
+            0.2,
+            0.672375
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "gt_wheel_FR",
+          "position": [
+            0.4725,
+            0.2,
+            0.672375
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "gt_wheel_RL",
+          "position": [
+            -0.4725,
+            0.2,
+            -0.672375
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "gt_wheel_RR",
+          "position": [
+            0.4725,
+            0.2,
+            -0.672375
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.25625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.4725,
+            0.1625,
+            0.85575
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "gt_wheel_FL",
+            "position": [
+              -0.4725,
+              0.2,
+              0.672375
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "gt_wheel_FR",
+            "position": [
+              0.4725,
+              0.2,
+              0.672375
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "gt_wheel_RL",
+            "position": [
+              -0.4725,
+              0.2,
+              -0.672375
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "gt_wheel_RR",
+            "position": [
+              0.4725,
+              0.2,
+              -0.672375
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "gt_body"
+      },
+      "length": 2.0375,
+      "width": 1.05,
+      "height": 0.9956250190734863,
+      "boundsBlender": {
+        "min": [
+          -0.588249921798706,
+          -1.1875,
+          0
+        ],
+        "max": [
+          0.5882499814033508,
+          1.125,
+          0.9956250190734863
+        ]
+      },
       "features": [
         "sculpted cyan coupe",
         "navy center livery",
@@ -51,21 +464,229 @@
         "rear diffuser",
         "large elevated wing"
       ],
-      "reference": "tools/rc/concepts/gt.jpg"
+      "reference": "tools/rc/concepts/gt.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "jeep",
       "node": "rc_jeep",
-      "triangles": 18640,
+      "triangles": 34538,
       "wheelNodes": [
-        "wheel_FL.002",
-        "wheel_FR.002",
-        "wheel_RL.002",
-        "wheel_RR.002"
+        "jeep_wheel_FL",
+        "jeep_wheel_FR",
+        "jeep_wheel_RL",
+        "jeep_wheel_RR"
       ],
-      "length": 1.48,
-      "width": 0.82,
-      "height": 1.06,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "jeep_wheel_FL",
+          "position": [
+            -0.46125,
+            0.25,
+            0.58275
+          ],
+          "radius": 0.25,
+          "width": 0.13999999999999999,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "jeep_wheel_FR",
+          "position": [
+            0.46125,
+            0.25,
+            0.58275
+          ],
+          "radius": 0.25,
+          "width": 0.13999999999999999,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "jeep_wheel_RL",
+          "position": [
+            -0.46125,
+            0.25,
+            -0.58275
+          ],
+          "radius": 0.25,
+          "width": 0.13999999999999999,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "jeep_wheel_RR",
+          "position": [
+            0.46125,
+            0.25,
+            -0.58275
+          ],
+          "radius": 0.25,
+          "width": 0.13999999999999999,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.30625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.46125,
+            0.1625,
+            0.777
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "jeep_wheel_FL",
+            "position": [
+              -0.46125,
+              0.25,
+              0.58275
+            ],
+            "radius": 0.25,
+            "width": 0.175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "jeep_wheel_FR",
+            "position": [
+              0.46125,
+              0.25,
+              0.58275
+            ],
+            "radius": 0.25,
+            "width": 0.175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "jeep_wheel_RL",
+            "position": [
+              -0.46125,
+              0.25,
+              -0.58275
+            ],
+            "radius": 0.25,
+            "width": 0.175,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "jeep_wheel_RR",
+            "position": [
+              0.46125,
+              0.25,
+              -0.58275
+            ],
+            "radius": 0.25,
+            "width": 0.175,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "jeep_body"
+      },
+      "length": 1.85,
+      "width": 1.025,
+      "height": 1.287500023841858,
+      "boundsBlender": {
+        "min": [
+          -0.5824750065803528,
+          -0.9999999403953552,
+          0
+        ],
+        "max": [
+          0.5824750065803528,
+          1.104374885559082,
+          1.287500023841858
+        ]
+      },
       "features": [
         "upright square cabin",
         "roof rack",
@@ -74,21 +695,229 @@
         "offroad bumper",
         "snorkel"
       ],
-      "reference": "tools/rc/concepts/jeep.jpg"
+      "reference": "tools/rc/concepts/jeep.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "buggy",
       "node": "rc_buggy",
-      "triangles": 12936,
+      "triangles": 21960,
       "wheelNodes": [
-        "wheel_FL.003",
-        "wheel_FR.003",
-        "wheel_RL.003",
-        "wheel_RR.003"
+        "buggy_wheel_FL",
+        "buggy_wheel_FR",
+        "buggy_wheel_RL",
+        "buggy_wheel_RR"
       ],
-      "length": 1.56,
-      "width": 0.87,
-      "height": 0.88,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "buggy_wheel_FL",
+          "position": [
+            -0.467625,
+            0.2375,
+            0.6435
+          ],
+          "radius": 0.2375,
+          "width": 0.133,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "buggy_wheel_FR",
+          "position": [
+            0.467625,
+            0.2375,
+            0.6435
+          ],
+          "radius": 0.2375,
+          "width": 0.133,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "buggy_wheel_RL",
+          "position": [
+            -0.467625,
+            0.2375,
+            -0.6435
+          ],
+          "radius": 0.2375,
+          "width": 0.133,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "buggy_wheel_RR",
+          "position": [
+            0.467625,
+            0.2375,
+            -0.6435
+          ],
+          "radius": 0.2375,
+          "width": 0.133,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.29375,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.489375,
+            0.1625,
+            0.819
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "buggy_wheel_FL",
+            "position": [
+              -0.467625,
+              0.2375,
+              0.6435
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "buggy_wheel_FR",
+            "position": [
+              0.467625,
+              0.2375,
+              0.6435
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "buggy_wheel_RL",
+            "position": [
+              -0.467625,
+              0.2375,
+              -0.6435
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "buggy_wheel_RR",
+            "position": [
+              0.467625,
+              0.2375,
+              -0.6435
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "buggy_body"
+      },
+      "length": 1.95,
+      "width": 1.0875,
+      "height": 1.0081249475479126,
+      "boundsBlender": {
+        "min": [
+          -0.5844137668609619,
+          -0.9749999642372131,
+          0
+        ],
+        "max": [
+          0.5844137668609619,
+          0.9749999642372131,
+          1.0081249475479126
+        ]
+      },
       "features": [
         "exposed space frame",
         "triangulated roll cage",
@@ -97,21 +926,229 @@
         "rally light bar",
         "knobby tires"
       ],
-      "reference": "tools/rc/concepts/buggy.jpg"
+      "reference": "tools/rc/concepts/buggy.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "drift",
       "node": "rc_drift",
-      "triangles": 14844,
+      "triangles": 31354,
       "wheelNodes": [
-        "wheel_FL.004",
-        "wheel_FR.004",
-        "wheel_RL.004",
-        "wheel_RR.004"
+        "drift_wheel_FL",
+        "drift_wheel_FR",
+        "drift_wheel_RL",
+        "drift_wheel_RR"
       ],
-      "length": 1.65,
-      "width": 0.8,
-      "height": 0.87,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "drift_wheel_FL",
+          "position": [
+            -0.45,
+            0.2,
+            0.680625
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "drift_wheel_FR",
+          "position": [
+            0.45,
+            0.2,
+            0.680625
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "drift_wheel_RL",
+          "position": [
+            -0.45,
+            0.2,
+            -0.680625
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "drift_wheel_RR",
+          "position": [
+            0.45,
+            0.2,
+            -0.680625
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.25625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.45,
+            0.1625,
+            0.86625
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "drift_wheel_FL",
+            "position": [
+              -0.45,
+              0.2,
+              0.680625
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "drift_wheel_FR",
+            "position": [
+              0.45,
+              0.2,
+              0.680625
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "drift_wheel_RL",
+            "position": [
+              -0.45,
+              0.2,
+              -0.680625
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "drift_wheel_RR",
+            "position": [
+              0.45,
+              0.2,
+              -0.680625
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "drift_body"
+      },
+      "length": 2.0625,
+      "width": 1,
+      "height": 0.9956250190734863,
+      "boundsBlender": {
+        "min": [
+          -0.5624999403953552,
+          -1.2000000476837158,
+          0
+        ],
+        "max": [
+          0.5625,
+          1.1375000476837158,
+          0.9956250190734863
+        ]
+      },
       "features": [
         "widebody coupe",
         "deep dish five-spoke rims",
@@ -119,21 +1156,229 @@
         "ducktail and tall wing",
         "twin tailpipes"
       ],
-      "reference": "tools/rc/concepts/drift.jpg"
+      "reference": "tools/rc/concepts/drift.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "pickup",
       "node": "rc_pickup",
-      "triangles": 14756,
+      "triangles": 32926,
       "wheelNodes": [
-        "wheel_FL.005",
-        "wheel_FR.005",
-        "wheel_RL.005",
-        "wheel_RR.005"
+        "pickup_wheel_FL",
+        "pickup_wheel_FR",
+        "pickup_wheel_RL",
+        "pickup_wheel_RR"
       ],
-      "length": 1.64,
-      "width": 0.82,
-      "height": 0.96,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "pickup_wheel_FL",
+          "position": [
+            -0.46125,
+            0.2375,
+            0.66625
+          ],
+          "radius": 0.2375,
+          "width": 0.133,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "pickup_wheel_FR",
+          "position": [
+            0.46125,
+            0.2375,
+            0.66625
+          ],
+          "radius": 0.2375,
+          "width": 0.133,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "pickup_wheel_RL",
+          "position": [
+            -0.46125,
+            0.2375,
+            -0.66625
+          ],
+          "radius": 0.2375,
+          "width": 0.133,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "pickup_wheel_RR",
+          "position": [
+            0.46125,
+            0.2375,
+            -0.66625
+          ],
+          "radius": 0.2375,
+          "width": 0.133,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.29375,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.46125,
+            0.1625,
+            0.861
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "pickup_wheel_FL",
+            "position": [
+              -0.46125,
+              0.2375,
+              0.66625
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "pickup_wheel_FR",
+            "position": [
+              0.46125,
+              0.2375,
+              0.66625
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "pickup_wheel_RL",
+            "position": [
+              -0.46125,
+              0.2375,
+              -0.66625
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "pickup_wheel_RR",
+            "position": [
+              0.46125,
+              0.2375,
+              -0.66625
+            ],
+            "radius": 0.2375,
+            "width": 0.16625,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "pickup_body"
+      },
+      "length": 2.05,
+      "width": 1.025,
+      "height": 1.1081249713897705,
+      "boundsBlender": {
+        "min": [
+          -0.57803875207901,
+          -1.0731250047683716,
+          0
+        ],
+        "max": [
+          0.57803875207901,
+          1.1268750429153442,
+          1.1081249713897705
+        ]
+      },
       "features": [
         "short cab",
         "open ribbed cargo bed",
@@ -141,21 +1386,229 @@
         "stout offroad tires",
         "toolbox"
       ],
-      "reference": "tools/rc/concepts/pickup.jpg"
+      "reference": "tools/rc/concepts/pickup.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "formula",
       "node": "rc_formula",
-      "triangles": 12436,
+      "triangles": 22066,
       "wheelNodes": [
-        "wheel_FL.006",
-        "wheel_FR.006",
-        "wheel_RL.006",
-        "wheel_RR.006"
+        "formula_wheel_FL",
+        "formula_wheel_FR",
+        "formula_wheel_RL",
+        "formula_wheel_RR"
       ],
-      "length": 1.75,
-      "width": 0.9,
-      "height": 0.69,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "formula_wheel_FL",
+          "position": [
+            -0.46125,
+            0.2125,
+            0.7875
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "formula_wheel_FR",
+          "position": [
+            0.46125,
+            0.2125,
+            0.7875
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "formula_wheel_RL",
+          "position": [
+            -0.46125,
+            0.2125,
+            -0.7875
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "formula_wheel_RR",
+          "position": [
+            0.46125,
+            0.2125,
+            -0.7875
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.26875,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.50625,
+            0.1625,
+            0.91875
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "formula_wheel_FL",
+            "position": [
+              -0.46125,
+              0.2125,
+              0.7875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "formula_wheel_FR",
+            "position": [
+              0.46125,
+              0.2125,
+              0.7875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "formula_wheel_RL",
+            "position": [
+              -0.46125,
+              0.2125,
+              -0.7875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "formula_wheel_RR",
+            "position": [
+              0.46125,
+              0.2125,
+              -0.7875
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "formula_body"
+      },
+      "length": 2.1875,
+      "width": 1.125,
+      "height": 0.7706249952316284,
+      "boundsBlender": {
+        "min": [
+          -0.5605472922325134,
+          -1.100000023841858,
+          0
+        ],
+        "max": [
+          0.5605472922325134,
+          1.09375,
+          0.7706249952316284
+        ]
+      },
       "features": [
         "open wheel",
         "tapered monocoque",
@@ -164,21 +1617,229 @@
         "front multi element wing",
         "rear endplates"
       ],
-      "reference": "tools/rc/concepts/formula.jpg"
+      "reference": "tools/rc/concepts/formula.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "van",
       "node": "rc_van",
-      "triangles": 14156,
+      "triangles": 31470,
       "wheelNodes": [
-        "wheel_FL.007",
-        "wheel_FR.007",
-        "wheel_RL.007",
-        "wheel_RR.007"
+        "van_wheel_FL",
+        "van_wheel_FR",
+        "van_wheel_RL",
+        "van_wheel_RR"
       ],
-      "length": 1.53,
-      "width": 0.81,
-      "height": 1.06,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "van_wheel_FL",
+          "position": [
+            -0.455625,
+            0.2125,
+            0.612
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "van_wheel_FR",
+          "position": [
+            0.455625,
+            0.2125,
+            0.612
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "van_wheel_RL",
+          "position": [
+            -0.455625,
+            0.2125,
+            -0.612
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "van_wheel_RR",
+          "position": [
+            0.455625,
+            0.2125,
+            -0.612
+          ],
+          "radius": 0.2125,
+          "width": 0.10540000000000001,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.26875,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.455625,
+            0.1625,
+            0.80325
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "van_wheel_FL",
+            "position": [
+              -0.455625,
+              0.2125,
+              0.612
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "van_wheel_FR",
+            "position": [
+              0.455625,
+              0.2125,
+              0.612
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "van_wheel_RL",
+            "position": [
+              -0.455625,
+              0.2125,
+              -0.612
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "van_wheel_RR",
+            "position": [
+              0.455625,
+              0.2125,
+              -0.612
+            ],
+            "radius": 0.2125,
+            "width": 0.13175,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "van_body"
+      },
+      "length": 1.9125,
+      "width": 1.0125,
+      "height": 1.2331249713897705,
+      "boundsBlender": {
+        "min": [
+          -0.5689374208450317,
+          -1.0024999380111694,
+          0
+        ],
+        "max": [
+          0.5689374804496765,
+          1.0581251382827759,
+          1.2331249713897705
+        ]
+      },
       "features": [
         "tall delivery body",
         "parcel roof box",
@@ -186,21 +1847,229 @@
         "sliding door tracks",
         "parcel decals"
       ],
-      "reference": "tools/rc/concepts/van.jpg"
+      "reference": "tools/rc/concepts/van.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "classic",
       "node": "rc_classic",
-      "triangles": 14140,
+      "triangles": 30996,
       "wheelNodes": [
-        "wheel_FL.008",
-        "wheel_FR.008",
-        "wheel_RL.008",
-        "wheel_RR.008"
+        "classic_wheel_FL",
+        "classic_wheel_FR",
+        "classic_wheel_RL",
+        "classic_wheel_RR"
       ],
-      "length": 1.33,
-      "width": 0.76,
-      "height": 0.92,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "classic_wheel_FL",
+          "position": [
+            -0.4275,
+            0.2,
+            0.523688
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "classic_wheel_FR",
+          "position": [
+            0.4275,
+            0.2,
+            0.523688
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "classic_wheel_RL",
+          "position": [
+            -0.4275,
+            0.2,
+            -0.523688
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "classic_wheel_RR",
+          "position": [
+            0.4275,
+            0.2,
+            -0.523688
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.25625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.4275,
+            0.1625,
+            0.69825
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "classic_wheel_FL",
+            "position": [
+              -0.4275,
+              0.2,
+              0.523688
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "classic_wheel_FR",
+            "position": [
+              0.4275,
+              0.2,
+              0.523688
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "classic_wheel_RL",
+            "position": [
+              -0.4275,
+              0.2,
+              -0.523688
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "classic_wheel_RR",
+            "position": [
+              0.4275,
+              0.2,
+              -0.523688
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "classic_body"
+      },
+      "length": 1.6625,
+      "width": 0.95,
+      "height": 1.0581248998641968,
+      "boundsBlender": {
+        "min": [
+          -0.5367499589920044,
+          -0.8793749809265137,
+          0
+        ],
+        "max": [
+          0.5367500185966492,
+          0.9331249594688416,
+          1.0581248998641968
+        ]
+      },
       "features": [
         "round retro lights",
         "curved compact roof",
@@ -208,21 +2077,229 @@
         "rear engine vents",
         "small sport rims"
       ],
-      "reference": "tools/rc/concepts/classic.jpg"
+      "reference": "tools/rc/concepts/classic.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "prototype",
       "node": "rc_prototype",
-      "triangles": 13588,
+      "triangles": 28902,
       "wheelNodes": [
-        "wheel_FL.009",
-        "wheel_FR.009",
-        "wheel_RL.009",
-        "wheel_RR.009"
+        "prototype_wheel_FL",
+        "prototype_wheel_FR",
+        "prototype_wheel_RL",
+        "prototype_wheel_RR"
       ],
-      "length": 1.72,
-      "width": 0.87,
-      "height": 0.8200000000000001,
+      "wheelRig": [
+        {
+          "id": "FL",
+          "node": "prototype_wheel_FL",
+          "position": [
+            -0.489375,
+            0.2,
+            0.731
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "FR",
+          "node": "prototype_wheel_FR",
+          "position": [
+            0.489375,
+            0.2,
+            0.731
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RL",
+          "node": "prototype_wheel_RL",
+          "position": [
+            -0.489375,
+            0.2,
+            -0.731
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "RR",
+          "node": "prototype_wheel_RR",
+          "position": [
+            0.489375,
+            0.2,
+            -0.731
+          ],
+          "radius": 0.2,
+          "width": 0.0992,
+          "axle": [
+            1,
+            0,
+            0
+          ],
+          "bindQuaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "vehicle": {
+        "centerOfMass": [
+          0,
+          0.25625,
+          0
+        ],
+        "collider": {
+          "center": [
+            0,
+            0.35,
+            0
+          ],
+          "halfExtents": [
+            0.489375,
+            0.1625,
+            0.903
+          ]
+        },
+        "wheels": [
+          {
+            "id": "FL",
+            "node": "prototype_wheel_FL",
+            "position": [
+              -0.489375,
+              0.2,
+              0.731
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "FR",
+            "node": "prototype_wheel_FR",
+            "position": [
+              0.489375,
+              0.2,
+              0.731
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": true,
+            "steer": true
+          },
+          {
+            "id": "RL",
+            "node": "prototype_wheel_RL",
+            "position": [
+              -0.489375,
+              0.2,
+              -0.731
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          },
+          {
+            "id": "RR",
+            "node": "prototype_wheel_RR",
+            "position": [
+              0.489375,
+              0.2,
+              -0.731
+            ],
+            "radius": 0.2,
+            "width": 0.124,
+            "front": false,
+            "steer": false
+          }
+        ],
+        "bodyNode": "prototype_body"
+      },
+      "length": 2.15,
+      "width": 1.0875,
+      "height": 0.9331250190734863,
+      "boundsBlender": {
+        "min": [
+          -0.5847430229187012,
+          -1.243749976158142,
+          0
+        ],
+        "max": [
+          0.5847430229187012,
+          1.181249976158142,
+          0.9331250190734863
+        ]
+      },
       "features": [
         "pointed sculpted nose",
         "narrow canopy",
@@ -230,7 +2307,19 @@
         "floating aero wings",
         "rear light bar"
       ],
-      "reference": "tools/rc/concepts/prototype.jpg"
+      "reference": "tools/rc/concepts/prototype.jpg",
+      "meshCount": 5,
+      "rootOrigin": "ground-contact centre",
+      "nose": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        0,
+        1,
+        0
+      ]
     }
   ],
   "compression": "glTF Transform dedup + Meshopt"

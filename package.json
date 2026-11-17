@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node tools/vendor_three.mjs --check && node tools/rc/vendor.mjs --check && node tools/build_static.mjs",
+    "build": "node tools/vendor_three.mjs --check && node tools/rc/vendor.mjs --check && node tools/rc/check-assets.mjs && node tools/build_static.mjs",
     "test": "node --test tests/*.test.mjs tools/tests/*.test.mjs tools/test_multiplayer_client.mjs"
   },
   "description": "Конфигуратор квартиры AA0304: статический сайт (tools/build_static.mjs -> dist/) и функция таблицы рекордов охоты (api/scores.js).",

@@ -1,5 +1,17 @@
-import test from'node:test';import assert from'node:assert/strict';import{readFileSync}from'node:fs';import{createRCOrbit}from'../../web/js/rc-camera.js';
-const spec=JSON.parse(readFileSync(new URL('../../web/spec/rc.json',import.meta.url))),settings=spec.view.orbit;
-test('trackpad click-drag turns the camera and holds it before smooth return',()=>{const o=createRCOrbit(settings);o.step(.016,1);assert.ok(o.down(1,200,100));assert.ok(o.move(1,320,125));o.up(1);const dragged=o.step(.1,1);assert.ok(Math.abs(dragged.azimuth-1)>.3);for(let i=0;i<15;i++)o.step(.1,1);assert.equal(o.snapshot().azimuth,dragged.azimuth);for(let i=0;i<70;i++)o.step(.1,1);assert.ok(Math.abs(o.snapshot().azimuth-1)<.001);assert.ok(Math.abs(o.snapshot().pitch-settings.pitch)<.001);});
-test('mobile pinch zoom is bounded and ending one finger never jumps camera angle',()=>{const o=createRCOrbit(settings);o.step(.016,0);o.down(1,100,100);o.down(2,200,100);o.move(2,400,100);assert.ok(o.snapshot().distance<settings.distance);const before=o.snapshot().azimuth;o.up(2);o.move(1,101,100);assert.ok(Math.abs(o.snapshot().azimuth-before)<.02);o.move(1,1e7,1e7);assert.ok(o.snapshot().pitch<=settings.maxPitch);assert.ok(o.snapshot().distance>=settings.minDistance);});
-test('blur/pointercancel clears every gesture; wheel/trackpad zoom stays finite under hostile deltas',()=>{const o=createRCOrbit(settings);o.down(1,1,1);o.down(2,2,2);o.cancel();assert.equal(o.snapshot().pointers,0);assert.equal(o.move(1,2,3),false);assert.equal(o.zoom(Infinity),false);assert.equal(o.look(NaN,1),false);for(let i=0;i<100;i++)o.zoom(-1000);assert.equal(o.snapshot().distance,settings.minDistance);for(let i=0;i<100;i++)o.zoom(1000);assert.equal(o.snapshot().distance,settings.maxDistance);o.reset();assert.equal(o.snapshot().distance,settings.distance);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createRCViewControls} from '../../web/js/rc-camera.js';
+const settings=JSON.parse(readFileSync(new URL('../../web/spec/rc.json',import.meta.url))).view.zoom;
+test('mouse and trackpad provide head-look deltas, never a camera or follow position',()=>{
+ const c=createRCViewControls(settings);c.down(1,100,100);assert.deepEqual(c.move(1,180,75),{dx:80,dy:-25,type:'mouse'});assert.ok(c.up(1));
+ assert.deepEqual(Object.keys(c.snapshot()).sort(),['magnification','pointers']);assert.equal(c.snapshot().magnification,settings.initial);
+});
+test('pinch changes only optical magnification and lifting a finger never jumps the remaining look',()=>{
+ const c=createRCViewControls(settings);c.down(1,100,100,'touch');c.down(2,200,100,'touch');const action=c.move(2,400,100);assert.ok(action.zoom);assert.ok(action.magnification>settings.initial);c.up(2);
+ assert.deepEqual(c.move(1,102,103),{dx:2,dy:3,type:'touch'});assert.equal(c.snapshot().pointers,1);
+});
+test('wheel is finite and bounded; cancellation clears touches without changing the body or magnification',()=>{
+ const c=createRCViewControls(settings);assert.equal(c.wheel(Infinity),false);for(let i=0;i<100;i++)c.wheel(-1000);assert.equal(c.snapshot().magnification,settings.max);for(let i=0;i<100;i++)c.wheel(1000);assert.equal(c.snapshot().magnification,settings.min);
+ c.down(1,1,1);c.cancel();assert.equal(c.move(1,2,2),null);assert.equal(c.snapshot().pointers,0);c.reset();assert.equal(c.snapshot().magnification,settings.initial);
+});

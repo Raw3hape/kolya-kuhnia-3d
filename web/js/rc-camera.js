@@ -1,17 +1,22 @@
-// DOM-free orbit intent shared by mouse, click-drag trackpad and multitouch.
-// It never sees or mutates the avatar camera. Angles are radians; SI distance.
+// Remote-operator input: returns head-look deltas and optical magnification.
+// No camera position, chase distance or vehicle-follow transform exists here.
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
-export function createRCOrbit(settings){
- let time=0,azimuth=null,pitch=settings.pitch,distance=settings.distance,manualUntil=0,pinch=0;const pointers=new Map();
- const manual=()=>{manualUntil=time+settings.manualSeconds;};
- function reset(){azimuth=null;pitch=settings.pitch;distance=settings.distance;manualUntil=0;pointers.clear();pinch=0;}
- function down(id,x,y){if(!Number.isFinite(x)||!Number.isFinite(y))return false;pointers.set(id,{x,y});if(pointers.size===2){const[a,b]=[...pointers.values()];pinch=Math.hypot(a.x-b.x,a.y-b.y);}return true;}
- function look(dx,dy){if(!Number.isFinite(dx)||!Number.isFinite(dy))return false;azimuth=(azimuth??0)-dx*settings.sensitivity;pitch=clamp(pitch+dy*settings.sensitivity,settings.minPitch,settings.maxPitch);manual();return true;}
- function move(id,x,y){const previous=pointers.get(id);if(!previous||!Number.isFinite(x)||!Number.isFinite(y))return false;pointers.set(id,{x,y});if(pointers.size>=2){const[a,b]=[...pointers.values()],next=Math.hypot(a.x-b.x,a.y-b.y);if(pinch>1&&next>1)distance=clamp(distance*pinch/next,settings.minDistance,settings.maxDistance);pinch=next;manual();}else look(x-previous.x,y-previous.y);return true;}
- function up(id){const had=pointers.delete(id);pinch=0;return had;}
+export function createRCViewControls(settings){
+ const pointers=new Map();let magnification=settings.initial,pinch=0;
+ const snapshot=()=>({magnification,pointers:pointers.size});
+ function reset(){pointers.clear();pinch=0;magnification=settings.initial;return snapshot();}
  function cancel(){pointers.clear();pinch=0;}
- function zoom(delta){if(!Number.isFinite(delta))return false;distance=clamp(distance*Math.exp(clamp(delta,-100,100)*settings.zoomSensitivity),settings.minDistance,settings.maxDistance);manual();return true;}
- function step(dt,heading){if(!Number.isFinite(dt)||!Number.isFinite(heading)||dt<0)return snapshot();time+=Math.min(dt,.1);azimuth??=heading;if(time>manualUntil&&!pointers.size){const k=1-Math.exp(-settings.recenterResponse*Math.min(dt,.1));azimuth+=Math.atan2(Math.sin(heading-azimuth),Math.cos(heading-azimuth))*k;pitch+=(settings.pitch-pitch)*k;}return snapshot();}
- function snapshot(){return{azimuth,pitch,distance,dragging:pointers.size>0,pointers:pointers.size,manual:time<=manualUntil};}
- return{down,move,up,look,zoom,step,cancel,reset,snapshot};
+ function down(id,x,y,type='mouse'){
+  if(!Number.isFinite(x)||!Number.isFinite(y)||pointers.size>=2)return false;
+  pointers.set(id,{x,y,type});if(pointers.size===2){const[a,b]=[...pointers.values()];pinch=Math.hypot(a.x-b.x,a.y-b.y);}return true;
+ }
+ function move(id,x,y){
+  const previous=pointers.get(id);if(!previous||!Number.isFinite(x)||!Number.isFinite(y))return null;
+  pointers.set(id,{x,y,type:previous.type});
+  if(pointers.size===2){const[a,b]=[...pointers.values()],distance=Math.hypot(a.x-b.x,a.y-b.y);if(pinch>1&&distance>1)magnification=clamp(magnification*distance/pinch,settings.min,settings.max);pinch=distance;return{zoom:true,magnification};}
+  return{dx:x-previous.x,dy:y-previous.y,type:previous.type};
+ }
+ function up(id){const found=pointers.delete(id);pinch=0;return found;}
+ function wheel(delta){if(!Number.isFinite(delta))return false;magnification=clamp(magnification*Math.exp(-clamp(delta,-200,200)*settings.wheelSensitivity),settings.min,settings.max);return true;}
+ return{down,move,up,wheel,reset,cancel,snapshot};
 }

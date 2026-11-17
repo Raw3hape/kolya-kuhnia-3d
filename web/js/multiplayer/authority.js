@@ -462,7 +462,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     switch (action.kind || action.type) {
       case 'inputs': ok = applyInputs(p, action.inputs); break;
       case 'input': ok = applyInputs(p, [action]); break;
-      case 'look': if (p.seat && [action.yaw, action.pitch, action.aiming].every(finite)) {
+      case 'look': if ((p.seat || rc?.held(p.id)) && [action.yaw, action.pitch, action.aiming].every(finite)) {
         p.lookYaw = action.yaw % (Math.PI * 2); p.pitch = clamp(action.pitch, -Math.PI / 2.05, Math.PI / 2.05);
         p.aiming = p.held ? 0 : clamp(action.aiming, 0, 1); ok = true;
       } break;

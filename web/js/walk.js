@@ -83,7 +83,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   const p = { x: 0, z: 0 };
   const vel = { x: 0, z: 0 };
   let yaw = 0, pitch = 0, tYaw = 0, tPitch = 0, turnVel = 0, fov = WALK.fovV, tFov = WALK.fovV, fovAdj = 0, step = 0;
-  let zoom = 1, kp = 0, ky = 0, kpT = 0, kyT = 0;   // прицел (во сколько раз уже обзор) и отдача: текущая и целевая добавка к взгляду
+  let zoom = 1, viewMagnification = 1, kp = 0, ky = 0, kpT = 0, kyT = 0;   // прицел (во сколько раз уже обзор) и отдача: текущая и целевая добавка к взгляду
   let heightCm = WALK.height, eye = (WALK.height * WALK.eyeRatio) / 100;
   let saved = null, anim = null, lastT = 0, touchSeen = false, locked = false, unlockedAt = 0;
   let moving = false, running = false, areaGate = () => false;
@@ -308,7 +308,8 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
     // взгляд и угол обзора — с лёгким сглаживанием; обзор следует за пропорциями окна (поворот телефона)
     tFov = clamp(naturalFov(camera.aspect) + fovAdj, WALK.fovMin, WALK.fovMax);
-    if (zoom > 1) tFov = (2 * Math.atan(Math.tan((tFov * Math.PI) / 360) / zoom) * 180) / Math.PI;
+    const magnification = zoom * viewMagnification;
+    if (magnification > 1) tFov = (2 * Math.atan(Math.tan((tFov * Math.PI) / 360) / magnification) * 180) / Math.PI;
     tPitch = clamp(tPitch, -PITCH, PITCH);
     const lk = 1 - Math.exp(-24 * dt);
     yaw += (tYaw - yaw) * lk; pitch += (tPitch - pitch) * lk; fov += (tFov - fov) * lk;
@@ -470,6 +471,26 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     zoom = mode === 'walk' ? z : 1;
     requestRender?.();
   }
+  // Device-independent head movement and optical zoom; never moves the body.
+  function lookByPixels(dx, dy, sensitivity = 0.0042) {
+    if (mode !== 'walk' || ![dx, dy, sensitivity].every(Number.isFinite)) return false;
+    const k = sensitivity * fov / WALK.fovV;
+    tYaw -= dx * k; tPitch = clamp(tPitch - dy * k, -PITCH, PITCH);
+    requestRender?.(); return true;
+  }
+  function lookAtPoint(point) {
+    if (mode !== 'walk' || !Array.isArray(point) || point.length !== 3 || !point.every(Number.isFinite)) return false;
+    const dx = point[0] - camera.position.x, dz = point[2] - camera.position.z;
+    const target = Math.atan2(-dx, -dz);
+    tYaw = yaw + Math.atan2(Math.sin(target - yaw), Math.cos(target - yaw));
+    tPitch = clamp(Math.atan2(point[1] - camera.position.y, Math.hypot(dx, dz)), -PITCH, PITCH);
+    requestRender?.(); return true;
+  }
+  function setViewMagnification(value = 1) {
+    const next = Number.isFinite(value) ? Math.max(1, value) : 1;
+    if (next === viewMagnification) return;
+    viewMagnification = next; requestRender?.();
+  }
   function kick(up = 0, side = 0, keep = 0.3) {
     if (mode !== 'walk') return;
     tPitch = clamp(tPitch + up * keep, -PITCH, PITCH); tYaw += side * keep;
@@ -529,7 +550,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
     get eyeHeight() { return eye; },
     get airborne() { return jy > 0; },
     setNetwork, getNetworkPose, reconcileNetwork, collisionSnapshot,
-    setPersonHeight, setZoom, kick,
+    setPersonHeight, setZoom, setViewMagnification, lookAtPoint, lookByPixels, kick,
     nudge(dx, dz) { if (!network && mode === 'walk' && !anim && (dx || dz)) { moveCircle(p, dx, dz, col, extra); requestRender?.(); } },
     enter, exit, toggle, update, boxesOf,
     colliders: col,
