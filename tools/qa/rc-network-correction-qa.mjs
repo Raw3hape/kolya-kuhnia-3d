@@ -26,7 +26,7 @@ async function aim(p,target){
  const yaw=Math.atan2(-dx,-dz),pitch=Math.atan2(target[1]-s.eye,Math.hypot(dx,dz));const angle=Math.atan2(Math.sin(s.yaw-yaw),Math.cos(s.yaw-yaw));
  const mx=Math.max(-210,Math.min(210,angle/.0042)),my=Math.max(-140,Math.min(140,(s.pitch-pitch)/.0042));if(Math.abs(mx)<.6&&Math.abs(my)<.6)break;
  await p.mouse.move(620,350);await p.mouse.down({button:'right'});await p.mouse.move(620+mx,350+my,{steps:5});await p.mouse.up({button:'right'});await p.waitForTimeout(70);}
- await p.waitForTimeout(250);
+ await p.waitForTimeout(40);
 }
 async function connected(p){await p.waitForFunction(()=>__kitchen.multiplayer.client.connected,null,{timeout:60000});await p.evaluate(()=>__kitchen.multiplayer.lobby.close());}
 async function navigationState(p){return p.evaluate(()=>{
@@ -39,7 +39,7 @@ async function walkTo(p,x,z){
  while(Date.now()<deadline){
   const state=await navigationState(p);if(!state.connected)throw Error('network disconnected during native walk '+JSON.stringify(state));
   const s=state.body,d=Math.hypot(s.x-x,s.z-z);
-  if(d<.085){await p.waitForTimeout(120);return{reached:true,state:await navigationState(p)};}
+  if(d<.16){await p.waitForTimeout(120);return{reached:true,state:await navigationState(p)};}
   if(d<best-.02){best=d;progressAt=Date.now();}
   else if(Date.now()-progressAt>2200){await p.keyboard.up('w');await p.waitForTimeout(250);return{reached:false,reason:'stalled',target:{x,z},best,state:await navigationState(p)};}
   await aim(p,[x,state.self?.y?state.self.y+1.6794:1.6794,z]);
@@ -101,7 +101,7 @@ async function walkRoute(p,x,z){
     const result=await walkTo(p,q.x,q.z);
     if(!result.reached){lastFailure={...result,attempt,goal:{x,z},waypoint:q};report.navigation??=[];report.navigation.push(lastFailure);stalls.push({x:result.state.body.x,z:result.state.body.z});retry=true;break;}
   }
-  if(!retry){const state=await navigationState(p);if(Math.hypot(state.body.x-x,state.body.z-z)<.17)return;lastFailure={reason:'goal_residual',state,goal:{x,z}};}
+  if(!retry){let state=await navigationState(p);if(Math.hypot(state.body.x-x,state.body.z-z)<.17)return;const finish=await walkTo(p,x,z);state=await navigationState(p);if(finish.reached||Math.hypot(state.body.x-x,state.body.z-z)<.17)return;lastFailure={reason:'goal_residual',state,goal:{x,z},finish};}
  }
  throw Error('bounded native route failed '+JSON.stringify({goal:{x,z},lastFailure,state:await navigationState(p)}));
 }
@@ -156,7 +156,7 @@ try{
  // Walk through the actual apartment and the validated open balcony door.
  await walkRoute(host,4.8,.9);await aim(host,[5.02,1.1,0]);await host.evaluate(()=>__kitchen.doors.setOpen('kitchen_balcony_door',true));await host.waitForTimeout(1000);
  await walkRoute(host,4.9,-1.18);await walkRoute(host,-1.32,-.92);
- await walkRoute(guest,4.8,.9);await walkRoute(guest,4.9,-1.18);
+ await walkRoute(guest,4.9,-1.18);
  await Promise.all([installRecorder(host),installRecorder(guest)]);
  const control=await host.evaluate(()=>__kitchen.rc.controllers[0]);await aim(host,control.position);await host.waitForFunction(()=>!!__kitchen.rc.target);
  let hostAnchor=await witness(host);const hostId=hostAnchor.id;await host.keyboard.press('e');await host.waitForFunction(()=>__kitchen.rc.controlling);await guest.waitForFunction(()=>__kitchen.rc.snapshot().cars.some(c=>c.owner));await host.waitForTimeout(600);

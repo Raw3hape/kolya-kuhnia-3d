@@ -208,7 +208,7 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   requestRender();stop(e);
  }
  function onPointerEnd(e){if(viewControls?.up(e.pointerId))stop(e);}
- function onPointerCancel(e){viewControls?.cancel();keys.clear();sendInput(true);if(isDriving())stop(e);}
+ function onPointerCancel(){viewControls?.cancel();keys.clear();sendInput(true);}
  function onLockedMouseMove(e){if(document.pointerLockElement===canvas&&isDriving()){getWalk?.()?.lookByPixels?.(e.movementX,e.movementY,spec.view.lookSensitivity.locked);stop(e);}}
  function onWheel(e){if(e.target!==canvas||!isDriving()||!viewControls)return;const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);if(viewControls.wheel(delta)){getWalk?.()?.setViewMagnification?.(viewControls.snapshot().magnification);requestRender();stop(e);}}
  window.addEventListener('keydown',onKey,true);window.addEventListener('keyup',onUp,true);window.addEventListener('blur',onBlur);window.addEventListener('pointerdown',onPointer,true);window.addEventListener('pointermove',onPointerMove,true);window.addEventListener('mousemove',onLockedMouseMove,true);window.addEventListener('pointerup',onPointerEnd,true);window.addEventListener('pointercancel',onPointerCancel,true);window.addEventListener('wheel',onWheel,{capture:true,passive:false});
