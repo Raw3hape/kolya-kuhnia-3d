@@ -168,7 +168,11 @@ try {
     report.qualities = [];
     for (const quality of ['fast','high','eco']) {
       await host.evaluate(q => dispatchEvent(new CustomEvent('kitchen-quality',{detail:q})),quality);
-      await host.evaluate(() => __kitchen.pipe.whenDrawn()); await pause(1800);
+      // Production texture requests can outlast a fixed delay. Verify the
+      // selected asset tier, not just the synchronous pipeline quality flag.
+      await host.waitForFunction(tier => __kitchen.M.floorA.userData.tier === tier,
+        { fast: '1k', high: 'full', eco: '512' }[quality], { timeout: 45000 });
+      await host.evaluate(() => __kitchen.pipe.whenDrawn()); await pause(500);
       report.qualities.push(await host.evaluate(() => ({quality:__kitchen.pipe.quality,normal:!!__kitchen.M.floorA.normalMap,tier:__kitchen.M.floorA.userData.tier,programs:__kitchen.renderer.info.programs.length})));
       if(quality==='high') await host.screenshot({path:path.join(output,report.label+'-high.png')});
       if(quality==='high' && process.env.QA_HIGH_MEASURE==='1') await measure(host,'host-high');

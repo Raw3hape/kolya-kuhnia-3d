@@ -52,3 +52,9 @@ Chrome 157, Apple M5 Pro, 1280×720, eco. В A/B обе версии включ�
 - `tools/qa/context-instance-qa.mjs`: действительные модели участка, сезон, тени, вложенный draw и рендер после dispose.
 - `tools/qa/wildlife-render-qa.mjs`: два сервера исходников через `QA_BEFORE_URL`/`QA_URL`, детерминированные позы и пиксельное сравнение шейдеров.
 - Локальные JSON/логи без изображений: `output/playwright/performance-instances-2026-11-17/`. Не коммитить captures и временные baseline/candidate-копии.
+
+## Опубликованная версия
+
+Runtime-коммит `5a0d2124b6ccf0b3e61ab74e6097b675364985c9` опубликован на https://kolya-kuhnia-3d.vercel.app. Проверка production с двумя клиентами: 59,97–60,22 FPS в повторе, ошибок нет, оба игрока подключены. Подтверждены реальные текстурные уровни fast=1k, high=full, eco=512, normal maps на fast/high и их отсутствие на eco, PNG 1,58 МБ и мобильная ширина 390.
+
+QA теперь ждёт фактического `floorA.userData.tier`: прежняя фиксированная пауза 1,8 секунды на production успевала проверить флаг режима раньше окончания загрузки текстур. Это исправление проверки, продуктовый рендер не менялся. Артефакт `production-texture-ready.json`; процессы обоих production-запусков завершены, captures удалены.
