@@ -46,3 +46,14 @@ wheel, touch и WebRTC. В соло разрешено ставить персо
 отрисовываемых браузеров на слабых устройствах. Сохраняется существующая
 host-authoritative WebRTC архитектура и её ограничения из
 [TRANSPORT.md](multiplayer/TRANSPORT.md).
+
+## Выпуск
+
+2026-11-17: runtime `7ef301f`, 215/215 тестов, сборка PASS; полный локальный
+Chrome-прогон 15/15, повторный прогон опубликованной сборки 7/7
+(настоящий WebRTC и мобильный touch). Проверенная сборка
+`dpl_HrURHhVRpXy4LyfmpN3LB3xu8VWT` переключена на
+https://kolya-kuhnia-3d.vercel.app. Контрольные суммы четырёх основных
+публичных JS-модулей совпали с проверенным release-набором.
+Последующие изменения этой записи и QA-авторизации не меняют runtime.
+Полный receipt: `output/playwright/interactive-release/release-receipt.json`.

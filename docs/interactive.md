@@ -62,7 +62,8 @@ PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node tools/qa/interactive-qa.mjs
 ```
 
 `QA_URL`, `QA_OUTPUT`, `QA_SOLO_ONLY=1`, `QA_RC_ONLY=1`, `QA_ROOM_ONLY=1` позволяют выбрать
-окружение и ограничить повторную проверку. У сценария есть timeout,
+окружение и ограничить повторную проверку. `QA_ACCESS_URL_FILE` читает
+приватный файл временного доступа Vercel; ссылка не попадает в отчёты. У сценария есть timeout,
 `finally` закрывает все свои браузерные контексты и процесс. Скриншоты
 в `output/playwright/` временные, в Git не входят. Итоговые фактические
 результаты и границы доказательства — в [QA](interactive-validation.md).

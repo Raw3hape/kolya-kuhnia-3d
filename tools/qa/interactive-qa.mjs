@@ -13,6 +13,7 @@ function check(name,pass,details){report.checks.push({name,pass,details});consol
 async function page(target=url,mobile=false){
  const c=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1280,height:800},isMobile:mobile,hasTouch:mobile,deviceScaleFactor:1});contexts.push(c);
  await c.addInitScript(()=>{localStorage.setItem('kitchen-ui-v1',JSON.stringify({quality:'eco',seen:{intro:true}}));localStorage.setItem('kitchen-life-v1',JSON.stringify({life:false,sound:'off',mute:true}));});
+ if(process.env.QA_ACCESS_URL_FILE){const access=fs.readFileSync(process.env.QA_ACCESS_URL_FILE,'utf8').trim();await c.request.get(access,{timeout:30000});}
  const p=await c.newPage();p.setDefaultTimeout(12000);p.on('pageerror',e=>{report.errors.push(e.message);console.log('PAGEERROR '+e.message)});
  await p.goto(target,{waitUntil:'domcontentloaded'});await awaitPlayable(p);await p.waitForFunction(()=>__kitchen.rc?.config&&__kitchen.party?.debug.ready);await p.getByRole('button',{name:'Понятно',exact:true}).click({timeout:500}).catch(()=>{});
  return p;
