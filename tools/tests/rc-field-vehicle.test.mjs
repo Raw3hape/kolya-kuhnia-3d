@@ -16,15 +16,15 @@ test('model origin subtracts rotated local centre of mass for pitched and rolled
 // Independent coordinate observations: no rig/model-origin helper participates
 // in the steering or rolling assertions below.
 import * as THREE from '../../web/vendor/three-0.169/build/three.module.js';
-function steeringProbe(index,throttle,steer){
+function steeringProbe(index,throttle,steer,heading=spec.arena.spawn.heading){
  const sim=createRCSimulation({spec,site}),id=`rc-${index}`,player={id:'direction-driver',x:spec.table.position[0],z:spec.table.position[2]};
- try{assert.ok(sim.command(player,'take',id).ok);for(let i=0;i<120;i++)sim.step(1/60);const before=sim.pose(id),q=new THREE.Quaternion().fromArray(before.quaternion).normalize(),nose=new THREE.Vector3(0,0,1).applyQuaternion(q),right=new THREE.Vector3(1,0,0).applyQuaternion(q);let middle,minUp=1;
+ try{assert.ok(sim.command(player,'take',id).ok);if(Math.abs(heading-spec.arena.spawn.heading)>1e-6){const setup=sim.snapshot(),car=setup.cars[index];car.quaternion=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),heading).toArray();car.position[2]=-60;car.lastSafe=[car.position[0],-60];sim.restore(setup);}for(let i=0;i<120;i++)sim.step(1/60);const before=sim.pose(id),q=new THREE.Quaternion().fromArray(before.quaternion).normalize(),nose=new THREE.Vector3(0,0,1).applyQuaternion(q),right=nose.clone().cross(new THREE.Vector3(0,1,0)).normalize();let middle,minUp=1;
   for(let frame=0;frame<60;frame++){assert.ok(sim.command(player,'input',id,{throttle,steer,brake:false,seq:frame+1}).ok);sim.step(1/60);const car=sim.pose(id);minUp=Math.min(minUp,1-2*(car.quaternion[0]**2+car.quaternion[2]**2));if(frame===29)middle=car;}
   const after=sim.pose(id),afterNose=new THREE.Vector3(0,0,1).applyQuaternion(new THREE.Quaternion().fromArray(after.quaternion).normalize()),displacement=new THREE.Vector3().fromArray(after.position).sub(new THREE.Vector3().fromArray(before.position));return{before,middle,after,yaw:Math.atan2(afterNose.dot(right),afterNose.dot(nose)),ahead:displacement.dot(nose),right:displacement.dot(right),minUp};
  }finally{sim.dispose();}
 }
 test('all ten vehicles turn D right and A left relative to their actual nose; reverse steering rotates the nose oppositely',()=>{
- for(let i=0;i<spec.designs.length;i++){const name=spec.designs[i].id,d=steeringProbe(i,.55,.65),a=steeringProbe(i,.55,-.65),reverse=steeringProbe(i,-.55,.65);
+ for(let i=0;i<spec.designs.length;i++)for(const heading of[0,Math.PI]){const name=spec.designs[i].id+' heading '+heading,d=steeringProbe(i,.55,.65,heading),a=steeringProbe(i,.55,-.65,heading),reverse=steeringProbe(i,-.55,.65,heading);
   assert.ok(d.yaw>.2&&d.yaw<1.2,`${name}: D must yaw right, observed ${d.yaw}`);assert.ok(a.yaw<-.2&&a.yaw>-1.2,`${name}: A must yaw left, observed ${a.yaw}`);assert.ok(d.ahead>1&&a.ahead>1,`${name}: forward turn must keep forward progress`);assert.ok(d.right>.3&&a.right<-.3,`${name}: trajectory must match steering label`);assert.ok(Math.abs(d.yaw+a.yaw)<.03,`${name}: left/right response must be symmetric`);
   assert.ok(reverse.ahead<-.5&&reverse.after.speed<0,`${name}: S must move backwards`);assert.ok(reverse.yaw<-.15,`${name}: S+D must reverse the forward yaw direction`);assert.ok(Math.min(d.minUp,a.minUp,reverse.minUp)>.9,`${name}: ordinary manoeuvre must remain upright`);
  }
@@ -35,4 +35,10 @@ test('all forty tires spin in the rolling direction with arc length matching act
    const axle=new THREE.Vector3(1,0,0).applyQuaternion(new THREE.Quaternion().fromArray(wheel.quaternion).normalize()),omega=axle.multiplyScalar(-rotation/.5),treadVelocity=omega.cross(new THREE.Vector3(0,-authored.radius,0));assert.ok(treadVelocity.dot(travel)<0,`${spec.designs[i].id}/${authored.id}: tire bottom must move against chassis travel, not skate forwards`);
   });
  }
+});
+
+// A real perspective projection from the balcony catches a mirrored driver's
+// right axis that pure local +X assertions incorrectly accepted previously.
+test('rear-facing balcony viewport shows W+D moving right and W+A moving left for all ten designs',()=>{
+ for(let i=0;i<spec.designs.length;i++)for(const steer of[.65,-.65]){const p=steeringProbe(i,.55,steer,Math.PI),camera=new THREE.PerspectiveCamera(55,16/9,.05,1000);camera.position.set(spec.table.position[0],1.68,spec.table.position[2]+.65);camera.lookAt(new THREE.Vector3().fromArray(p.before.position));camera.updateProjectionMatrix();camera.updateMatrixWorld(true);const before=new THREE.Vector3().fromArray(p.before.position).project(camera),after=new THREE.Vector3().fromArray(p.after.position).project(camera),delta=after.x-before.x;assert.ok(delta*steer>0.0001,`${spec.designs[i].id}: ${steer>0?'W+D':'W+A'} moved ${delta>0?'right':'left'} in the actual balcony projection (deltaX ${delta})`);}
 });

@@ -299,7 +299,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       p.pitch = clamp(cmd.pitch, -Math.PI / 2.05, Math.PI / 2.05);
       if (finite(cmd.aiming)) p.aiming = p.held ? 0 : clamp(cmd.aiming, 0, 1);
       if (weaponOf(cmd.weapon)) equip(p, cmd.weapon);
-      if (p.seat || rc?.held(p.id)) continue;
+      if (p.seat || rc?.isDriving(p.id)) continue;
       const length = Math.hypot(cmd.dx, cmd.dz), max = WALK.run * allowed;
       const k = length > max ? max / length : 1;
       const before = { x: p.x, z: p.z };
@@ -326,7 +326,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   function handoff(p, action) {
     const target = players.get(action.targetId);
     if (!target || target === p || target.link === null || p.held !== action.id || target.held ||
-      social?.heldBy(target.id) || party.held(target.id) || rc?.held(target.id) || rc?.held(p.id) && target.seat ||
+      social?.heldBy(target.id) || party.held(target.id) || rc?.held(target.id) ||
       distance([p.x, p.eyeY ?? p.y + 1.2, p.z], [target.x, target.eyeY ?? target.y + 1.2, target.z]) > R.itemReach || pathBlocked(p, target)) return false;
     // Walking proxies have no height. Use actual 3D item bounds so a low
     // table/stool does not become an invisible ceiling-high handoff barrier.
@@ -462,7 +462,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     switch (action.kind || action.type) {
       case 'inputs': ok = applyInputs(p, action.inputs); break;
       case 'input': ok = applyInputs(p, [action]); break;
-      case 'look': if ((p.seat || rc?.held(p.id)) && [action.yaw, action.pitch, action.aiming].every(finite)) {
+      case 'look': if ((p.seat || rc?.isDriving(p.id)) && [action.yaw, action.pitch, action.aiming].every(finite)) {
         p.lookYaw = action.yaw % (Math.PI * 2); p.pitch = clamp(action.pitch, -Math.PI / 2.05, Math.PI / 2.05);
         p.aiming = p.held ? 0 : clamp(action.aiming, 0, 1); ok = true;
       } break;
@@ -471,7 +471,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       case 'reload': ok = reload(p, action.weapon); break;
       case 'handoff': ok = handoff(p, action); break;
       case 'rc': {
-        if (!rc || p.seat && action.verb === 'take') break;
+        if (!rc || p.seat && ['take', 'drive'].includes(action.verb)) break;
         const controller = rc.controllers.find(item => item.id === action.id);
         if (action.verb === 'take' && (!controller || pathBlocked(p, { x: controller.position[0], z: controller.position[2] }))) break;
         const previous = p.held;
@@ -578,7 +578,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       case 'sit': {
         const seat = seatMeta.find(seat => seat.id === action.id);
         if (seat && p.seat === seat.id) { ok = true; break; }
-        if (seat && !rc?.held(p.id) && (!seats[seat.id] || seats[seat.id] === p.id) && Math.hypot(p.x - seat.position[0], p.z - seat.position[2]) <= R.itemReach &&
+        if (seat && !rc?.isDriving(p.id) && (!seats[seat.id] || seats[seat.id] === p.id) && Math.hypot(p.x - seat.position[0], p.z - seat.position[2]) <= R.itemReach &&
           roomOf(plan, seat.position[0], seat.position[2]) && !pathBlocked(p, { x: seat.position[0], z: seat.position[2] }) &&
           !others(p).some(other => Math.hypot(other.x - seat.position[0], other.z - seat.position[2]) < WALK.radius * 2)) {
           const seatOrigin = p.seatOrigin || { x: p.x, z: p.z };

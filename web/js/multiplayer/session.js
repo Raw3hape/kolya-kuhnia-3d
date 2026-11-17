@@ -94,7 +94,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       if (inputs.length > R.maxInputBatch) inputs.splice(0, inputs.length - R.maxInputBatch);
     }, players: () => (lastSnapshot?.players || []).filter(p => p.id !== client.id),
     canExit: () => client.role === 'host', canTeleport: () => false,
-    canMove: () => client.connected && !applying && !document.body.classList.contains('kmp-modal-open') && !getModules().rc?.controlling });
+    canMove: () => client.connected && !applying && !document.body.classList.contains('kmp-modal-open') && !getModules().rc?.isDriving });
     m.doors.setNetwork({ request });
     m.tv.setNetwork({ request, nearbyRecipient: handoff.nearbyRecipient, selfId: () => client.id, isHost: () => client.role === 'host' });
     m.paper.setNetwork({ request, nearbyRecipient: handoff.nearbyRecipient, selfId: () => client.id });
@@ -231,7 +231,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     if (sendClock >= 1 / R.inputHz) {
       sendClock %= 1 / R.inputHz;
       if (inputs.length && client.connected) client.send({ kind: 'inputs', inputs: inputs.splice(0) });
-      const look = client.self?.seat ? m.seats?.getNetworkPose?.() : m.rc?.controlling ? m.walk.getNetworkPose?.() : null;
+      const look = client.self?.seat ? m.seats?.getNetworkPose?.() : m.rc?.isDriving ? m.walk.getNetworkPose?.() : null;
       if (look && client.connected && !applying && !document.body.classList.contains('kmp-modal-open'))
         client.send({ kind: 'look', yaw: look.yaw, pitch: look.pitch, aiming: m.viewmodel.aiming });
     }

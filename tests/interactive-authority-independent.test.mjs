@@ -134,7 +134,7 @@ test('RC owner can drive but neither owner nor forged movement can move the huma
   assert.equal(car().hp, car().maxHp); f.room.dispose();
 });
 
-test('RC handoff changes driver, clears sticky input and disconnect frees the controller', () => {
+test('RC handoff carries the controller without forcing driving, clears sticky input and disconnect frees it', () => {
   const f = fixture({ rc: true }), input = { throttle: 1, steer: .5, brake: false, seq: 1 };
   assert(f.action('local', { kind: 'rc', verb: 'take', id: 'rc-0' }).ok);
   assert(f.action('local', { kind: 'rc', verb: 'input', id: 'rc-0', input }).ok);
@@ -143,19 +143,28 @@ test('RC handoff changes driver, clears sticky input and disconnect frees the co
   assert.equal(car().owner, f.id('guest')); assert.equal(car().input.throttle, 0); assert.equal(car().input.steer, 0);
   assert.equal(f.player('local').held, null); assert.equal(f.player('guest').held, 'rc-0');
   assert.equal(f.action('local', { kind: 'rc', verb: 'input', id: 'rc-0', input: { ...input, seq: 2 } }).ok, false);
-  assert(f.action('guest', { kind: 'rc', verb: 'input', id: 'rc-0', input }).ok, 'new driver starts a new input sequence');
+  assert.equal(car().controlMode, 'carry'); assert.equal(car().input.brake, true);
+  const recipientBefore=f.player('guest');assert(f.action('guest',{kind:'inputs',inputs:[{seq:1,dt:.05,dx:0,dz:.15,yaw:0,pitch:0}]}).ok);assert(f.player('guest').z>recipientBefore.z+.1,'recipient can step away while carrying the received controller');
+  assert.equal(f.action('guest', { kind: 'rc', verb: 'input', id: 'rc-0', input }).ok, false, 'recipient does not drive without consent');
+  assert(f.action('guest', { kind: 'rc', verb: 'drive', id: 'rc-0' }).ok);
+  assert(f.action('guest', { kind: 'rc', verb: 'input', id: 'rc-0', input }).ok, 'new owner explicitly starts driving with a new input sequence');
   f.room.disconnect('guest'); assert.equal(car().owner, null); assert.equal(car().status, 'ready');
   assert(f.action('local', { kind: 'rc', verb: 'take', id: 'rc-0' }).ok); f.room.dispose();
 });
 
-test('RC controller cannot be forced onto a seated recipient', () => {
+test('seated recipient can carry a controller but cannot drive until standing', () => {
   const f = fixture({ rc: true });
   const guest = f.player('guest'), seat = { id: 'rc-recipient-seat', position: [guest.x, .45, guest.z - .5], yaw: 0, eyeY: 1.17, stand: [guest.x, guest.z] };
   assert(f.action('local', { kind: 'geometry', seats: [seat], items: f.itemMeta }).ok);
   assert(f.action('guest', { kind: 'sit', id: seat.id }).ok);
   assert(f.action('local', { kind: 'rc', verb: 'take', id: 'rc-0' }).ok);
-  assert.equal(f.action('local', { kind: 'handoff', id: 'rc-0', targetId: f.id('guest') }).ok, false);
-  assert.equal(f.player('guest').seat, seat.id); assert.equal(f.player('guest').held, null); f.room.dispose();
+  assert(f.action('local', { kind: 'handoff', id: 'rc-0', targetId: f.id('guest') }).ok);
+  assert.equal(f.player('guest').seat, seat.id); assert.equal(f.player('guest').held, 'rc-0');
+  assert.equal(f.room.snapshot().rc.cars[0].controlMode, 'carry');
+  assert.equal(f.action('guest', { kind: 'rc', verb: 'drive', id: 'rc-0' }).ok, false, 'seated carry cannot turn into driving');
+  assert.equal(f.action('guest', { kind: 'rc', verb: 'input', id: 'rc-0', input: { throttle: 1, steer: 0, brake: false, seq: 1 } }).ok, false);
+  assert(f.action('guest', { kind: 'stand' }).ok);
+  assert(f.action('guest', { kind: 'rc', verb: 'drive', id: 'rc-0' }).ok); f.room.dispose();
 });
 
 test('ten authority clients receive ten distinct RC designs and colors; eleventh client remains rejected', () => {
@@ -239,4 +248,23 @@ test('low furniture allows passing above it while tall opaque furniture still bl
   assert(f.action('local',geometry(2.3)).ok);
   assert.equal(f.action('guest',{kind:'handoff',id:'phone',targetId:f.id('local')}).ok,false);
   assert.equal(f.room.snapshot().items.phone,f.id('guest')); f.room.dispose();
+});
+
+
+test('pausing preserves controller ownership while authority allows walking and jumping; resumed driving freezes again', () => {
+ const f=fixture({rc:true}),car=()=>f.room.snapshot().rc.cars.find(c=>c.id==='rc-0');
+ try{
+  assert(f.action('local',{kind:'rc',verb:'take',id:'rc-0'}).ok);assert.equal(car().controlMode,'drive');
+  const start=f.player('local');assert(f.action('local',{kind:'inputs',inputs:[{seq:1,dt:.05,dx:-.15,dz:0,yaw:0,pitch:0,jump:true}]}).ok);f.step(.1);
+  assert.equal(f.player('local').x,start.x);assert.equal(f.player('local').y,0);
+  assert(f.action('local',{kind:'rc',verb:'pause',id:'rc-0'}).ok);assert.equal(car().controlMode,'carry');assert.equal(f.player('local').held,'rc-0');
+  assert.equal(f.action('guest',{kind:'rc',verb:'drive',id:'rc-0'}).ok,false);
+  assert(f.action('local',{kind:'inputs',inputs:[{seq:2,dt:.05,dx:-.15,dz:0,yaw:0,pitch:0,jump:true}]}).ok);f.step(.05);
+  assert(f.player('local').x<start.x-.1,`owner can step aside: start ${start.x},${start.z}; after ${f.player('local').x},${f.player('local').z}; guest ${f.player('guest').x},${f.player('guest').z}`);assert(f.player('local').y>0,'carry permits an ordinary jump');
+  assert.equal(f.action('local',{kind:'look',yaw:1,pitch:0,aiming:0}).ok,false,'carry uses normal walk look inputs');
+  f.step(1.5);assert(f.action('local',{kind:'rc',verb:'drive',id:'rc-0'}).ok);const resumed=f.player('local');
+  assert(f.action('local',{kind:'look',yaw:1,pitch:0,aiming:0}).ok,'driving uses camera-only look');
+  assert(f.action('local',{kind:'inputs',inputs:[{seq:3,dt:.05,dx:-.15,dz:0,yaw:1,pitch:0,jump:true}]}).ok);f.step(.1);
+  assert.equal(f.player('local').x,resumed.x);assert.equal(f.player('local').z,resumed.z);assert.equal(f.player('local').y,0);
+ }finally{f.room.dispose();}
 });

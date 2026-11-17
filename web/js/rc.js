@@ -6,6 +6,7 @@ import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {createRCSimulation} from './rc-state.js';
 import {modelOriginFromChassis} from './rc-vehicle-layout.js';
 import {createRCViewControls} from './rc-camera.js';
+import {createRCHud} from './rc-hud.js';
 import {assetUrl,track,retry} from './loading.js';
 import {addTargets} from './hunt.js';
 import {injectStyle} from './minimap.js';
@@ -15,13 +16,13 @@ import {acquireSceneIndex} from './scene-index.js';
 import {isTransient} from './network-objects.js';
 addHelp(
  {mode:'walk',topic:'rc',keys:['E'],text:'взять пульт на столике слева на балконе — появится своя машинка',order:68},
- {mode:'walk',topic:'rc',keys:['W','A','S','D'],text:'с пультом: W — газ, S — назад, A / D — руль, Пробел — тормоз',order:69},
+ {mode:'walk',topic:'rc',keys:['W','A','S','D'],text:'в режиме управления машинкой: W — газ, S — назад, A / D — руль, Пробел — тормоз',order:69},
  {mode:'walk',topic:'rc',keys:['Esc'],text:'закончить гонку; R — вернуть или починить машинку',order:70}
 );
 const typing=e=>e.target?.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName);
 const movementKeys=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space']);
 export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,getSeats,getVM,getParty,getTV,getPaper,beforeCarry,requestRender=()=>{}}){
- let spec=null,sim=null,predictor=null,state=null,network=null,source=null,disposed=false,pending=false,generation=0,aimed=null,heldId=null,players=[],clock=0,sendClock=0,seq=0,lastInput='',savedSolo=null,statusMessage='',exitRequested=false,viewControls=null,focusPending=false;
+ let spec=null,sim=null,predictor=null,state=null,network=null,source=null,disposed=false,pending=false,generation=0,aimed=null,heldId=null,heldMode=null,players=[],clock=0,sendClock=0,seq=0,lastInput='',savedSolo=null,statusMessage='',exitRequested=false,viewControls=null,focusPending=false;
  const sceneIndex=acquireSceneIndex(scene),bounds=new THREE.Box3();
  const root=new THREE.Group();root.name='rc_world';root.userData.rasterOnly=true;root.userData.networkEntity=true;root.userData.networkDynamic=true;scene.add(root);
  const remoteRoot=new THREE.Group();remoteRoot.name='rc_remote_controllers';remoteRoot.userData.networkEntity=true;remoteRoot.userData.rasterOnly=true;scene.add(remoteRoot);
@@ -31,29 +32,30 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
  const originBuffer=new Float64Array(3);
  const carViews=new Map(),controllerViews=new Map(),remoteViews=new Map(),keys=new Set(),pendingInputs=[],predictionOffset=new THREE.Vector3(),coarse=matchMedia('(pointer:coarse)');let overlay=null,detachTarget=null,table=null,boundary=null,driverRing=null;const runtimeResources=new Set();let uiKey='',markerKey='';
  injectStyle('rc-style',CSS);
- const panel=document.createElement('div');panel.className='rc-hud';panel.hidden=true;panel.setAttribute('role','status');
- const title=document.createElement('strong'),stats=document.createElement('span'),hint=document.createElement('span'),exit=document.createElement('button'),reset=document.createElement('button'),follow=document.createElement('button');
- title.className='rc-title';stats.className='rc-stats';hint.className='rc-hint';exit.type=reset.type=follow.type='button';exit.className='rc-exit';reset.className='rc-reset';exit.textContent='Положить пульт';exit.setAttribute('aria-label','Положить пульт и закончить управление машинкой');reset.textContent='Вернуть машинку';follow.className='rc-camera';follow.textContent='Найти машинку';follow.setAttribute('aria-label','Посмотреть на свою машинку с балкона, клавиша C');follow.title='C — посмотреть на машинку · колесо / щипок — оптическое приближение';panel.append(title,stats,hint,follow,reset,exit);document.body.append(panel);
+ const hud=createRCHud({onExit:()=>command('release'),onReset:()=>command('respawn'),onFocus:()=>focusCar(),onMode:()=>switchControlMode()}),panel=hud.panel;
  const take=document.createElement('button');take.type='button';take.className='rc-take kw-float';take.hidden=true;document.body.append(take);
  let markerTop=160;
  const hudObserver=new ResizeObserver(()=>{markerTop=Math.max(88,panel.getBoundingClientRect().bottom+44);});hudObserver.observe(panel);
  const marker=document.createElement('button');marker.type='button';marker.className='rc-driver-marker';marker.hidden=true;marker.setAttribute('aria-label','Найти свою радиомашинку');document.body.append(marker);
  const touch=document.createElement('div');touch.className='rc-touch';touch.hidden=true;document.body.append(touch);
- const controls=[['left','←','Повернуть влево','KeyA'],['right','→','Повернуть вправо','KeyD'],['gas','Газ ↑','Ехать вперёд','KeyW'],['reverse','Назад ↓','Ехать назад','KeyS'],['brake','Тормоз','Тормоз','Space']];
+ const controls=[['left','←','Повернуть влево','KeyA'],['right','→','Повернуть вправо','KeyD'],['gas','Вперёд ↑','Ехать вперёд','KeyW'],['reverse','Назад ↓','Ехать назад','KeyS'],['brake','Тормоз','Тормоз','Space']];
  for(const [name,label,aria,key]of controls){const b=document.createElement('button');b.type='button';b.className='rc-control rc-'+name;b.textContent=label;b.setAttribute('aria-label',aria);b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(key);sendInput(true);});for(const event of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(event,()=>{keys.delete(key);sendInput(true);});touch.append(b);}
  const active=()=>!!getWalk?.()?.walking&&!getSeats?.()?.active&&!pipe.photo;
+ const presenting=()=>!!(getWalk?.()?.walking||getSeats?.()?.active)&&!pipe.photo;
  const selfId=()=>network?(typeof network.selfId==='function'?network.selfId():network.selfId):'solo';
  const held=()=>state?.cars.find(c=>c.owner===selfId())||null;
+ const isDriving=()=>held()?.controlMode==='drive'&&!exitRequested;
  const pose=()=>({id:'solo',x:camera.position.x,y:camera.position.y-(getWalk?.()?.eyeHeight||1.68),z:camera.position.z});
  const design=id=>spec?.designs.find(d=>d.id===id);
  function makeController(color){const t=source.getObjectByName('controller');if(!t)throw Error('rc_controller_model');const o=t.clone(true);o.traverse(m=>{if(m.isMesh){m.castShadow=false;m.receiveShadow=false;}});const badge=new THREE.Mesh(new THREE.BoxGeometry(.105,.005,.017),new THREE.MeshStandardMaterial({color,roughness:.4,metalness:.1}));badge.name='rc_controller_color';badge.position.set(0,.079,.033);o.add(badge);return o;}
  function releaseController(o){o?.getObjectByName('rc_controller_color')?.geometry.dispose();o?.getObjectByName('rc_controller_color')?.material.dispose();}
- function stopDriving(){keys.clear();viewControls?.reset();getWalk?.()?.setViewMagnification?.(1);pendingInputs.length=0;predictionOffset.set(0,0,0);handRoot.visible=false;marker.hidden=true;if(driverRing)driverRing.visible=false;document.body.classList.remove('rc-controlling');}
+ function stopDriving(){keys.clear();viewControls?.reset();getWalk?.()?.setViewMagnification?.(1);pendingInputs.length=0;predictionOffset.set(0,0,0);handRoot.visible=false;marker.hidden=true;if(driverRing)driverRing.visible=false;document.body.classList.remove('rc-controlling','rc-holding');}
  function accept(next,context={}){
   if(!next)return;const oldHeld=held(),oldPred=network&&predictor?.pose(heldId);state=next;players=context.players||players;
-  const h=held();if(h?.id!==heldId){
-   stopDriving();releaseController(handRoot.children[0]);handRoot.clear();heldId=h?.id||null;exitRequested=false;seq=h?.inputSeq||0;lastInput='';sendClock=0;
-   if(h&&source){focusPending=true;getWalk?.()?.setViewMagnification?.(spec.view.zoom.initial);getVM?.()?.setWeapon('none');handRoot.add(makeController(h.color));const hands=source.getObjectByName('controller_hands');if(hands)handRoot.add(hands.clone(true));}
+  const h=held();if(h?.id!==heldId||h?.controlMode!==heldMode){
+   const changedItem=h?.id!==heldId;stopDriving();if(changedItem){releaseController(handRoot.children[0]);handRoot.clear();}
+   heldId=h?.id||null;heldMode=h?.controlMode||null;exitRequested=false;seq=h?.inputSeq||0;lastInput='';sendClock=0;
+   if(h&&source){focusPending=h.controlMode==='drive';getWalk?.()?.setViewMagnification?.(h.controlMode==='drive'?spec.view.zoom.initial:1);getVM?.()?.setWeapon('none');if(changedItem){handRoot.add(makeController(h.color));const hands=source.getObjectByName('controller_hands');if(hands)handRoot.add(hands.clone(true));}}
   }
   if(network&&predictor){
    predictor.restore(next);
@@ -63,10 +65,15 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   }
   renderUI();
  }
+ function switchControlMode(){
+  const h=held();if(!h||pending)return;
+  const verb=isDriving()?'pause':'drive';if(verb==='pause'){keys.clear();sendInput(true);viewControls?.cancel();}
+  return command(verb,h.id,{seq});
+ }
  async function command(verb,id=held()?.id||aimed?.id,input){
   if(!sim||pending&&verb!=='input'||!id)return{ok:false,error:'rc_pending'};
   if(verb==='release'){exitRequested=true;stopDriving();renderUI();}
-  if(verb==='take'&&!active())return{ok:false,error:'rc_not_walking'};
+  if(['take','drive'].includes(verb)&&!active())return{ok:false,error:'rc_not_walking'};
   if(network?.ready&&network.ready()===false)return{ok:false,error:'rc_disconnected'};
   const token=generation;if(verb!=='input'){pending=true;renderUI();}
   try{
@@ -83,7 +90,8 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
  }
  function getInput(){return{throttle:(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0),steer:(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),brake:keys.has('Space')};}
  function sendInput(force=false){
-  const h=held();if(!h||h.status!=='active'||exitRequested)return;const input=getInput(),key=JSON.stringify(input);
+  const h=held();if(!h||!isDriving()||h.status!=='active'||exitRequested)return;const input=getInput(),key=JSON.stringify(input);
+  if(pending)return;
   if(!force&&sendClock<1/spec.physics.inputHz&&key===lastInput)return;
   if(network?.ready&&network.ready()===false){keys.clear();return;}
   input.seq=++seq;const dt=Math.max(spec.physics.fixedStep,Math.min(.1,sendClock));sendClock=0;lastInput=key;
@@ -102,12 +110,14 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   if(!obstruction)aimed=car;
  }
  function renderUI(){
-  const h=held(),can=!!h&&active()&&!exitRequested;const key=[h?.id,h?.hp,h?.status,Math.round(Math.abs(h?.speed||0)*3.6),Math.ceil((h?.respawnAt||0)-(state?.time||0)),h?.atBoundary,pending,can,coarse.matches,aimed?.id,statusMessage,network?.ready?.()].join('|');if(key===uiKey)return;uiKey=key;panel.hidden=!can;touch.hidden=!can||!coarse.matches;
-  if(h){const d=design(h.designId),remaining=Math.max(0,Math.ceil((h.respawnAt||0)-(state?.time||0)));title.textContent=d?.name||'Радиомашинка';title.style.color=h.color;stats.textContent=h.status==='wrecked'?`Машинка разбита · ${remaining?`ремонт ${remaining} с`:'можно починить'}`:`${Math.round(Math.abs(h.speed||0)*3.6)} км/ч · HP ${Math.ceil(h.hp)} / ${h.maxHp}`;
-   const flipped=h.quaternion&&1-2*(h.quaternion[0]**2+h.quaternion[2]**2)<.3;hint.textContent=statusMessage||(h.atBoundary?'Край поля — поверните обратно':flipped?'Машинка перевернулась · нажмите «Вернуть машинку»':!network||!network.ready||network.ready()?(coarse.matches?'Вы на балконе · кнопки — газ и руль · пальцем — осмотр · щипок — приблизить':'Вы на балконе · W / S — газ и назад · A / D — руль · Пробел — тормоз · мышь / тачпад — взгляд'):'Связь восстанавливается… управление на паузе');
-   reset.textContent=h.status==='wrecked'?(remaining?`Ремонт ${remaining} с`:'Починить и продолжить'):'Вернуть машинку · R';reset.disabled=pending||h.status==='wrecked'&&remaining>0;exit.disabled=pending;}
+  const h=held(),can=!!h&&presenting()&&!exitRequested,flipped=!!h?.quaternion&&1-2*(h.quaternion[0]**2+h.quaternion[2]**2)<.3;const key=[h?.id,h?.hp,h?.status,Math.round(Math.abs(h?.speed||0)*3.6),Math.ceil((h?.respawnAt||0)-(state?.time||0)),h?.atBoundary,pending,can,flipped,h?.controlMode,active(),coarse.matches,aimed?.id,statusMessage,network?.ready?.()].join('|');if(key===uiKey)return;uiKey=key;touch.hidden=!can||!isDriving()||!coarse.matches;
+  if(h){const d=design(h.designId),remaining=Math.max(0,Math.ceil((h.respawnAt||0)-(state?.time||0)));
+   const connected=!network||!network.ready||network.ready(),wrecked=h.status==='wrecked';
+   const message=statusMessage||(!connected?'Связь восстанавливается · машинка на паузе':wrecked?(remaining?`Машинка разбита · ремонт ${remaining} с`:'Машинка готова к ремонту'):flipped?'Машинка перевернулась':h.atBoundary?'Край поля · поверните обратно':h.controlMode==='carry'&&!active()?'Встаньте, чтобы управлять машинкой':'');
+   hud.update({active:can,name:d?.name||'Радиомашинка',color:h.color,velocity:h.speed||0,hp:h.hp,maxHp:h.maxHp,status:h.status,remaining,pending,coarse:coarse.matches,message,needsRecovery:flipped||wrecked,controlMode:h.controlMode,canDrive:active()});
+  }else hud.update({active:false});
   take.hidden=!aimed||!!h||!active();take.textContent=`${coarse.matches?'':'E · '}Взять пульт${aimed?' · '+design(aimed.designId).name:''}`;take.disabled=pending;
-  document.body.classList.toggle('rc-controlling',can);
+  document.body.classList.toggle('rc-controlling',can&&isDriving());document.body.classList.toggle('rc-holding',can);
  }
  function animateCar(view,car,dt,local=false){
   view.visible=car.status!=='ready';if(!view.visible)return;
@@ -132,7 +142,7 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   runtimeResources.add(geometry);runtimeResources.add(material);driverRing=new THREE.Mesh(geometry,material);driverRing.name='rc_driver_ring';driverRing.userData.rcDriverMarker=true;driverRing.rotation.x=-Math.PI/2;driverRing.visible=false;root.add(driverRing);
  }
  function updateDriverMarker(car){
-  const visible=!!car&&active()&&!exitRequested;marker.hidden=!visible;if(driverRing)driverRing.visible=visible;
+  const visible=!!car&&presenting()&&!exitRequested;marker.hidden=!visible;if(driverRing)driverRing.visible=visible;
   if(!visible)return;
   const d=design(car.designId),view=carViews.get(car.id);if(!view)return;
   driverRing.position.set(view.position.x,-site.floorY+.04,view.position.z);driverRing.scale.set(d.width*.85,d.length*.62,1);driverRing.material.color.set(car.color);driverRing.userData.rcId=car.id;
@@ -146,13 +156,13 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
  }
  function update(dt){
   if(!sim||!source||disposed)return false;clock+=dt;sendClock+=dt;
-  const h=held();if(h&&(!active()||exitRequested)&&!pending&&(!network?.ready||network.ready()))command('release',h.id);
-  if(h&&!exitRequested)sendInput();if(!network&&state.cars.some(c=>c.owner)){sim.step(dt);state={...state,time:sim.time,cars:state.cars.map(c=>c.owner?sim.pose(c.id):c)};}else if(network&&predictor&&(!network.ready||network.ready())&&h)predictor.step(dt);
-  const predicted=network&&predictor&&h?predictor.pose(h.id):null;predictionOffset.multiplyScalar(Math.exp(-12*dt));
-  for(const car of state.cars){const local=car.owner===selfId(),display=local&&predicted?predicted:car;animateCar(carViews.get(car.id),display,dt,local);const c=controllerViews.get(car.id);c.visible=!car.owner;
+  const h=held();if(h&&(!presenting()||exitRequested)&&!pending&&(!network?.ready||network.ready()))command('release',h.id);
+  if(isDriving())sendInput();if(!network&&state.cars.some(c=>c.owner)){sim.step(dt);state={...state,time:sim.time,cars:state.cars.map(c=>c.owner?sim.pose(c.id):c)};}else if(network&&predictor&&(!network.ready||network.ready())&&h)predictor.step(dt);
+  const predicted=network&&predictor&&isDriving()?predictor.pose(h.id):null;predictionOffset.multiplyScalar(Math.exp(-12*dt));
+  for(const car of state.cars){const local=car.owner===selfId()&&car.controlMode==='drive',display=local&&predicted?predicted:car;animateCar(carViews.get(car.id),display,dt,local);const c=controllerViews.get(car.id);c.visible=!car.owner;
    let remote=remoteViews.get(car.id);if(car.owner&&car.owner!==selfId()&&!remote){remote=makeController(car.color);remoteViews.set(car.id,remote);remoteRoot.add(remote);}if(remote){const p=players.find(p=>p.id===car.owner);remote.visible=!!p&&car.owner!==selfId();if(remote.visible){const grip=network?.gripForPlayer?.(car.owner);if(grip){grip.getWorldPosition(remote.position);grip.getWorldQuaternion(remote.quaternion);remote.position.add(v.set(-.11,0,0).applyQuaternion(remote.quaternion));}else{const yaw=p.lookYaw??p.yaw??0;remote.position.set(p.x+Math.cos(yaw)*.12,(p.eyeY??p.y+1.68)-.55,p.z-Math.cos(yaw)*.3);remote.rotation.set(-.25,yaw,0);}}}
   }
-  if(h&&active()&&!exitRequested){
+  if(h&&presenting()&&!exitRequested){
    if(focusPending){focusPending=false;focusCar();}
    handCamera.position.copy(camera.position);handCamera.quaternion.copy(camera.quaternion);handCamera.aspect=camera.aspect;handCamera.fov=Math.min(spec.view.controllerMaxFov,2*Math.atan(Math.tan(spec.view.controllerFov*Math.PI/360)/Math.min(1,camera.aspect))*180/Math.PI);handCamera.updateProjectionMatrix();handCamera.updateMatrixWorld(true);
    handRoot.visible=!pipe.photo;
@@ -164,16 +174,16 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   if(clock%(1/10)<dt)aim();renderUI();return!!h||state.cars.some(c=>c.status==='active');
  }
  function setNetwork(adapter){
-  generation++;pending=false;exitRequested=false;stopDriving();if(adapter&&!network)savedSolo=sim?.snapshot();network=adapter||null;players=[];heldId=null;seq=0;lastInput='';
+  generation++;pending=false;exitRequested=false;stopDriving();if(adapter&&!network)savedSolo=sim?.snapshot();network=adapter||null;players=[];heldId=null;heldMode=null;seq=0;lastInput='';
   if(!adapter&&sim){if(savedSolo)sim.restore(savedSolo);savedSolo=null;state=sim.snapshot();accept(state);}else state=state?{...state,cars:state.cars.map(c=>({...c,owner:null,status:'ready'}))}:null;
  }
  const stop=e=>{e.preventDefault();e.stopImmediatePropagation();};
- function onKey(e){if(typing(e)||e.metaKey||e.ctrlKey||e.altKey)return;const h=held();if(h&&!exitRequested){
-   if(movementKeys.has(e.code)){keys.add(e.code);if(!e.repeat)sendInput(true);stop(e);}
-   else if(['Escape','KeyQ','KeyE'].includes(e.code)){if(!e.repeat)command('release',h.id);stop(e);}
+ function onKey(e){if(typing(e)||e.metaKey||e.ctrlKey||e.altKey||e.code==='Space'&&e.target?.closest?.('button'))return;const h=held();if(h&&!exitRequested){
+   if(isDriving()&&movementKeys.has(e.code)){keys.add(e.code);if(!e.repeat)sendInput(true);stop(e);}
+   else if(['Escape','KeyQ'].includes(e.code)||e.code==='KeyE'&&isDriving()){if(!e.repeat)command('release',h.id);stop(e);}
    else if(e.code==='KeyC'){if(!e.repeat)focusCar();stop(e);}
    else if(e.code==='KeyR'){if(!e.repeat)command('respawn',h.id);stop(e);}
-   else if(/^Digit[1-5]$/.test(e.code)||e.code==='KeyF'){stop(e);}
+   else if(isDriving()&&(/^Digit[1-5]$/.test(e.code)||e.code==='KeyF')){stop(e);}
   }else if(e.code==='KeyE'&&!e.repeat&&aimed){command('take',aimed.id);stop(e);}}
  function onUp(e){if(!keys.has(e.code))return;keys.delete(e.code);sendInput(true);if(held())stop(e);}
  function onBlur(){keys.clear();viewControls?.cancel();sendInput(true);}
@@ -184,11 +194,11 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
  }
  function onPointer(e){
   if(e.target!==canvas)return;
-  if(held()&&!exitRequested){if(e.button===0||e.button===2){viewControls?.down(e.pointerId,e.clientX,e.clientY,e.pointerType==='touch'?'touch':'mouse');try{canvas.setPointerCapture(e.pointerId);}catch{}stop(e);}}
+  if(isDriving()){if(e.button===0||e.button===2){viewControls?.down(e.pointerId,e.clientX,e.clientY,e.pointerType==='touch'?'touch':'mouse');try{canvas.setPointerCapture(e.pointerId);}catch{}stop(e);}}
   else if(aimed&&e.button===0&&getVM?.()?.weapon==='none'){command('take',aimed.id);stop(e);}
  }
  function onPointerMove(e){
-  if(!held()||exitRequested||!viewControls)return;
+  if(!isDriving()||!viewControls)return;
   if(document.pointerLockElement===canvas)return;
   const action=viewControls.move(e.pointerId,e.clientX,e.clientY);if(!action)return;
   if(action.zoom)getWalk?.()?.setViewMagnification?.(action.magnification);
@@ -196,11 +206,11 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   requestRender();stop(e);
  }
  function onPointerEnd(e){if(viewControls?.up(e.pointerId))stop(e);}
- function onPointerCancel(e){viewControls?.cancel();keys.clear();sendInput(true);if(held()&&!exitRequested)stop(e);}
- function onLockedMouseMove(e){if(document.pointerLockElement===canvas&&held()&&!exitRequested){getWalk?.()?.lookByPixels?.(e.movementX,e.movementY,spec.view.lookSensitivity.locked);stop(e);}}
- function onWheel(e){if(e.target!==canvas||!held()||exitRequested||!viewControls)return;const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);if(viewControls.wheel(delta)){getWalk?.()?.setViewMagnification?.(viewControls.snapshot().magnification);requestRender();stop(e);}}
+ function onPointerCancel(e){viewControls?.cancel();keys.clear();sendInput(true);if(isDriving())stop(e);}
+ function onLockedMouseMove(e){if(document.pointerLockElement===canvas&&isDriving()){getWalk?.()?.lookByPixels?.(e.movementX,e.movementY,spec.view.lookSensitivity.locked);stop(e);}}
+ function onWheel(e){if(e.target!==canvas||!isDriving()||!viewControls)return;const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);if(viewControls.wheel(delta)){getWalk?.()?.setViewMagnification?.(viewControls.snapshot().magnification);requestRender();stop(e);}}
  window.addEventListener('keydown',onKey,true);window.addEventListener('keyup',onUp,true);window.addEventListener('blur',onBlur);window.addEventListener('pointerdown',onPointer,true);window.addEventListener('pointermove',onPointerMove,true);window.addEventListener('mousemove',onLockedMouseMove,true);window.addEventListener('pointerup',onPointerEnd,true);window.addEventListener('pointercancel',onPointerCancel,true);window.addEventListener('wheel',onWheel,{capture:true,passive:false});
- take.onclick=()=>command('take',aimed?.id);exit.onclick=()=>command('release');reset.onclick=()=>command('respawn');follow.onclick=focusCar;marker.onclick=focusCar;
+ take.onclick=()=>command('take',aimed?.id);marker.onclick=focusCar;
  const ready=retry(()=>fetch('spec/rc.json').then(r=>{if(!r.ok)throw Error('rc_config');return r.json();})).then(async data=>{
   if(disposed)return;spec=data;viewControls=createRCViewControls(spec.view.zoom);sim=createRCSimulation({spec,site});predictor=createRCSimulation({spec,site});state=sim.snapshot();
   const url=assetUrl(spec.asset),loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);const gltf=await track(retry(()=>loader.loadAsync(url)),{label:'Гараж радиомашинок',url});source=gltf.scene;if(disposed){releaseResources();return;}
@@ -210,14 +220,14 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
    const controller=makeController(car.color),c=sim.controllers.find(c=>c.id===car.id);controller.position.fromArray(c.position);controller.userData.rcId=car.id;controllerViews.set(car.id,controller);root.add(controller);
   }
   createArenaPresentation();
-  overlay=createPartyOverlay({THREE,renderer,scene,camera:handCamera,pipe,root:handRoot,active:()=>!!held()&&active()});
+  overlay=createPartyOverlay({THREE,renderer,scene,camera:handCamera,pipe,root:handRoot,active:()=>!!held()&&presenting()&&!exitRequested});
   detachTarget=addTargets({raycast(raycaster){if(network)return null;const r=sim.raycast(raycaster.ray.origin.toArray(),raycaster.ray.direction.toArray(),raycaster.far);if(!r)return null;return{distance:r.distance,point:new THREE.Vector3().fromArray(r.point),normal:new THREE.Vector3(0,1,0),object:carViews.get(r.id),surface:{albedo:[.44,.50,.54],solid:true,flesh:false,metal:true},hit(weaponId,damage){sim.damage(r.id,damage);accept(sim.snapshot());requestRender();}};}});
   accept(state);requestRender();
  });
  function releaseResources(){const resources=new Set();source?.traverse(o=>{if(o.geometry)resources.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){resources.add(m);for(const v of Object.values(m))if(v?.isTexture)resources.add(v);}});for(const r of resources)r.dispose?.();source=null;}
- return{ready,update,command,setNetwork,applyNetwork:accept,get config(){return spec;},snapshot:()=>state,get controlling(){return!!held();},get held(){return held();},get target(){return aimed;},get viewCamera(){return held()&&!exitRequested?camera:null;},get controllers(){return sim?.controllers||[];},get colliders(){if(!spec)return[];const t=spec.table,p=t.position,w=t.size[0]/2,d=t.size[2]/2;return[{x0:p[0]-w,x1:p[0]+w,z0:p[2]-d,z1:p[2]+d}];},dispose(){disposed=true;generation++;stopDriving();sceneIndex.release();window.removeEventListener('keydown',onKey,true);window.removeEventListener('keyup',onUp,true);window.removeEventListener('blur',onBlur);window.removeEventListener('pointerdown',onPointer,true);window.removeEventListener('pointermove',onPointerMove,true);window.removeEventListener('mousemove',onLockedMouseMove,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerCancel,true);window.removeEventListener('wheel',onWheel,true);detachTarget?.();overlay?.dispose();sim?.dispose();predictor?.dispose();for(const o of [...controllerViews.values(),...remoteViews.values(),...handRoot.children])releaseController(o);root.removeFromParent();remoteRoot.removeFromParent();panel.remove();take.remove();touch.remove();marker.remove();hudObserver.disconnect();for(const resource of runtimeResources)resource.dispose();runtimeResources.clear();releaseResources();}};
+ return{ready,update,command,setNetwork,applyNetwork:accept,get config(){return spec;},snapshot:()=>state,get controlling(){return held()?.controlMode==='drive';},get isDriving(){return held()?.controlMode==='drive';},get held(){return held();},get target(){return aimed;},get viewCamera(){return isDriving()?camera:null;},get controllers(){return sim?.controllers||[];},get colliders(){if(!spec)return[];const t=spec.table,p=t.position,w=t.size[0]/2,d=t.size[2]/2;return[{x0:p[0]-w,x1:p[0]+w,z0:p[2]-d,z1:p[2]+d}];},dispose(){disposed=true;generation++;stopDriving();sceneIndex.release();window.removeEventListener('keydown',onKey,true);window.removeEventListener('keyup',onUp,true);window.removeEventListener('blur',onBlur);window.removeEventListener('pointerdown',onPointer,true);window.removeEventListener('pointermove',onPointerMove,true);window.removeEventListener('mousemove',onLockedMouseMove,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerCancel,true);window.removeEventListener('wheel',onWheel,true);detachTarget?.();overlay?.dispose();sim?.dispose();predictor?.dispose();for(const o of [...controllerViews.values(),...remoteViews.values(),...handRoot.children])releaseController(o);root.removeFromParent();remoteRoot.removeFromParent();hud.dispose();take.remove();touch.remove();marker.remove();hudObserver.disconnect();for(const resource of runtimeResources)resource.dispose();runtimeResources.clear();releaseResources();}};
 }
 const CSS=`
-.rc-driver-marker{position:fixed;left:0;top:0;z-index:12;max-width:170px;padding:5px 9px;border:1px solid;border-radius:12px;background:#18382de8;color:#fff;font:600 11px/1.3 system-ui;cursor:pointer;will-change:transform}.rc-driver-marker[hidden]{display:none}.rc-driver-marker[data-offscreen="true"]{background:#203e35f2}.rc-hud{position:fixed;z-index:30;left:50%;top:calc(env(safe-area-inset-top,0px) + 16px);transform:translateX(-50%);display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:min(780px,94vw);padding:12px 16px;border:1px solid #ffffff25;border-radius:18px;background:#15232af2;box-shadow:0 6px 28px #0004;color:#f1f5ee;font:13px/1.4 system-ui;backdrop-filter:blur(12px)}.rc-hud[hidden],.rc-take[hidden],.rc-touch[hidden]{display:none!important}.rc-title{font-size:15px}.rc-stats{font-variant-numeric:tabular-nums;white-space:nowrap}.rc-hint{flex-basis:100%;text-align:center;font-size:12px;color:#d2dccd}.rc-hud button,.rc-take,.rc-control{font:600 13px system-ui;color:#f1f5ee;border:1px solid #ffffff35;border-radius:11px;padding:10px 14px;background:#31454d;cursor:pointer;touch-action:none}.rc-hud .rc-exit{background:#eff5e9;color:#182b2b;min-height:44px}.rc-hud button:focus-visible,.rc-take:focus-visible,.rc-control:focus-visible{outline:3px solid #c9ec70;outline-offset:3px}.rc-hud button:disabled{opacity:.55;cursor:wait}.rc-take{position:fixed;z-index:12;left:50%;bottom:calc(var(--hud-bottom,76px) + 20px);transform:translateX(-50%);background:#163830f0;max-width:92vw}.rc-control{position:fixed;z-index:31;min-height:58px;min-width:64px;background:#213a40ed}.rc-left{left:16px;bottom:160px}.rc-right{left:92px;bottom:160px}.rc-gas{right:16px;bottom:225px;min-width:110px;background:#487b42ed}.rc-reverse{right:16px;bottom:160px;min-width:110px}.rc-brake{right:16px;bottom:95px;min-width:110px;background:#86543bed}.rc-control:active{filter:brightness(1.3);transform:scale(.97)}body.rc-controlling .title-card,body.rc-controlling #hud-bottom,body.rc-controlling #panel,body.rc-controlling #panel-toggle,body.rc-controlling #kh-score,body.rc-controlling .kh-score,body.rc-controlling #kh-hud,body.rc-controlling .kh-hud,body.rc-controlling #coach,body.rc-controlling .party-hud,body.rc-controlling .social-hud,body.rc-controlling .social-radio,body.rc-controlling .party-touch,body.rc-controlling .khh-btn,body.rc-controlling .khh-hint,body.rc-controlling #kw-dock,body.rc-controlling .tv-layer,body.rc-controlling .kw-jump,body.rc-controlling .kw-joy,body.rc-controlling .kd-hint,body.rc-controlling .ks-hint{visibility:hidden!important}
-@media(max-width:650px){.rc-hud{top:calc(env(safe-area-inset-top,0px) + 12px);padding:10px;gap:7px;width:calc(100vw - 24px);box-sizing:border-box}.rc-title{font-size:13px}.rc-hud button{padding:9px 12px;font-size:12px}.rc-hint{font-size:11px}.rc-hud .rc-exit{margin-left:auto}.rc-stats{font-size:12px}}@media(prefers-reduced-motion:reduce){.rc-control:active{transform:none}}
+.rc-driver-marker{position:fixed;left:0;top:0;z-index:12;max-width:170px;padding:5px 9px;border:1px solid;border-radius:12px;background:#18382de8;color:#fff;font:600 11px/1.3 system-ui;cursor:pointer;will-change:transform}.rc-driver-marker[hidden]{display:none}.rc-driver-marker[data-offscreen="true"]{background:#203e35f2}.rc-take[hidden],.rc-touch[hidden]{display:none!important}.rc-take,.rc-control{font:600 13px system-ui;color:#f1f5ee;border:1px solid #ffffff35;border-radius:11px;padding:10px 14px;background:#31454d;cursor:pointer;touch-action:none}.rc-take:focus-visible,.rc-control:focus-visible{outline:3px solid #c9ec70;outline-offset:3px}.rc-take{position:fixed;z-index:12;left:50%;bottom:calc(var(--hud-bottom,76px) + 20px);transform:translateX(-50%);background:#163830f0;max-width:92vw}.rc-control{position:fixed;z-index:31;min-height:58px;min-width:64px;background:#213a40ed}.rc-left{left:16px;bottom:160px}.rc-right{left:92px;bottom:160px}.rc-gas{right:16px;bottom:225px;min-width:110px;background:#487b42ed}.rc-reverse{right:16px;bottom:160px;min-width:110px}.rc-brake{right:16px;bottom:95px;min-width:110px;background:#86543bed}.rc-control:active{filter:brightness(1.3);transform:scale(.97)}body.rc-holding .title-card,body.rc-holding #hud-bottom,body.rc-holding #panel,body.rc-holding #panel-toggle,body.rc-holding #kh-score,body.rc-holding .kh-score,body.rc-holding #kh-hud,body.rc-holding .kh-hud,body.rc-holding #coach,body.rc-holding .party-hud,body.rc-holding .social-hud,body.rc-holding .social-radio,body.rc-holding .party-touch,body.rc-holding .khh-btn,body.rc-holding .khh-hint,body.rc-holding #kw-dock,body.rc-holding .tv-layer,body.rc-controlling .kw-jump,body.rc-controlling .kw-joy,body.rc-holding .kd-hint,body.rc-holding .ks-hint{visibility:hidden!important}
+@media(prefers-reduced-motion:reduce){.rc-control:active{transform:none}}
 `;

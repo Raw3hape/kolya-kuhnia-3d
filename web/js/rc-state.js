@@ -36,12 +36,12 @@ export function createRCSimulation({spec,site}){
   const s=spec.arena.spawn,columns=s.columns;let p=[s.center[0]+(index%columns-(columns-1)/2)*s.spacing[0],s.center[1]+Math.floor(index/columns)*s.spacing[1]];
   const point=arena.nearestSafe(...p);if(point)return point;throw Error('rc_no_safe_spawn');
  }
- const neutral=()=>({throttle:0,steer:0,brake:false});
+ const neutral=()=>({throttle:0,steer:0,brake:false}),parked=()=>({throttle:0,steer:0,brake:true});
  function resetBody(car){
   const {body,vehicle,layout}=physics.get(car.id),[x,z]=spawnFor(car.index);
   body.quaternion.setFromEuler(0,spec.arena.spawn.heading,0);const centre=body.quaternion.vmult(new CANNON.Vec3(...layout.centerOfMass));body.position.set(x+centre.x,ground+centre.y+rules.spawnClearance,z+centre.z);body.velocity.setZero();body.angularVelocity.setZero();body.force.setZero();body.torque.setZero();body.wakeUp();
-  car.input=neutral();car.steering=0;car.inputAt=time;car.resetAt=time;car.lastSafe=[x,z];car.speed=0;car.atBoundary=false;
-  for(let i=0;i<4;i++){vehicle.setSteeringValue(0,i);vehicle.applyEngineForce(0,i);vehicle.setBrake(0,i);const wheel=vehicle.wheelInfos[i];wheel.rotation=0;wheel.deltaRotation=0;wheel.suspensionLength=rules.suspension.restLength;wheel.steering=0;vehicle.updateWheelTransform(i);}
+  car.input=car.controlMode==='drive'?neutral():parked();car.steering=0;car.inputAt=time;car.resetAt=time;car.lastSafe=[x,z];car.speed=0;car.atBoundary=false;
+  for(let i=0;i<4;i++){vehicle.setSteeringValue(0,i);vehicle.applyEngineForce(0,i);vehicle.setBrake(car.controlMode==='carry'?rules.brakeForce:0,i);const wheel=vehicle.wheelInfos[i];wheel.rotation=0;wheel.deltaRotation=0;wheel.suspensionLength=rules.suspension.restLength;wheel.steering=0;vehicle.updateWheelTransform(i);}
  }
  spec.designs.forEach((design,index)=>{
   const layout=getRCVehicleLayout(design,rules),id=`rc-${index}`,body=new CANNON.Body({mass:rules.mass,linearDamping:rules.linearDamping,angularDamping:rules.angularDamping,sleepSpeedLimit:.08,sleepTimeLimit:1.5});
@@ -49,39 +49,47 @@ export function createRCSimulation({spec,site}){
   body.angularFactor.set(...rules.angularFactor);
   const vehicle=new CANNON.RaycastVehicle({chassisBody:body,indexRightAxis:AXES.right,indexUpAxis:AXES.up,indexForwardAxis:AXES.forward}),s=rules.suspension;
   for(const wheel of layout.wheels)vehicle.addWheel({radius:wheel.radius,directionLocal:new CANNON.Vec3(...AXES.direction),axleLocal:new CANNON.Vec3(...AXES.axle),chassisConnectionPointLocal:new CANNON.Vec3(...wheel.connection),suspensionStiffness:s.stiffness,suspensionRestLength:s.restLength,frictionSlip:s.frictionSlip,dampingRelaxation:s.relaxation,dampingCompression:s.compression,maxSuspensionForce:rules.mass*70,maxSuspensionTravel:s.travel,rollInfluence:s.rollInfluence,customSlidingRotationalSpeed:-30,useCustomSlidingRotationalSpeed:true,isFrontWheel:wheel.front});
-  const car={id,index,designId:design.id,color:design.color,owner:null,status:'ready',hp:rules.maxHp,maxHp:rules.maxHp,input:neutral(),inputAt:0,inputSeq:0,steering:0,respawnAt:0,lastSafe:null,resetAt:-10,speed:0};
+  const car={id,index,designId:design.id,color:design.color,owner:null,status:'ready',controlMode:'carry',hp:rules.maxHp,maxHp:rules.maxHp,input:neutral(),inputAt:0,inputSeq:0,steering:0,respawnAt:0,lastSafe:null,resetAt:-10,speed:0};
   cars.set(id,car);physics.set(id,{body,vehicle,layout,inWorld:false});resetBody(car);
  });
  const held=playerId=>[...cars.values()].find(c=>c.owner===playerId)||null;
+ const isDriving=playerId=>held(playerId)?.controlMode==='drive';
+ function clearDriveIntent(car){car.input=car.controlMode==='drive'?neutral():parked();car.inputAt=time;car.steering=0;const{vehicle,body}=physics.get(car.id);for(let i=0;i<vehicle.wheelInfos.length;i++){vehicle.applyEngineForce(0,i);vehicle.setSteeringValue(0,i);vehicle.setBrake(car.controlMode==='carry'?rules.brakeForce:rules.idleBrake,i);vehicle.updateWheelTransform(i);}body.wakeUp();}
  const error=reason=>({ok:false,error:reason});
  function add(car){const p=physics.get(car.id);if(!p.inWorld){p.vehicle.addToWorld(world);p.inWorld=true;}}
  function remove(car){const p=physics.get(car.id);if(p.inWorld){p.vehicle.removeFromWorld(world);p.inWorld=false;}}
- function releasePlayer(playerId){const car=held(playerId);if(!car)return false;remove(car);car.owner=null;car.status='ready';car.input=neutral();car.hp=rules.maxHp;car.respawnAt=0;resetBody(car);return true;}
- function takeError(player,id){const car=cars.get(id);if(!player?.id)return'rc_player';if(!car)return'rc_item';if(car.owner)return'rc_owned';const c=controllers[car.index];if(!finite(player.x)||!finite(player.z)||Math.hypot(player.x-c.position[0],player.z-c.position[2])>spec.controllers.reach)return'rc_reach';return held(player.id)?'rc_hands_full':null;}
+ function releasePlayer(playerId){const car=held(playerId);if(!car)return false;remove(car);car.owner=null;car.status='ready';car.controlMode='carry';car.input=parked();car.hp=rules.maxHp;car.respawnAt=0;resetBody(car);return true;}
+ function takeError(player,id){const car=cars.get(id);if(!player?.id)return'rc_player';if(player.seat)return'rc_seated';if(!car)return'rc_item';if(car.owner)return'rc_owned';const c=controllers[car.index];if(!finite(player.x)||!finite(player.z)||Math.hypot(player.x-c.position[0],player.z-c.position[2])>spec.controllers.reach)return'rc_reach';return held(player.id)?'rc_hands_full':null;}
  function command(player,verb,id,input={}){
   if(!player?.id)return error('rc_player');const car=cars.get(id);if(!car)return error('rc_item');
   if(verb==='take'){
-   const reason=takeError(player,id);if(reason)return error(reason);car.owner=player.id;car.status='active';car.hp=rules.maxHp;car.inputSeq=0;resetBody(car);add(car);return{ok:true,id};
+   const reason=takeError(player,id);if(reason)return error(reason);car.owner=player.id;car.status='active';car.controlMode='drive';car.hp=rules.maxHp;car.inputSeq=0;resetBody(car);add(car);return{ok:true,id};
   }
   if(car.owner!==player.id)return error('rc_not_owner');
   if(verb==='release'){releasePlayer(player.id);return{ok:true};}
+  if(verb==='pause'){const fence=input?.seq;if(fence!==undefined&&(!Number.isSafeInteger(fence)||fence<0))return error('rc_input');if(fence!==undefined)car.inputSeq=Math.max(car.inputSeq,fence);car.controlMode='carry';clearDriveIntent(car);return{ok:true};}
+  if(verb==='drive'){if(player.seat)return error('rc_seated');if(car.controlMode!=='drive'){car.controlMode='drive';clearDriveIntent(car);}return{ok:true};}
   if(verb==='respawn'){
    if(car.status==='wrecked'&&time<car.respawnAt)return error('rc_repairing');if(car.status==='active'&&time-car.resetAt<rules.resetCooldown)return error('rc_reset_cooldown');
    const repairing=car.status==='wrecked';car.status='active';if(repairing)car.hp=rules.maxHp;car.respawnAt=0;resetBody(car);add(car);return{ok:true};
   }
   if(verb==='input'){
+   if(car.controlMode!=='drive')return error('rc_paused');
    if(car.status!=='active')return error('rc_wrecked');
    if(!finite(input.throttle)||!finite(input.steer)||Math.abs(input.throttle)>1||Math.abs(input.steer)>1||typeof input.brake!=='boolean'||!Number.isSafeInteger(input.seq)||input.seq<0)return error('rc_input');
    if(input.seq<=car.inputSeq)return error('rc_input_order');car.inputSeq=input.seq;car.input={throttle:input.throttle,steer:input.steer,brake:input.brake};car.inputAt=time;physics.get(id).body.wakeUp();return{ok:true};
   }
   return error('rc_verb');
  }
- function transfer(actorId,targetId,id){const car=cars.get(id);if(!car||car.owner!==actorId)return error('rc_not_owner');if(!targetId||held(targetId))return error('rc_hands_full');car.owner=targetId;car.input=neutral();car.inputAt=time;car.inputSeq=0;return{ok:true,id};}
+ function transfer(actorId,targetId,id){const car=cars.get(id);if(!car||car.owner!==actorId)return error('rc_not_owner');if(!targetId||held(targetId))return error('rc_hands_full');car.owner=targetId;car.controlMode='carry';car.inputSeq=0;clearDriveIntent(car);return{ok:true,id};}
  function advance(dt){
   for(const car of cars.values()){
-   if(car.status!=='active')continue;const {body,vehicle,layout}=physics.get(car.id),input=time-car.inputAt>rules.staleInputSeconds?neutral():car.input;
+   if(car.status!=='active')continue;const {body,vehicle,layout}=physics.get(car.id),input=car.controlMode==='carry'?parked():time-car.inputAt>rules.staleInputSeconds?neutral():car.input;
    const speed=body.velocity.length();car.speed=vehicle.currentVehicleSpeedKmHour/3.6;
-   const target=input.steer*rules.maxSteer*(1-(1-rules.highSpeedSteer)*clamp(speed/rules.maxSpeed,0,1));car.steering+=(target-car.steering)*(1-Math.exp(-rules.steerResponse*dt));
+   // Input +steer means driver's right: forward(+Z) cross up(+Y) is -X.
+   // Cannon's positive steering rotates the nose toward +X, so convert once
+   // here for solo, host authority and client prediction alike.
+   const target=-input.steer*rules.maxSteer*(1-(1-rules.highSpeedSteer)*clamp(speed/rules.maxSpeed,0,1));car.steering+=(target-car.steering)*(1-Math.exp(-rules.steerResponse*dt));
    const localVelocity=body.vectorToLocalFrame(body.velocity),opposing=input.throttle*localVelocity.z<-.4;
    const force=input.throttle>0?(localVelocity.z<rules.maxSpeed?-input.throttle*rules.engineForce:0):(localVelocity.z>-rules.reverseMaxSpeed?-input.throttle*rules.reverseForce:0);
    for(let i=0;i<4;i++){vehicle.setSteeringValue(layout.wheels[i].steer?car.steering:0,i);vehicle.applyEngineForce(force,i);vehicle.setBrake(input.brake?rules.brakeForce:opposing?rules.brakeForce*.65:Math.abs(input.throttle)<.01?rules.idleBrake:0,i);}
@@ -106,13 +114,13 @@ export function createRCSimulation({spec,site}){
    if(result.hasHit&&(!best||result.distance<best.distance))best={id:car.id,distance:result.distance,point:result.hitPointWorld.toArray()};
   }return best;
  }
- function serialize(c){const{body,vehicle}=physics.get(c.id);return{id:c.id,index:c.index,designId:c.designId,color:c.color,owner:c.owner,status:c.status,hp:c.hp,maxHp:c.maxHp,position:body.position.toArray().map(round),quaternion:body.quaternion.toArray().map(round),velocity:body.velocity.toArray().map(round),angularVelocity:body.angularVelocity.toArray().map(round),speed:round(c.speed),atBoundary:!!c.atBoundary,steering:round(c.steering),wheels:vehicle.wheelInfos.map((w,i)=>({id:physics.get(c.id).layout.wheels[i].id,rotation:round(w.rotation),suspensionLength:round(w.suspensionLength),steering:round(w.steering),deltaRotation:round(w.deltaRotation),position:w.worldTransform.position.toArray().map(round),quaternion:w.worldTransform.quaternion.toArray().map(round)})),inputSeq:c.inputSeq,input:{...c.input},inputAt:round(c.inputAt),respawnAt:round(c.respawnAt),resetAt:round(c.resetAt),lastSafe:c.lastSafe.map(round)};}
+ function serialize(c){const{body,vehicle}=physics.get(c.id);return{id:c.id,index:c.index,designId:c.designId,color:c.color,owner:c.owner,status:c.status,controlMode:c.controlMode,hp:c.hp,maxHp:c.maxHp,position:body.position.toArray().map(round),quaternion:body.quaternion.toArray().map(round),velocity:body.velocity.toArray().map(round),angularVelocity:body.angularVelocity.toArray().map(round),speed:round(c.speed),atBoundary:!!c.atBoundary,steering:round(c.steering),wheels:vehicle.wheelInfos.map((w,i)=>({id:physics.get(c.id).layout.wheels[i].id,rotation:round(w.rotation),suspensionLength:round(w.suspensionLength),steering:round(w.steering),deltaRotation:round(w.deltaRotation),position:w.worldTransform.position.toArray().map(round),quaternion:w.worldTransform.quaternion.toArray().map(round)})),inputSeq:c.inputSeq,input:{...c.input},inputAt:round(c.inputAt),respawnAt:round(c.respawnAt),resetAt:round(c.resetAt),lastSafe:c.lastSafe.map(round)};}
  function snapshot(){return{version:1,time:round(time),cars:[...cars.values()].map(serialize)};}
  function pose(id){const car=cars.get(id);return car?serialize(car):null;}
  function restore(state){
-  if(!state?.cars||!finite(state.time))return false;time=state.time;accumulator=0;
-  for(const next of state.cars){const car=cars.get(next.id);if(!car||!vec(next.position)||!Array.isArray(next.quaternion)||next.quaternion.length!==4||!next.quaternion.every(finite))continue;remove(car);const {body,vehicle}=physics.get(car.id);for(const key of ['speed','owner','status','hp','inputSeq','steering','respawnAt','inputAt','resetAt','atBoundary'])if(next[key]!==undefined)car[key]=next[key];car.input=next.input?{...next.input}:neutral();car.lastSafe=Array.isArray(next.lastSafe)?[...next.lastSafe]:[next.position[0],next.position[2]];body.position.set(...next.position);body.quaternion.set(...next.quaternion);body.velocity.set(...(next.velocity||[0,0,0]));body.angularVelocity.set(...(next.angularVelocity||[0,0,0]));for(let i=0;i<vehicle.wheelInfos.length;i++){const wheel=vehicle.wheelInfos[i],w=next.wheels?.[i];if(w&&w.id===physics.get(car.id).layout.wheels[i].id){for(const key of ['rotation','suspensionLength','steering','deltaRotation'])if(finite(w[key]))wheel[key]=w[key];}vehicle.updateWheelTransform(i);}if(car.status==='active')add(car);}
+  if(!Array.isArray(state?.cars)||!finite(state.time)||state.cars.some(c=>!c||typeof c!=='object'||c.controlMode!==undefined&&!['drive','carry'].includes(c.controlMode)))return false;time=state.time;accumulator=0;
+  for(const next of state.cars){const car=cars.get(next.id);if(!car||!vec(next.position)||!Array.isArray(next.quaternion)||next.quaternion.length!==4||!next.quaternion.every(finite))continue;remove(car);const {body,vehicle}=physics.get(car.id);for(const key of ['speed','owner','status','hp','inputSeq','steering','respawnAt','inputAt','resetAt','atBoundary'])if(next[key]!==undefined)car[key]=next[key];car.controlMode=['drive','carry'].includes(next.controlMode)?next.controlMode:car.owner?'drive':'carry';car.input=car.controlMode==='carry'?parked():next.input?{...next.input}:neutral();car.lastSafe=Array.isArray(next.lastSafe)?[...next.lastSafe]:[next.position[0],next.position[2]];body.position.set(...next.position);body.quaternion.set(...next.quaternion);body.velocity.set(...(next.velocity||[0,0,0]));body.angularVelocity.set(...(next.angularVelocity||[0,0,0]));for(let i=0;i<vehicle.wheelInfos.length;i++){const wheel=vehicle.wheelInfos[i],w=next.wheels?.[i];if(w&&w.id===physics.get(car.id).layout.wheels[i].id){for(const key of ['rotation','suspensionLength','steering','deltaRotation'])if(finite(w[key]))wheel[key]=w[key];}if(car.controlMode==='carry'){wheel.steering=0;vehicle.applyEngineForce(0,i);vehicle.setBrake(rules.brakeForce,i);}vehicle.updateWheelTransform(i);}if(car.controlMode==='carry')car.steering=0;if(car.status==='active')add(car);}
   return true;
  }
- return{canTake:(player,id)=>!takeError(player,id),command,held,transfer,releasePlayer,step,snapshot,pose,restore,raycast,damage,arena,controllers,get time(){return time;},dispose(){for(const c of cars.values())remove(c);world.removeBody(groundBody);for(const body of boundaryBodies)world.removeBody(body);}};
+ return{canTake:(player,id)=>!takeError(player,id),command,held,isDriving,transfer,releasePlayer,step,snapshot,pose,restore,raycast,damage,arena,controllers,get time(){return time;},dispose(){for(const c of cars.values())remove(c);world.removeBody(groundBody);for(const body of boundaryBodies)world.removeBody(body);}};
 }

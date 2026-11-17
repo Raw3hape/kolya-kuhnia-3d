@@ -88,7 +88,7 @@ try{
  await solo.mouse.move(700,450);await solo.mouse.wheel(0,-140);await solo.waitForTimeout(600);
  check('trackpad wheel optically zooms from the balcony and keyboard C locates the car',await solo.evaluate(before=>__kitchen.camera.fov<before&&__kitchen.camera.fov>8,fovBefore));
  await solo.keyboard.press('c');await solo.waitForTimeout(800);await screenshot(solo,'rc-driving');
- await solo.getByRole('button',{name:'Положить пульт и закончить управление машинкой',exact:true}).click();await solo.waitForFunction(()=>!__kitchen.rc.controlling);check('clear exit returns camera and player to balcony',await solo.evaluate(()=>!document.body.classList.contains('rc-controlling')&&__kitchen.camera.position.y>1));
+ await solo.getByRole('button',{name:'Выйти из управления машинкой и положить пульт',exact:true}).click();await solo.waitForFunction(()=>!__kitchen.rc.controlling);check('clear exit returns camera and player to balcony',await solo.evaluate(()=>!document.body.classList.contains('rc-controlling')&&__kitchen.camera.position.y>1));
  }
  if(process.env.QA_ROOM_ONLY!=='1'){
   await solo.waitForFunction(()=>__kitchen.social.debug.state.pizza?.location==='courier',null,{timeout:55000});
@@ -132,7 +132,7 @@ try{
  await screenshot(mobile,'mobile-rc');
  check('mobile has visible touch gas and clear exit without overflow',await mobile.evaluate(()=>{const r=document.querySelector('.rc-exit').getBoundingClientRect();return r.width>=100&&r.left>=0&&r.right<=innerWidth&&document.documentElement.scrollWidth<=innerWidth}));
  check('mobile own-car marker remains below the RC controls',await mobile.evaluate(()=>{const m=document.querySelector('.rc-driver-marker'),h=document.querySelector('.rc-hud');return !m.hidden&&m.getBoundingClientRect().top>=h.getBoundingClientRect().bottom+2}));
- await mobile.getByRole('button',{name:'Положить пульт и закончить управление машинкой',exact:true}).click();await mobile.waitForFunction(()=>!__kitchen.rc.controlling);
+ await mobile.getByRole('button',{name:'Выйти из управления машинкой и положить пульт',exact:true}).click();await mobile.waitForFunction(()=>!__kitchen.rc.controlling);
  check('browser has no uncaught errors',report.errors.length===0,report.errors);
 }catch(error){report.failure=error.stack;console.error(error.stack);process.exitCode=1;for(const c of contexts)for(const p of c.pages())await screenshot(p,'failure-'+contexts.indexOf(c)).catch(()=>{});}
 finally{for(const c of contexts)await c.close().catch(()=>{});await browser?.close();clearTimeout(watchdog);report.cleanup=true;fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({checks:report.checks.length,pass:!report.failure&&report.checks.every(c=>c.pass),failure:report.failure,cleanup:report.cleanup}));}
