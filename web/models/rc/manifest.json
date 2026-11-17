@@ -4,10 +4,10 @@
   "generator": "tools/rc/build.py",
   "recipe": "web/spec/rc.json",
   "asset": "models/rc/garage.glb",
-  "sha256": "9d1aca7304e036d6f83f9a802a854f025cb5ed382f2d386fb9ceb1b42e3f4d72",
-  "bytes": 1997352,
+  "sha256": "eafb77d16b5bac0564942813f9de58fef01ac282c7ca87519cad6cea8749179e",
+  "bytes": 2162756,
   "modelScale": 1.25,
-  "sourceSpecSha256": "c4702cf0a162ea4c37c96b8607509327d94e385f7a6d04441cf03aae32b63cfc",
+  "sourceSpecSha256": "d080c1d15e86614ab5ce2898cb05229bb8bfcc68ce1b27a30ce0744d9e8638e4",
   "units": "metres",
   "coordinateSystem": {
     "up": "+Y",
@@ -19,7 +19,7 @@
     {
       "id": "rally",
       "node": "rc_rally",
-      "triangles": 34878,
+      "triangles": 36018,
       "wheelNodes": [
         "rally_wheel_FL",
         "rally_wheel_FR",
@@ -250,7 +250,7 @@
     {
       "id": "gt",
       "node": "rc_gt",
-      "triangles": 31184,
+      "triangles": 33224,
       "wheelNodes": [
         "gt_wheel_FL",
         "gt_wheel_FR",
@@ -481,7 +481,7 @@
     {
       "id": "jeep",
       "node": "rc_jeep",
-      "triangles": 34538,
+      "triangles": 37058,
       "wheelNodes": [
         "jeep_wheel_FL",
         "jeep_wheel_FR",
@@ -712,7 +712,7 @@
     {
       "id": "buggy",
       "node": "rc_buggy",
-      "triangles": 21960,
+      "triangles": 23910,
       "wheelNodes": [
         "buggy_wheel_FL",
         "buggy_wheel_FR",
@@ -943,7 +943,7 @@
     {
       "id": "drift",
       "node": "rc_drift",
-      "triangles": 31354,
+      "triangles": 33334,
       "wheelNodes": [
         "drift_wheel_FL",
         "drift_wheel_FR",
@@ -1173,7 +1173,7 @@
     {
       "id": "pickup",
       "node": "rc_pickup",
-      "triangles": 32926,
+      "triangles": 35146,
       "wheelNodes": [
         "pickup_wheel_FL",
         "pickup_wheel_FR",
@@ -1403,7 +1403,7 @@
     {
       "id": "formula",
       "node": "rc_formula",
-      "triangles": 22066,
+      "triangles": 23326,
       "wheelNodes": [
         "formula_wheel_FL",
         "formula_wheel_FR",
@@ -1864,7 +1864,7 @@
     {
       "id": "classic",
       "node": "rc_classic",
-      "triangles": 30996,
+      "triangles": 33336,
       "wheelNodes": [
         "classic_wheel_FL",
         "classic_wheel_FR",
@@ -2094,7 +2094,7 @@
     {
       "id": "prototype",
       "node": "rc_prototype",
-      "triangles": 28902,
+      "triangles": 30042,
       "wheelNodes": [
         "prototype_wheel_FL",
         "prototype_wheel_FR",

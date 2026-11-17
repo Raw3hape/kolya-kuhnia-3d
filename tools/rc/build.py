@@ -3,7 +3,7 @@ blender -b --python tools/rc/build.py -- --out tools/rc/.art-staging/v2
 The recipe contains FINAL SI vehicle dimensions/sockets. Authoring style details
 use modelScale once. No downloads, no changes to published web/models/rc here.
 """
-import bpy,math,json,os,sys,hashlib,struct
+import bpy,bmesh,math,json,sys,hashlib,struct
 from pathlib import Path
 from mathutils import Vector
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(Path(__file__).parent))
@@ -25,7 +25,6 @@ A=Artist(M,SCALE)
 def empty(name,pos=(0,0,0)):
  o=bpy.data.objects.new(name,None);bpy.context.collection.objects.link(o);o.location=pos;return o
 
-def slot(artist,name,position,size,material):return artist.box(name,position,size,material,.006)
 def hood_height(d,y):
  bulge=max([max(0,1-((y-q['base'][1])/(q['r']*1.2))**2)*.018 for q in d.get('artWheels',[])]or[0])
  return interpolated(d['profile'],y/d['length'])[1]+bulge+.030
@@ -77,8 +76,11 @@ def signature_details(a,d,w,L,h,paint,accent,wheels):
   bright=sum(v*c for v,c in zip(rgb(d['accent']),[.2126,.7152,.0722]))>.35
   number=a.text('Large bonnet race number',d['number'],(0,yy-.046,0),.132,M['black']if bright else M['light']);number.data.offset=.0013*a.scale
   bpy.ops.object.select_all(action='DESELECT');number.select_set(True);bpy.context.view_layer.objects.active=number;bpy.ops.object.convert(target='MESH')
+  # Long glyph strokes need interior vertices before conforming to a curved
+  # bonnet; otherwise a planar stroke cuts through the curved paint decal.
+  bm=bmesh.new();bm.from_mesh(number.data);bmesh.ops.triangulate(bm,faces=list(bm.faces));bmesh.ops.subdivide_edges(bm,edges=list(bm.edges),cuts=3,use_grid_fill=True);bm.to_mesh(number.data);bm.free();number.data.update()
   for vertex in number.data.vertices:
-   world=number.matrix_world@vertex.co;vertex.co.z+=(hood_height(d,world.y/a.scale)+.003)*a.scale
+   world=number.matrix_world@vertex.co;vertex.co.z+=(hood_height(d,world.y/a.scale)+.004)*a.scale
  # Discrete RC shell clips, aerial and servo-electronics details anchor scale.
  for sign in [-1,1]:
   for yy in [-L*.34,L*.32]:

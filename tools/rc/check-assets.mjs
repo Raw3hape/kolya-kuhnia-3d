@@ -13,4 +13,5 @@ assert.equal(manifest.bytes,asset.length);
 assert.equal(manifest.cars.length,spec.designs.length);
 assert.equal(PLAYABLE_FIELD.sourceSiteSha256,hash(read('web/spec/site.json')),'Recompile the playable field');
 assert.equal(PLAYABLE_FIELD.seamTolerance,spec.arena.seamTolerance);
+assert.deepEqual(PLAYABLE_FIELD.recipe,{kinds:spec.arena.kinds,spawnCenter:spec.arena.spawn.center,seamTolerance:spec.arena.seamTolerance},'Recompile field after changing its source recipe');
 console.log('RC garage and field provenance verified.');

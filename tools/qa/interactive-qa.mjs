@@ -129,6 +129,7 @@ try{
  check('mobile gas and balcony head-look respond independently without moving the camera position',await mobile.evaluate(before=>Math.hypot(...__kitchen.camera.quaternion.toArray().map((v,i)=>v-before.quaternion[i]))>.01&&Math.hypot(...__kitchen.camera.position.toArray().map((v,i)=>v-before.position[i]))<.01,mobileBefore));
  await screenshot(mobile,'mobile-rc');
  check('mobile has visible touch gas and clear exit without overflow',await mobile.evaluate(()=>{const r=document.querySelector('.rc-exit').getBoundingClientRect();return r.width>=100&&r.left>=0&&r.right<=innerWidth&&document.documentElement.scrollWidth<=innerWidth}));
+ check('mobile own-car marker remains below the RC controls',await mobile.evaluate(()=>{const m=document.querySelector('.rc-driver-marker'),h=document.querySelector('.rc-hud');return !m.hidden&&m.getBoundingClientRect().top>=h.getBoundingClientRect().bottom+2}));
  await mobile.getByRole('button',{name:'Положить пульт и закончить управление машинкой',exact:true}).click();await mobile.waitForFunction(()=>!__kitchen.rc.controlling);
  check('browser has no uncaught errors',report.errors.length===0,report.errors);
 }catch(error){report.failure=error.stack;console.error(error.stack);process.exitCode=1;for(const c of contexts)for(const p of c.pages())await screenshot(p,'failure-'+contexts.indexOf(c)).catch(()=>{});}

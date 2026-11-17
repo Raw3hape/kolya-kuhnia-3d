@@ -56,11 +56,10 @@ includes the prototype teardrop canopy, formula cockpit/halo, buggy space frame,
 rally lamps/roof scoop, expedition basket, pickup bed and van cargo shell.
 Large contrasting race numbers sit on the body surfaces.
 
-Ten cars total 300,274 triangles, at most 34,878 per car, five semantic meshes
+Ten cars total 316,864 triangles, at most 37,058 per car, five semantic meshes
 per template (body plus four wheel geometries). The packed garage is about
-2.0 MB; all models share their immutable resources between clients/instances.
-These are polished stylized RC models adapted from the references, not a claim
-of photorealistic image-to-mesh reconstruction.
+2.16 MB; all models share their immutable resources between clients/instances.
+These are polished stylized RC models adapted from the references.
 
 Renders and staging are temporary proof. Preserve the short QA report and
 published manifest, then remove regenerable frame/render intermediates. No
