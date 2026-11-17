@@ -19,7 +19,7 @@
     "deliveryInset": 0.55
   },
   "courier": {
-    "outside": 0.25,
+    "outside": 0.72,
     "color": "#169b55",
     "label": "ŻABKA · PIZZA",
     "arriveSeconds": 1.1,

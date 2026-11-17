@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { courierPose } from '../../web/js/courier-pose.js';
 import { createSocialSimulation, socialLocations } from '../../web/js/social-state.js';
 const read = name => JSON.parse(fs.readFileSync(new URL(`../../web/spec/${name}.json`, import.meta.url)));
 const plan = read('plan.generated'), original = read('social');
@@ -59,6 +60,20 @@ test('courier carries the only box, requires an open door and serializes handoff
   assert.notDeepEqual(f.sim.snapshot().pizza.position, before);
   open = false; for (let i = 0; i < 7; i++) f.sim.step(.1, f.players);
   assert.equal(f.sim.snapshot().pizza.owner, 'a'); assert(f.command('a', 'return'));
+});
+test('the entire pizza box stays outside the entrance as the courier moves and turns', () => {
+  const entry = plan.openings.find(o => o.type === 'entry');
+  const locations = socialLocations(plan, spec);
+  // The lid and side panels extend a few millimetres past the nominal box size.
+  const halfBox = spec.pizza.size / 2 + 0.005;
+  for (const [phase, duration] of Object.entries({ arriving: spec.courier.arriveSeconds,
+    waiting: 0, offering: 0, leaving: spec.courier.leaveSeconds })) {
+    for (let frame = 0; frame <= 20; frame++) {
+      const { box, yaw } = courierPose(spec, locations, { phase, phaseAt: 0 }, duration * frame / 20);
+      const closestEdge = box[2] - halfBox * (Math.abs(Math.sin(yaw)) + Math.abs(Math.cos(yaw)));
+      assert(closestEdge > entry.z1, `${phase} frame ${frame} puts the box inside the entrance`);
+    }
+  }
 });
 test('disconnect during transfer gives the same pizza back to the courier; after transfer it returns safely', () => {
   const f = fixture({ delivered: false }); const id = f.sim.snapshot().pizza.id;
