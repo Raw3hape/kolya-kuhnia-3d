@@ -60,3 +60,5 @@ HP или владение и не присылают урон. При RC раз
 переданную в WebGL, колёса и управление. Сетевая и touch-проверка —
 `tools/qa/interactive-qa.mjs`. Итоговые свидетельства:
 [независимый контроль](multiplayer/qa-independent-rc-correction.md).
+
+Итоговый выпуск и границы проверки: [RC v2 validation](rc-correction-validation.md).
