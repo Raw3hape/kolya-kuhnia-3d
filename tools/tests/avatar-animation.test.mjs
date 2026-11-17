@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { solveAvatarPose, solveArm } from '../../web/js/multiplayer/avatar-pose.js';
 import { AVATAR_RIG as R, WEAPON_PRESENTATION as W } from '../../web/js/multiplayer/avatar-rig.js';
 import { makeAvatarAction } from '../../web/js/multiplayer/action-contract.js';
+import { Box3, Vector3 } from '../../web/vendor/three-0.169/build/three.module.js';
 // Browser import-map resolution only; exercise the production renderer/Three.js rig without WebGL.
 const sourceURL = new URL('../../web/js/multiplayer/avatars.js', import.meta.url);
 const source = fs.readFileSync(sourceURL, 'utf8').replace(/from '([^']+)'/g, (whole, spec) => {
@@ -14,6 +15,31 @@ const { createAvatar, AVATAR_ROSTER } = await import('data:text/javascript;base6
 const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
 const close = (actual, expected, epsilon = 1e-6) => assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
 function finiteTree(value) { if (typeof value === 'number') assert.ok(Number.isFinite(value)); else if (value && typeof value === 'object') for (const next of Object.values(value)) finiteTree(next); }
+
+test('a reclined avatar rests above the bedding and lies along the bed axis', () => {
+  const avatar = createAvatar({ slot: 0 });
+  const surfaceY = 0.7055, yaw = Math.PI / 3;
+  try {
+    avatar.root.position.set(4.66, 0, 5.55);
+    avatar.root.rotation.y = yaw;
+    avatar.update({ seated: true, reclined: true, seatY: surfaceY, time: 4 });
+    avatar.root.updateMatrixWorld(true);
+    const body = avatar.root.getObjectByName('avatar_body');
+    const torso = new Box3().setFromObject(body.children[0], true);
+    assert.ok(torso.min.y >= surfaceY - 0.015 && torso.min.y <= surfaceY + 0.02,
+      `torso underside is ${torso.min.y}, bedding is ${surfaceY}`);
+    const axis = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const along = name => avatar.root.getObjectByName(name).getWorldPosition(new Vector3()).sub(avatar.root.position).dot(axis);
+    assert.ok(along('avatar_head') > 0.55);
+    assert.ok(along('right_ankle') < -0.65 && along('left_ankle') < -0.65);
+    for (const side of ['left', 'right']) {
+      const hand = new Box3().setFromObject(avatar.root.getObjectByName(side + '_hand'), true);
+      assert.ok(hand.min.y >= surfaceY - 0.015 && hand.min.y < surfaceY + 0.1);
+    }
+    avatar.update({ time: 5 });
+    assert.equal(avatar.root.getObjectByName('avatar_rig').rotation.x, 0);
+  } finally { avatar.dispose(); }
+});
 
 test('Pose solver is deterministic, finite, anatomically bounded across 10 slots and accepted actions', () => {
   const kinds = ['draw', 'fire', 'reload', 'pickup', 'drop', 'use', 'page', 'sit', 'stand', 'jump', 'land'];

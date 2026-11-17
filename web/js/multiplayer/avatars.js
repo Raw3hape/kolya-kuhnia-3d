@@ -327,11 +327,12 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0, app
     }
     pose = solveAvatarPose(state, index);
     rig.rotation.x = state.reclined ? Math.PI / 2 : 0;
-    rig.position.set(0, state.reclined ? state.seatY : pose.body.y, state.reclined ? -R.hipY : 0);
+    // In the reclined pose seatY is the cover's surface. The hip pivot is half a torso above it.
+    rig.position.set(0, state.reclined ? state.seatY + 0.12 : pose.body.y, state.reclined ? -R.hipY : 0);
     body.rotation.set(state.reclined ? 0 : pose.body.pitch, 0, pose.body.roll);
     head.rotation.set(pose.head.pitch, pose.head.yaw, -pose.body.roll * 0.3);
     for (const [chain, value] of [[leftLeg, pose.legs.left], [rightLeg, pose.legs.right]]) {
-      chain.hip.rotation.x = state.reclined ? 0 : value.hip; chain.knee.rotation.x = state.reclined ? 0 : value.knee; chain.ankle.rotation.x = state.reclined ? 0 : value.ankle;
+      chain.hip.rotation.x = value.hip; chain.knee.rotation.x = value.knee; chain.ankle.rotation.x = value.ankle;
     }
     applyArm(leftArm, pose.arms.left, pose.hands.left); applyArm(rightArm, pose.arms.right, pose.hands.right);
     const kind = pose.gear.kind;
@@ -352,7 +353,7 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0, app
       if (currentGear.page) { currentGear.page.visible = pose.gear.page > 0.001 && pose.gear.page < 0.999; currentGear.page.rotation.y = -Math.PI * pose.gear.page; }
     }
     spareMagazine.visible = !!currentGear?.magazine && pose.gear.magazine >= 0.15;
-    if (plate) plate.sprite.position.y = 2.08 + pose.body.y;
+    if (plate) plate.sprite.position.set(0, state.reclined ? rig.position.y + 0.32 : 2.08 + pose.body.y, state.reclined ? R.neckY - R.hipY : 0);
   }
   update();
   return {

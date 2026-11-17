@@ -56,7 +56,8 @@ export function solveLeg(hipHeight, footZ, lift = 0) {
 }
 
 export function solveAvatarPose(state = {}, slot = 0) {
-  const time = finite(state.time), speed = clamp(finite(state.speed), 0, 4.5), motion = smooth(speed / 0.5), running = smooth((speed - 1.8) / 1.2);
+  const reclined = !!state.reclined;
+  const time = finite(state.time), speed = reclined ? 0 : clamp(finite(state.speed), 0, 4.5), motion = smooth(speed / 0.5), running = smooth((speed - 1.8) / 1.2);
   const phase = time * 8 + slot * 0.43, step = Math.sin(phase), swing = 0.12 + running * 0.15;
   const action = state.action && typeof state.action === 'object' ? state.action : null;
   const kind = action?.kind || (typeof state.action === 'string' ? state.action : null);
@@ -85,8 +86,10 @@ export function solveAvatarPose(state = {}, slot = 0) {
     const sitHip = Math.acos(clamp((seatY - R.lowerLeg - R.ankleY) / R.upperLeg, -0.4, 0.4));
     return { hip: lerp(result.hip, sitHip, seated), knee: lerp(result.knee, -sitHip, seated), ankle: lerp(result.ankle, 0, seated) };
   };
-  const leftLeg = leg(-1), rightLeg = leg(1);
+  const leftLeg = reclined ? { hip: 0.03, knee: -0.04, ankle: -0.14 } : leg(-1);
+  const rightLeg = reclined ? { hip: 0.06, knee: -0.08, ankle: -0.2 } : leg(1);
   let right = [R.shoulderX, 0.91, -0.025 - step * motion * 0.11], left = [-R.shoulderX, 0.91, -0.025 + step * motion * 0.11];
+  if (reclined) { right = [0.25, 0.91, 0.07]; left = [-0.24, 0.93, 0.08]; }
   let handEuler = [0, 0, 0], leftEuler = [0, 0, 0], headPitch = clamp(finite(state.aimPitch) * 0.72, -0.65, 0.65);
   const held = EXTERNAL_AVATAR_PROPS.includes(state.carried) ? state.carried : HELD_PROPS.includes(state.held) ? state.held : null;
   let gear = held || (state.weapon && Object.hasOwn(W, state.weapon) ? state.weapon : 'none');
@@ -185,7 +188,9 @@ export function solveAvatarPose(state = {}, slot = 0) {
     headPitch = lerp(headPitch, clamp(pitch * 0.8, -0.8, 0.8), actionWave);
   }
   const leftArm = solveArm(-1, left), rightArm = solveArm(1, right);
-  return { body: { y: offsetY, pitch: bodyPitch, roll: bodyRoll }, head: { pitch: headPitch, yaw: clamp(finite(state.aimYaw), -1.2, 1.2) },
+  const headYaw = reclined ? 0.7 : 1.2;
+  if (reclined) headPitch = clamp(headPitch + 0.15, -0.1, 0.35);
+  return { body: { y: offsetY, pitch: bodyPitch, roll: bodyRoll }, head: { pitch: headPitch, yaw: clamp(finite(state.aimYaw), -headYaw, headYaw) },
     legs: { left: leftLeg, right: rightLeg }, arms: { left: leftArm, right: rightArm }, hands: { left: leftEuler, right: handEuler },
     gear: { kind: gear, visible: gearVisible && gearScale > 0.001, scale: gearScale, page, tap, magazine, bolt, breakOpen,
       muzzle: !!weapon && shotAge < 0.075, recoil },

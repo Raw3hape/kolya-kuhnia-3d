@@ -57,6 +57,7 @@
             },
             {
               "model": "models/decor/props/bedding-160/model.glb",
+              "reclineSurface": 0.322,
               "pos": [
                 4.2,
                 0.3835,
@@ -171,6 +172,7 @@
             },
             {
               "model": "models/decor/props/bedding-160/model.glb",
+              "reclineSurface": 0.322,
               "pos": [
                 4.2,
                 0.4445,
@@ -285,6 +287,7 @@
             },
             {
               "model": "models/decor/props/bedding-160/model.glb",
+              "reclineSurface": 0.322,
               "pos": [
                 4.2,
                 0.3125,
@@ -399,6 +402,7 @@
             },
             {
               "model": "models/decor/props/bedding-160/model.glb",
+              "reclineSurface": 0.322,
               "pos": [
                 4.2,
                 0.3055,

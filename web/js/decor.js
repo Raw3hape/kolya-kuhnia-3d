@@ -116,7 +116,8 @@ function parseOption(o) {
     .map(p => (p?.model && vec(p.pos, 3)
       ? { model: p.model, pos: p.pos, rot: Number(p.rot) || 0, seat: parseSeat(p.seat), on: typeof p.on === 'string' ? p.on : null,
         anchor: ANCHORS.includes(p.anchor) ? p.anchor : null, mount: MOUNTS.includes(p.mount) ? p.mount : null,
-        season: SEASONS.includes(p.season) ? p.season : null, seatTarget: p.seatTarget === true }
+        season: SEASONS.includes(p.season) ? p.season : null, seatTarget: p.seatTarget === true,
+        reclineSurface: Number.isFinite(p.reclineSurface) ? p.reclineSurface : null }
       : null)).filter(Boolean);
   // seat на опции — это место первой части (если у части нет своего)
   if (parts[0] && !parts[0].seat) parts[0].seat = parseSeat(o.seat);

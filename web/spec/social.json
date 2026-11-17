@@ -90,9 +90,9 @@
   },
   "seating": {
     "sofaSpacing": 0.64,
-    "reclineOffset": 0.5,
-    "reclineHead": 0.66,
-    "reclineEye": 0.27,
-    "reclineHip": 0.09
+    "reclineOffset": 0.46,
+    "reclineTowardFoot": 0.11,
+    "reclineHead": 0.76,
+    "reclineEye": 0.18
   }
 }

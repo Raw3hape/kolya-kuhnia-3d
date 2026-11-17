@@ -123,6 +123,22 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     });
   }
 
+  function reclineAnchor(bed) {
+    const bedding = bed.hitRoots.find(holder => {
+      const part = decorPart(holder);
+      return Number.isFinite(part?.option.parts[part.index].reclineSurface);
+    });
+    const base = bedding || bed.root;
+    const part = bedding && decorPart(bedding);
+    const surface = part ? part.option.parts[part.index].reclineSurface : bed.hip.y - bed.root.position.y;
+    const towardFoot = seating.reclineTowardFoot ?? 0;
+    return { ...bed, id: bed.id + ':recline', label: 'Лечь рядом с ноутбуком', posture: 'recline',
+      face: base.rotation.y,
+      hip: base.localToWorld(V(-seating.reclineOffset, surface, towardFoot)),
+      stand: base.localToWorld(V(-seating.reclineOffset - SEAT.standOut, 0, towardFoot)),
+      look: bed.hip.clone().add(V(0, 0.15, -0.1)) };
+  }
+
   // Ключ сцены: что влияет на места. Считается, только когда места нужны (прогулка, сидим, панель).
   let anchors = [], lastKey = [];
   function sceneKey() {
@@ -142,10 +158,7 @@ export function createSeats({ THREE, scene, camera, canvas, controls, plan, bath
     }
     const decor = decorSeats(getDecor?.());
     const bed = decor.find(a => a.id.startsWith('d_room2_bed:'));
-    const recline = bed ? { ...bed, id: bed.id + ':recline', label: 'Лечь рядом с ноутбуком', posture: 'recline',
-      hip: bed.root.localToWorld(V(-seating.reclineOffset, bed.hip.y - bed.root.position.y + seating.reclineHip, 0)),
-      stand: bed.root.localToWorld(V(-seating.reclineOffset - SEAT.standOut, 0, 0)),
-      look: bed.hip.clone().add(V(0, 0.15, -0.1)) } : null;
+    const recline = bed ? reclineAnchor(bed) : null;
     anchors = [...sofaSeats, wcAnchor(), recline, ...decor].filter(Boolean);
     return anchors;
   }
