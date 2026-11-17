@@ -349,7 +349,25 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
     if (!m0 || m0.visible === false || m0.colorWrite === false || (m0.transparent && m0.opacity < 0.05 && !o.userData.glass)) return;
     list.push(o);
   };
-  function shoot({ spread = 0, pellets = 1, range = 100, hunt = null, weapon = '', damage = 0 } = {}) {
+  const traceEnd = V3();
+  const carSurface = { albedo: new THREE.Color(.44, .50, .54), solid: true, metal: true };
+  function vehicleBurst(point, normal, direction, destroyed) {
+    burst(point, normal, direction, carSurface);
+    if (destroyed) for (let i = 0; i < 14; i++) emit('sparks', e => {
+      e.p.copy(point).addScaledVector(normal, .035);
+      e.v.copy(randomUnit(rnd)).multiplyScalar(rand(2, 6)).addScaledVector(normal, 2);
+      e.life = rand(.18, .42); e.size = rand(.011, .024); e.c.setRGB(1, rand(.24, .55), .09);
+      e.drag = 1.5; e.g = IMP.gravity; e.floor = -Infinity;
+    });
+  }
+  function vehicleImpact(hit, rayDirection) {
+    const direction = new THREE.Vector3().fromArray(rayDirection);
+    const normal = hit.normal ? new THREE.Vector3().fromArray(hit.normal) : direction.clone().negate();
+    vehicleBurst(new THREE.Vector3().fromArray(hit.point), normal, direction, hit.destroyed);
+    requestRender?.();
+  }
+
+  function shoot({ spread = 0, pellets = 1, range = 100, hunt = null, weapon = '', damage = 0, onRay } = {}) {
     list.length = 0;
     scene.traverseVisible(collect);
     ray.far = range;
@@ -375,13 +393,16 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
         if (breaks.handle(h, ray.ray.direction) == null) breaks.shatterPane(h, ray.ray.direction);
       }
       if (beast && beast.distance < (hit ? hit.distance : Infinity)) {
-        beast.hit?.(weapon, damage);
+        const result = beast.hit?.(weapon, damage);
         struck++;
         nrm.copy(beast.normal ?? ray.ray.direction).normalize();
         if (nrm.dot(ray.ray.direction) > 0) nrm.negate();
-        burst(beast.point, nrm, ray.ray.direction, beastSurf(beast.surface));
+        if (beast.vehicle) vehicleBurst(beast.point, nrm, ray.ray.direction, result?.destroyed);
+        else burst(beast.point, nrm, ray.ray.direction, beastSurf(beast.surface));
+        onRay?.(ray.ray.origin, ray.ray.direction, beast.point, beast.vehicle && !result?.ok ? null : result);
         continue;
       }
+      onRay?.(ray.ray.origin, ray.ray.direction, hit?.point ?? ray.ray.at(range, traceEnd));
       if (!hit) continue;
       // нормаль в мире (неравномерный масштаб — через матрицу нормалей), к стрелку
       const o = hit.object;
@@ -637,7 +658,7 @@ export function createImpacts({ THREE, scene, camera, renderer, pipe, requestRen
   }
 
   return {
-    shoot, captureShot, resolveNetworkSurfaces, applyNetworkShot, applyBroken, reconcileNetworkDamage, update, clear, dispose,
+    shoot, vehicleImpact, captureShot, resolveNetworkSurfaces, applyNetworkShot, applyBroken, reconcileNetworkDamage, update, clear, dispose,
     setNetwork(on) { network = !!on; },
     get raycastStatus() { return acceleration.status; },
     get networkDamage() { return { events: networkDamageEvents.size, holes: holes.filter(inScene).length, cracks: cracks.filter(inScene).length, pending: pendingEffects.length }; },

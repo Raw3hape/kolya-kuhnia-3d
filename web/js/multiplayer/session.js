@@ -3,7 +3,6 @@ import { createMultiplayerClient } from './client.js';
 import { createMultiplayerLobby } from './lobby.js';
 import { createHostAuthority } from './host.js';
 import { createAvatar } from './avatars.js';
-import { createShotRenderer } from './shots.js';
 import { createHandoffUI } from './handoff-ui.js';
 import { NETWORK_RULES as R } from './rules.js';
 import { sampleAvatarAction, selectAvatarPresentation } from './action-contract.js';
@@ -12,7 +11,6 @@ const angle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
 export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui, getParty = () => getModules().party, whenReady = Promise.resolve() }) {
   const avatars = new Map(), samples = [], inputs = [], seenEvents = new Set();
-  const shots = createShotRenderer({ THREE, scene, requestRender });
   let active = false, applying = false, revision = -1, epoch = -1, lastSnapshot = null, disposed = false;
   let appliedHunt = null, started = false, sendClock = 0, ambientClock = 0, geometryTimer = null, changeSerial = 0;
   let apartmentQueue = Promise.resolve(), previousState = null, sessionRole = null, lifecycle = 0, pendingApartments = 0, wasWalking = false, sentWeapon = null;
@@ -119,7 +117,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     lastSnapshot = snapshot;
     const m = getModules();
     if (epoch !== snapshot.epoch) {
-      epoch = snapshot.epoch; seenEvents.clear(); m.viewmodel.clearHoles({ remote: true }); shots.clear(); getParty()?.clearEffects?.();
+      epoch = snapshot.epoch; seenEvents.clear(); m.viewmodel.clearHoles({ remote: true }); getParty()?.clearEffects?.();
       damageModule = null;
     }
     if (revision !== snapshot.revision) {
@@ -193,14 +191,16 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     seenEvents.add(event.id); if (seenEvents.size > 512) seenEvents.delete(seenEvents.values().next().value);
     const m = getModules();
     if (event.kind === 'shot') {
-      m.viewmodel.applyNetworkShot(event);
-      const muzzle = event.actorId !== client.id ? avatars.get(event.actorId)?.getMuzzleWorldPosition?.() : null;
-      shots.shot(event, { origin: muzzle?.toArray?.() });
-      for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
+      const local = event.actorId === client.id;
+      const muzzle = local ? null : avatars.get(event.actorId)?.getMuzzleWorldPosition?.();
+      m.viewmodel.showNetworkShot(event, { local, origin: muzzle?.toArray() });
+      for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local });
     } else if (event.kind === 'external-hit') {
-      for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local: event.actorId === client.id });
+      const local = event.actorId === client.id;
+      if (local && event.hits?.length) m.viewmodel.showHitMarker(event.hits.some(hit => hit.killed));
+      for (const hit of event.hits || []) m.hunt?.applyNetworkHit(hit, { local });
     } else if (event.kind === 'party') getParty()?.applyNetworkSnapshot?.(event.state, { players: lastSnapshot?.players || [], time: event.time, selfId: client.id });
-    else if (event.kind === 'clear') { m.viewmodel.clearHoles({ remote: true }); shots.clear(); damageModule = null; }
+    else if (event.kind === 'clear') { m.viewmodel.clearHoles({ remote: true }); damageModule = null; }
     else if (event.kind === 'door' && event.targetId) m.doors.applyNetwork({ ...lastSnapshot?.doors, [event.targetId]: event.open }, { instant: false });
     else if (event.kind === 'item' && event.targetId) { (event.targetId === 'phone' ? m.tv : m.paper).applyNetwork(event.owner); }
     else if (event.kind === 'interaction' && event.targetId) {
@@ -266,7 +266,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       roomState().then(data => { if (active && lifecycle === version && client.role === 'host') client.send({ kind: 'geometry', ...data }); })
         .catch(() => {}).finally(() => { if (lifecycle === version) manifestPending = false; });
     }
-    handoff.update(dt); shots.update(dt); requestRender(); return true;
+    handoff.update(dt); requestRender(); return true;
   }
 
   function deactivate() {
@@ -277,7 +277,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.hood?.setNetwork?.(null); getParty()?.setNetwork?.(null);
     m.social?.setNetwork?.(null); m.rc?.setNetwork?.(null);
     m.seats?.setNetwork?.(null); m.viewmodel.setNetwork(null); m.hunt?.setNetwork(false); m.life?.setNetwork?.(null);
-    for (const avatar of avatars.values()) { scene.remove(avatar.root); avatar.dispose(); } avatars.clear(); shots.clear();
+    for (const avatar of avatars.values()) { scene.remove(avatar.root); avatar.dispose(); } avatars.clear();
     samples.length = 0; inputs.length = 0; seenEvents.clear(); appliedHunt = null; appliedAmbient = ambientModule = null; epoch = revision = -1; started = false;
     damageModule = damageEffects = damageBroken = null;
     handoff.update(); delete document.body.dataset.multiplayerRole;
@@ -292,5 +292,5 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
   return { client, lobby, update, apartmentChanged, roomState,
     get active() { return active; }, get canEdit() { return !active || (client.role === 'host' && client.connected); },
     get applying() { return applying; },
-    dispose() { disposed = true; clearTimeout(roomRequestTimer); deactivate(); client.dispose(); lobby.dispose(); shots.dispose(); handoff.dispose(); style.remove(); window.removeEventListener('kitchen:room-request', openRoom); } };
+    dispose() { disposed = true; clearTimeout(roomRequestTimer); deactivate(); client.dispose(); lobby.dispose(); handoff.dispose(); style.remove(); window.removeEventListener('kitchen:room-request', openRoom); } };
 }

@@ -26,6 +26,7 @@
 // и прицела, нажатие на счётчик патронов — перезарядка. Пустой магазин: щелчок и сама начинается перезарядка.
 // Патроны: магазин и запас у каждого оружия свои; выход из прогулки всё пополняет.
 // Покой: покачивание дыхания затухает за VM.settle секунд, дальше update() возвращает false и кадров не просит.
+import { createShotRenderer } from './multiplayer/shots.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
@@ -211,10 +212,54 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   const W = () => byId(weapon);
   const impacts = createImpacts({ THREE, scene, camera, renderer, pipe, requestRender, getSound: () => sound });
 
+  const tracers = createShotRenderer({ THREE, scene, requestRender });
+  const muzzleByShot = new Map();
+  const worldMuzzle = new THREE.Vector3(), vmPoint = new THREE.Vector3();
+  function muzzlePosition() {
+    const muzzle = models[weapon]?.muzzle;
+    if (!muzzle) return null;
+    muzzle.getWorldPosition(vmPoint);
+    const depth = -vmPoint.z;
+    if (depth <= camera.near) return null;
+    // Map the hands' separate FOV and viewport onto the visible world-camera pixel.
+    camera.updateWorldMatrix(true, false);
+    vmPoint.project(vmCam);
+    worldMuzzle.set(vmPoint.x, vmPoint.y, 0).unproject(camera).sub(camera.position);
+    worldMuzzle.multiplyScalar(depth / vmPoint.set(0, 0, -1).applyQuaternion(camera.quaternion).dot(worldMuzzle))
+      .add(camera.position);
+    return worldMuzzle;
+  }
+  function showHitMarker(destroyed) {
+    if (!shown || pipe.photo) return;
+    hitMarker.dataset.result = destroyed ? 'destroyed' : 'hit';
+    hitAnimation?.cancel();
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    hitAnimation = hitMarker.animate([
+      { opacity: 1, scale: reduced ? 1 : destroyed ? 1.28 : 1.14 },
+      { opacity: 1, scale: 1, offset: .34 },
+      { opacity: 0, scale: 1 },
+    ], { duration: destroyed ? 360 : 215 });
+  }
+  function showNetworkShot(shot, { local, origin }) {
+    impacts.applyNetworkShot(shot);
+    const range = WEAPON_RULES[shot.weapon]?.range;
+    if (range) tracers.shot(shot, { origin: local ? muzzleByShot.get(shot.shotId) : origin, range });
+    if (local) muzzleByShot.delete(shot.shotId);
+    let confirmed = !!shot.hits?.length, destroyed = !!shot.hits?.some(hit => hit.killed);
+    for (const ray of shot.rays || []) {
+      const hit = ray.vehicleHit;
+      if (!hit) continue;
+      impacts.vehicleImpact(hit, ray.direction);
+      if (hit.hp !== undefined) { confirmed = true; destroyed ||= hit.destroyed; }
+    }
+    if (local && confirmed) showHitMarker(destroyed);
+  }
+
   // частицы попаданий живут и после выхода из прогулки, поэтому считаются отдельно от рук
   function update(dt = 1 / 60, opts) {
     const fx = impacts.update(dt);
-    return hands(dt, opts) || fx;
+    const trace = tracers.update(dt, !pipe.photo);
+    return hands(dt, opts) || fx || trace;
   }
 
   function hands(dt = 1 / 60, { active = false, moving = false, running = false } = {}) {
@@ -228,7 +273,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     const show = want && mounted === weapon;
     if (show !== shown) {
       shown = show;
-      if (!show) { stopHold(); aimHeld = false; adsK = adsE = 0; act = null; lastYaw = null; setZoom(1); syncDom(); return true; }   // ещё кадр — убрать руки
+      if (!show) { hitAnimation?.cancel(); stopHold(); aimHeld = false; adsK = adsE = 0; act = null; lastYaw = null; setZoom(1); syncDom(); return true; }   // ещё кадр — убрать руки
       raise = 0; quiet = 0; lastPos.copy(camera.position);
       clipName = null; clipPose(models[weapon], 'idle', 0);
       syncDom();
@@ -350,11 +395,21 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     if (a.mag <= 0) { dry(); return false; }
     lastShot = now; shots++; a.mag--;
     const hunt = getHunt?.() ?? null;
+    const muzzle = muzzlePosition();
+    const shot = { spread: spreadNow(), pellets: w.pellets || 1, range: w.range, weapon: w.id };
     if (networkAdapter) {
-      networkAdapter.shoot?.({ ...impacts.captureShot({ spread: spreadNow(), pellets: w.pellets || 1, range: w.range, weapon: w.id }), shotId: crypto.randomUUID() });
+      const shotId = crypto.randomUUID();
+      if (muzzle) muzzleByShot.set(shotId, muzzle.toArray());
+      if (muzzleByShot.size > 64) muzzleByShot.delete(muzzleByShot.keys().next().value);
+      networkAdapter.shoot?.({ ...impacts.captureShot(shot), shotId });
     } else {
       hunt?.noise?.(ear.copy(camera.position), w.loud);
-      impacts.shoot({ spread: spreadNow(), pellets: w.pellets || 1, range: w.range, hunt, weapon: w.id, damage: w.damage });
+      let confirmed = false, destroyed = false;
+      impacts.shoot({ ...shot, hunt, damage: w.damage, onRay(origin, direction, end, targetHit) {
+        if (!muzzle || vmPoint.subVectors(end, muzzle).dot(direction) > .03) tracers.trace(muzzle ?? origin, end, w.id);
+        if (targetHit) { confirmed = true; destroyed ||= targetHit.destroyed || targetHit.killed; }
+      } });
+      if (confirmed) showHitMarker(destroyed);
     }
     bloom = Math.min(w.spread.max, bloom + w.spread.bloom * (1 - (1 - VM.adsBloom) * adsE));
     const r = w.recoil, k = 1 - (1 - VM.adsRecoil) * adsE;
@@ -475,6 +530,12 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
   cross.className = 'kvm-cross kw-float'; cross.hidden = true; cross.setAttribute('aria-hidden', 'true');
   cross.innerHTML = '<i></i><i></i><i></i><i></i>';
   document.body.appendChild(cross);
+  const hitMarker = document.createElement('div');
+  hitMarker.className = 'kvm-hit-marker';
+  hitMarker.setAttribute('aria-hidden', 'true');
+  hitMarker.innerHTML = '<i></i><i></i><i></i><i></i>';
+  document.body.append(hitMarker);
+  let hitAnimation = null;
   let crossGap = -1;
   function crosshair() {
     // зазор = текущий разброс на экране: тангенс угла к тангенсу половины обзора × половина высоты
@@ -617,7 +678,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) canvas.removeEventListener(t, onPointer);
     removeEventListener('blur', onBlur);
     removeEventListener('keydown', onKey);
-    fireBtn.remove(); aimBtn.remove(); cross.remove(); hudEl.remove();
+    fireBtn.remove(); aimBtn.remove(); cross.remove(); hudEl.remove(); hitAnimation?.cancel(); hitMarker.remove();
     for (const w of WEAPONS) document.body.classList.remove('kvm-w-' + w.id);
     document.body.classList.remove('kvm-ads');
     for (const m of Object.values(models)) {
@@ -628,13 +689,14 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
     rt?.dispose(); quad?.material.dispose(); quad?.dispose();
     audio.dispose();
     impacts.dispose();
+    tracers.dispose();
   }
 
   return {
     update, setWeapon, setSound, setAim, reload, link, dispose,
     get fireReady() { return readyToFire(); },
-    setNetwork(adapter) { networkAdapter = adapter || null; impacts.setNetwork(!!networkAdapter); },
-    applyNetworkShot: impacts.applyNetworkShot,
+    setNetwork(adapter) { networkAdapter = adapter || null; muzzleByShot.clear(); tracers.clear(); hitAnimation?.cancel(); impacts.setNetwork(!!networkAdapter); },
+    showNetworkShot, showHitMarker,
     applyBroken: impacts.applyBroken,
     reconcileNetworkDamage: impacts.reconcileNetworkDamage,
     collectNetworkObjects: impacts.collectNetworkObjects,
@@ -647,7 +709,7 @@ export function createViewmodel({ THREE, scene, camera, renderer, pipe, canvas, 
       syncDom();
     },
     clearHoles({ remote = false } = {}) {
-      if (networkAdapter && !remote) networkAdapter.clear?.(); else impacts.clear();
+      if (networkAdapter && !remote) networkAdapter.clear?.(); else { impacts.clear(); tracers.clear(); hitAnimation?.cancel(); }
     },
     get brokenIds() { return impacts.brokenIds; },
     get networkRaycasts() { return impacts.raycastStatus; },
@@ -815,6 +877,14 @@ function injectStyle() {
 .kvm-cross i:nth-child(1) { bottom: var(--g); } .kvm-cross i:nth-child(2) { top: var(--g); }
 .kvm-cross i:nth-child(3) { right: var(--g); } .kvm-cross i:nth-child(4) { left: var(--g); }
 body.kvm-ads .kvm-cross { opacity: 0; }
+.kvm-hit-marker { position: fixed; left: 50%; top: 50%; width: 32px; height: 32px; translate: -50% -50%; z-index: 13; pointer-events: none; color: #fff4d7; opacity: 0; }
+.kvm-hit-marker[data-result="destroyed"] { color: #ff5948; }
+.kvm-hit-marker i { position: absolute; top: 15px; left: 15px; width: 6px; height: 2px; background: currentColor; border-radius: 1px; box-shadow: 0 0 1px 1px #20140e, 0 0 5px currentColor; transform-origin: 1px center; transform: rotate(var(--angle)) translateX(5px); }
+.kvm-hit-marker[data-result="destroyed"] i { width: 8px; }
+.kvm-hit-marker i:nth-child(1) { --angle: 45deg; }
+.kvm-hit-marker i:nth-child(2) { --angle: 135deg; }
+.kvm-hit-marker i:nth-child(3) { --angle: 225deg; }
+.kvm-hit-marker i:nth-child(4) { --angle: 315deg; }
 .kvm-hud { position: fixed; z-index: 5; right: calc(var(--shift, 0px) * 2 + max(16px, env(safe-area-inset-right, 0px))); bottom: var(--hud-bottom, 76px);
   display: grid; justify-items: end; gap: 3px; min-width: 104px; padding: 8px 12px 10px; overflow: hidden; cursor: pointer; text-align: right;
   border: 1px solid var(--kw-line); border-radius: 4px; background: var(--kw-sheet); color: var(--kw-ink); box-shadow: var(--kw-shadow);

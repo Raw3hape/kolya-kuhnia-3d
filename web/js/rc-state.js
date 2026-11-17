@@ -49,11 +49,19 @@ export function createRCSimulation({spec,site}){
  spec.designs.forEach((design,index)=>{
   const layout=getRCVehicleLayout(design,rules),id=`rc-${index}`,body=new CANNON.Body({mass:rules.mass,linearDamping:rules.linearDamping,angularDamping:rules.angularDamping,sleepSpeedLimit:.08,sleepTimeLimit:1.5});
   body.addShape(new CANNON.Box(new CANNON.Vec3(...layout.collider.halfExtents)),new CANNON.Vec3(...layout.collider.offset));
+  // Bullet volumes include the cabin and wheels without changing driving physics.
+  const shotBody=new CANNON.Body();
+  shotBody.addShape(new CANNON.Box(new CANNON.Vec3(...layout.collider.halfExtents)),new CANNON.Vec3(...layout.collider.offset));
+  const cabinHeight=Math.max(.03,(design.roof-layout.collider.center[1]-layout.collider.halfExtents[1])*.5);
+  shotBody.addShape(new CANNON.Box(new CANNON.Vec3(design.width*.34,cabinHeight,design.length*.29)),
+   new CANNON.Vec3(-layout.centerOfMass[0],design.roof-cabinHeight-layout.centerOfMass[1],-layout.centerOfMass[2]));
+  for(const w of layout.wheels)shotBody.addShape(new CANNON.Box(new CANNON.Vec3(w.width*.45,w.radius*.79,w.radius*.79)),
+   new CANNON.Vec3(...w.connection));
   body.angularFactor.set(...rules.angularFactor);
   const vehicle=new CANNON.RaycastVehicle({chassisBody:body,indexRightAxis:AXES.right,indexUpAxis:AXES.up,indexForwardAxis:AXES.forward}),s=rules.suspension;
   for(const wheel of layout.wheels)vehicle.addWheel({radius:wheel.radius,directionLocal:new CANNON.Vec3(...AXES.direction),axleLocal:new CANNON.Vec3(...AXES.axle),chassisConnectionPointLocal:new CANNON.Vec3(...wheel.connection),suspensionStiffness:s.stiffness,suspensionRestLength:s.restLength,frictionSlip:s.frictionSlip,dampingRelaxation:s.relaxation,dampingCompression:s.compression,maxSuspensionForce:rules.mass*70,maxSuspensionTravel:s.travel,rollInfluence:s.rollInfluence,customSlidingRotationalSpeed:-30,useCustomSlidingRotationalSpeed:true,isFrontWheel:wheel.front});
   const car={id,index,designId:design.id,color:design.color,owner:null,status:'ready',controlMode:'carry',parked:false,parkingStableSeconds:0,hp:rules.maxHp,maxHp:rules.maxHp,input:neutral(),inputAt:0,inputSeq:0,steering:0,driveThrottle:0,respawnAt:0,lastSafe:null,resetAt:-10,speed:0};
-  cars.set(id,car);physics.set(id,{body,vehicle,layout,dynamicMass:rules.mass,inWorld:false});resetBody(car);
+  cars.set(id,car);physics.set(id,{body,shotBody,vehicle,layout,dynamicMass:rules.mass,inWorld:false});resetBody(car);
  });
  const held=playerId=>[...cars.values()].find(c=>c.owner===playerId)||null;
  const isDriving=playerId=>held(playerId)?.controlMode==='drive';
@@ -133,12 +141,20 @@ export function createRCSimulation({spec,site}){
   if(!finite(dt)||dt<=0)return;const bounded=Math.min(dt,rules.fixedStep*rules.maxSubSteps);accumulator+=bounded;
   for(let i=0;i<rules.maxSubSteps&&accumulator+1e-9>=rules.fixedStep;i++){time+=rules.fixedStep;advance(rules.fixedStep);accumulator=Math.max(0,accumulator-rules.fixedStep);}
  }
- function damage(id,amount){const car=cars.get(id);if(!car||car.status!=='active'||!finite(amount)||amount<=0)return error('rc_damage');car.hp=Math.max(0,car.hp-amount);if(!car.hp){car.status='wrecked';car.respawnAt=time+rules.respawnSeconds;car.input=neutral();car.driveThrottle=0;const p=physics.get(id);p.body.velocity.scale(.2,p.body.velocity);remove(car);setParking(car,false);}return{ok:true,id,hp:car.hp,destroyed:car.hp===0};}
+ function damage(id,amount){const car=cars.get(id);if(!car||car.status!=='active'||!finite(amount)||amount<=0)return error('rc_damage');car.hp=Math.max(0,car.hp-amount);if(!car.hp){car.status='wrecked';car.respawnAt=time+rules.respawnSeconds;car.input=neutral();car.driveThrottle=0;const p=physics.get(id);p.body.velocity.scale(.2,p.body.velocity);remove(car);setParking(car,false);}return{ok:true,id,hp:car.hp,maxHp:car.maxHp,destroyed:car.hp===0};}
  function raycast(origin,direction,range=Infinity){
-  if(!vec(origin)||!vec(direction)||!(range>0))return null;const d=new CANNON.Vec3(...direction),length=d.length();if(length<.0001)return null;d.scale(1/length,d);let best=null;
+  if(!vec(origin)||!vec(direction)||!(range>0))return null;
+  const d=new CANNON.Vec3(...direction),length=d.length();if(length<.0001)return null;
+  const from=new CANNON.Vec3(...origin),to=from.vadd(d.scale((range===Infinity?10000:range)/length));
+  const ray=new CANNON.Ray(from,to),result=new CANNON.RaycastResult();ray.mode=CANNON.Ray.CLOSEST;ray.result=result;
+  let best=null;
   for(const car of cars.values()){
-   if(car.status!=='active')continue;const {body}=physics.get(car.id),from=new CANNON.Vec3(...origin),to=from.vadd(d.scale(range===Infinity?10000:range)),ray=new CANNON.Ray(from,to),result=new CANNON.RaycastResult();ray.mode=CANNON.Ray.CLOSEST;ray.result=result;ray.intersectBody(body,result);
-   if(result.hasHit&&(!best||result.distance<best.distance))best={id:car.id,distance:result.distance,point:result.hitPointWorld.toArray()};
+   if(car.status==='ready')continue;
+   const {body,shotBody,vehicle,layout}=physics.get(car.id);
+   shotBody.position.copy(body.position);shotBody.quaternion.copy(body.quaternion);
+   for(const wheel of layout.wheels)shotBody.shapeOffsets[wheel.index+2].y=wheel.connection[1]-vehicle.wheelInfos[wheel.index].suspensionLength;
+   result.reset();ray.intersectBody(shotBody,result);
+   if(result.hasHit&&(!best||result.distance<best.distance))best={id:car.id,distance:result.distance,point:result.hitPointWorld.toArray(),normal:result.hitNormalWorld.toArray()};
   }return best;
  }
  function serialize(c){const{body,vehicle}=physics.get(c.id);return{id:c.id,index:c.index,designId:c.designId,color:c.color,owner:c.owner,status:c.status,controlMode:c.controlMode,parked:c.parked,parkingStableSeconds:round(c.parkingStableSeconds),hp:c.hp,maxHp:c.maxHp,position:body.position.toArray().map(round),quaternion:body.quaternion.toArray().map(round),velocity:body.velocity.toArray().map(round),angularVelocity:body.angularVelocity.toArray().map(round),speed:round(c.speed),atBoundary:!!c.atBoundary,steering:round(c.steering),driveThrottle:round(c.driveThrottle),wheels:vehicle.wheelInfos.map((w,i)=>({id:physics.get(c.id).layout.wheels[i].id,rotation:round(w.rotation),suspensionLength:round(w.suspensionLength),steering:round(w.steering),deltaRotation:round(w.deltaRotation),position:w.worldTransform.position.toArray().map(round),quaternion:w.worldTransform.quaternion.toArray().map(round)})),inputSeq:c.inputSeq,input:{...c.input},inputAt:round(c.inputAt),respawnAt:round(c.respawnAt),resetAt:round(c.resetAt),lastSafe:c.lastSafe.map(round)};}

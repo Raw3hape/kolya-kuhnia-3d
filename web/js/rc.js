@@ -7,6 +7,7 @@ import {createRCSimulation} from './rc-state.js';
 import {modelOriginFromChassis} from './rc-vehicle-layout.js';
 import {createRCViewControls} from './rc-camera.js';
 import {createRCHud} from './rc-hud.js';
+import {createRCHealthBadge} from './rc-health.js';
 import {assetUrl,track,retry} from './loading.js';
 import {addTargets} from './hunt.js';
 import {injectStyle} from './minimap.js';
@@ -32,6 +33,7 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
  const handCamera=camera.clone();
  const ray=new THREE.Raycaster(),ndc=new THREE.Vector2(),v=new THREE.Vector3(),look=new THREE.Vector3(),q=new THREE.Quaternion(),desired=new THREE.Vector3();
  const originBuffer=new Float64Array(3);
+ const upAxis=new THREE.Vector3(0,1,0),axleAxis=new THREE.Vector3(-1,0,0),spin=new THREE.Quaternion();
  const carViews=new Map(),controllerViews=new Map(),remoteViews=new Map(),keys=new Set(),pendingInputs=[],predictionOffset=new THREE.Vector3(),coarse=matchMedia('(pointer:coarse)');let overlay=null,detachTarget=null,table=null,boundary=null,driverRing=null;const runtimeResources=new Set();let uiKey='',markerKey='';
  injectStyle('rc-style',CSS);
  const hud=createRCHud({onExit:()=>command('release'),onReset:()=>command('respawn'),onFocus:()=>focusCar(),onMode:()=>switchControlMode(),onDismiss:()=>focusViewport()}),panel=hud.panel;
@@ -63,7 +65,8 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
    predictor.restore(next);
    const ack=h?.inputSeq||0;while(pendingInputs.length&&pendingInputs[0].input.seq<=ack)pendingInputs.shift();
    for(const entry of pendingInputs){predictor.command({id:selfId()},'input',entry.id,entry.input);predictor.step(entry.dt);}
-   if(h&&oldHeld?.id===h.id&&oldPred){const now=predictor.pose(h.id);if(now&&oldPred.position){predictionOffset.add(v.fromArray(oldPred.position).sub(new THREE.Vector3().fromArray(now.position)));if(predictionOffset.length()>4)predictionOffset.set(0,0,0);}}
+   if(h?.resetAt!==oldHeld?.resetAt||h?.status!==oldHeld?.status)predictionOffset.set(0,0,0);
+   if(h?.status==='active'&&oldHeld?.id===h.id&&oldHeld.controlMode===h.controlMode&&oldHeld.resetAt===h.resetAt&&oldPred){const now=predictor.pose(h.id);if(now&&oldPred.position){predictionOffset.add(v.fromArray(oldPred.position).sub(new THREE.Vector3().fromArray(now.position)));if(predictionOffset.length()>4)predictionOffset.set(0,0,0);}}
   }
   renderUI();
  }
@@ -122,19 +125,36 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   document.body.classList.toggle('rc-controlling',can&&isDriving());document.body.classList.toggle('rc-holding',can);
  }
  function animateCar(view,car,dt,local=false){
-  view.visible=car.status!=='ready';if(!view.visible)return;
-  const layout=design(car.designId).vehicle;
+  const data=view.userData,{badge}=data;
+  view.visible=car.status!=='ready';if(!view.visible){data.seen=false;badge.sprite.visible=false;return;}
+  const d=design(car.designId),layout=d.vehicle;
   desired.fromArray(modelOriginFromChassis(car.position,car.quaternion,layout.centerOfMass,originBuffer));
   if(local)desired.add(predictionOffset);
-  q.fromArray(car.quaternion);const k=local?1:1-Math.exp(-spec.physics.remoteSmooth*dt);
-  if(!view.userData.seen){view.position.copy(desired);view.quaternion.copy(q);view.userData.seen=true;}else{view.position.lerp(desired,k);view.quaternion.slerp(q,k);}
-  view.updateMatrixWorld(true);
-  for(let i=0;i<4;i++){
-   const wheel=view.userData.wheels[i],w=car.wheels?.[i];if(!wheel||!w)continue;
-   v.fromArray(w.position);if(local)v.add(predictionOffset);view.worldToLocal(v);wheel.position.copy(v);
-   wheel.quaternion.copy(view.quaternion).invert().multiply(q.fromArray(w.quaternion)).multiply(wheel.userData.bindQuaternion);
+  const reset=!data.seen||car.resetAt!==data.resetAt;
+  const k=local||reset?1:1-Math.exp(-spec.physics.remoteSmooth*dt);
+  view.position.lerp(desired,k);view.quaternion.slerp(q.fromArray(car.quaternion).normalize(),k);
+  data.seen=true;data.resetAt=car.resetAt;
+  // Suspension and rotation are chassis-local. The same smoothed chassis
+  // transform is inherited by all four wheels, even between host packets.
+  const rest=spec.physics.suspension.restLength;
+  for(const wheel of data.wheels){
+   const sample=car.wheels?.[wheel.index],def=wheel.socket;
+   const y=def.position[1]+rest-(sample?.suspensionLength??rest);
+   wheel.pivot.position.set(def.position[0],THREE.MathUtils.lerp(wheel.pivot.position.y,y,k),def.position[2]);
+   wheel.steering=THREE.MathUtils.lerp(wheel.steering,sample?.steering??0,k);
+   wheel.rotation=THREE.MathUtils.lerp(wheel.rotation,sample?.rotation??0,k);
+   wheel.pivot.quaternion.setFromAxisAngle(upAxis,wheel.steering).multiply(spin.setFromAxisAngle(axleAxis,wheel.rotation)).multiply(wheel.bind);
   }
-  view.userData.body.scale.y=car.status==='wrecked'?.7:1;
+  data.body.scale.y=car.status==='wrecked'?.7:1;
+  const label=badge.sprite;
+  label.position.copy(view.position);label.position.y+=d.roof+.3;
+  const distance=camera.position.distanceTo(label.position);
+  label.visible=presenting()&&distance<180;
+  if(label.visible){
+   const width=THREE.MathUtils.clamp(distance*Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*.135,.82,4.6);
+   label.scale.set(width,width*52/160,1);label.position.y+=label.scale.y*.5;
+   badge.paint(car.hp,car.maxHp,dt,reset);
+  }
  }
  function createArenaPresentation(){
   boundary=new THREE.Group();boundary.name='rc_arena_boundary';boundary.visible=false;root.add(boundary);
@@ -218,16 +238,39 @@ export function createRC({THREE,scene,camera,renderer,canvas,pipe,site,getWalk,g
   const url=assetUrl(spec.asset),loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);const gltf=await track(retry(()=>loader.loadAsync(url)),{label:'Гараж радиомашинок',url});source=gltf.scene;if(disposed){releaseResources();return;}
   table=source.getObjectByName('rc_table').clone(true);table.position.fromArray(spec.table.position);root.add(table);
   for(const car of state.cars){
-   const template=source.getObjectByName('rc_'+car.designId);if(!template)throw Error('rc_car_model:'+car.designId);const view=template.clone(true);view.name='rc_car_'+car.id;view.userData.rcId=car.id;view.userData.wheels=design(car.designId).vehicle.wheels.map(def=>{const pivot=view.getObjectByName(def.node);if(!pivot||pivot.isMesh)throw Error('rc_wheel_pivot:'+def.node);pivot.userData.bindQuaternion=pivot.quaternion.clone();return pivot;});view.userData.body=view.getObjectByName(design(car.designId).vehicle.bodyNode);if(!view.userData.body)throw Error('rc_body_node:'+car.designId);view.visible=false;view.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;}});root.add(view);carViews.set(car.id,view);
+   const template=source.getObjectByName('rc_'+car.designId);
+   if(!template)throw Error('rc_car_model:'+car.designId);
+   const view=template.clone(true),rig=design(car.designId).vehicle;
+   view.name='rc_car_'+car.id;view.userData.rcId=car.id;
+   view.userData.wheels=rig.wheels.map((socket,index)=>{
+    const pivot=view.getObjectByName(socket.node);
+    if(!pivot||pivot.isMesh||pivot.parent!==view)throw Error('rc_wheel_pivot:'+socket.node);
+    return{pivot,socket,index,bind:pivot.quaternion.clone(),steering:0,rotation:0};
+   });
+   view.userData.body=view.getObjectByName(rig.bodyNode);
+   if(!view.userData.body)throw Error('rc_body_node:'+car.designId);
+   view.userData.badge=createRCHealthBadge(THREE,car.id);
+   root.add(view.userData.badge.sprite);
+   view.visible=false;view.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;}});
+   root.add(view);carViews.set(car.id,view);
    const controller=makeController(car.color),c=sim.controllers.find(c=>c.id===car.id);controller.position.fromArray(c.position);controller.userData.rcId=car.id;controllerViews.set(car.id,controller);root.add(controller);
   }
   createArenaPresentation();
   overlay=createPartyOverlay({THREE,renderer,scene,camera:handCamera,pipe,root:handRoot,active:()=>!!held()&&presenting()&&!exitRequested});
-  detachTarget=addTargets({raycast(raycaster){if(network)return null;const r=sim.raycast(raycaster.ray.origin.toArray(),raycaster.ray.direction.toArray(),raycaster.far);if(!r)return null;return{distance:r.distance,point:new THREE.Vector3().fromArray(r.point),normal:new THREE.Vector3(0,1,0),object:carViews.get(r.id),surface:{albedo:[.44,.50,.54],solid:true,flesh:false,metal:true},hit(weaponId,damage){sim.damage(r.id,damage);accept(sim.snapshot());requestRender();}};}});
+  detachTarget=addTargets({raycast(raycaster){
+   if(network)return null;
+   const r=sim.raycast(raycaster.ray.origin.toArray(),raycaster.ray.direction.toArray(),raycaster.far);
+   if(!r)return null;
+   return{vehicle:true,distance:r.distance,point:new THREE.Vector3().fromArray(r.point),normal:new THREE.Vector3().fromArray(r.normal),hit(weaponId,damage){
+    const result=sim.damage(r.id,damage);
+    if(result.ok){accept(sim.snapshot());requestRender();}
+    return result;
+   }};
+  }});
   accept(state);requestRender();
  });
  function releaseResources(){const resources=new Set();source?.traverse(o=>{if(o.geometry)resources.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){resources.add(m);for(const v of Object.values(m))if(v?.isTexture)resources.add(v);}});for(const r of resources)r.dispose?.();source=null;}
- return{ready,update,command,setNetwork,applyNetwork:accept,get config(){return spec;},snapshot:()=>state,get controlling(){return held()?.controlMode==='drive';},get isDriving(){return held()?.controlMode==='drive';},get held(){return held();},get target(){return aimed;},get viewCamera(){return isDriving()?camera:null;},get controllers(){return sim?.controllers||[];},get colliders(){if(!spec)return[];const t=spec.table,p=t.position,w=t.size[0]/2,d=t.size[2]/2;return[{x0:p[0]-w,x1:p[0]+w,z0:p[2]-d,z1:p[2]+d}];},dispose(){disposed=true;generation++;if(ownsCanvasTabIndex&&canvas.getAttribute('tabindex')==='0')canvas.removeAttribute('tabindex');stopDriving();sceneIndex.release();window.removeEventListener('keydown',onKey,true);window.removeEventListener('keyup',onUp,true);window.removeEventListener('blur',onBlur);window.removeEventListener('pointerdown',onPointer,true);window.removeEventListener('pointermove',onPointerMove,true);window.removeEventListener('mousemove',onLockedMouseMove,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerCancel,true);window.removeEventListener('wheel',onWheel,true);detachTarget?.();overlay?.dispose();sim?.dispose();predictor?.dispose();for(const o of [...controllerViews.values(),...remoteViews.values(),...handRoot.children])releaseController(o);root.removeFromParent();remoteRoot.removeFromParent();hud.dispose();take.remove();touch.remove();marker.remove();hudObserver.disconnect();for(const resource of runtimeResources)resource.dispose();runtimeResources.clear();releaseResources();}};
+ return{ready,update,command,setNetwork,applyNetwork:accept,get config(){return spec;},snapshot:()=>state,get controlling(){return held()?.controlMode==='drive';},get isDriving(){return held()?.controlMode==='drive';},get held(){return held();},get target(){return aimed;},get viewCamera(){return isDriving()?camera:null;},get controllers(){return sim?.controllers||[];},get colliders(){if(!spec)return[];const t=spec.table,p=t.position,w=t.size[0]/2,d=t.size[2]/2;return[{x0:p[0]-w,x1:p[0]+w,z0:p[2]-d,z1:p[2]+d}];},dispose(){disposed=true;generation++;if(ownsCanvasTabIndex&&canvas.getAttribute('tabindex')==='0')canvas.removeAttribute('tabindex');stopDriving();sceneIndex.release();window.removeEventListener('keydown',onKey,true);window.removeEventListener('keyup',onUp,true);window.removeEventListener('blur',onBlur);window.removeEventListener('pointerdown',onPointer,true);window.removeEventListener('pointermove',onPointerMove,true);window.removeEventListener('mousemove',onLockedMouseMove,true);window.removeEventListener('pointerup',onPointerEnd,true);window.removeEventListener('pointercancel',onPointerCancel,true);window.removeEventListener('wheel',onWheel,true);detachTarget?.();overlay?.dispose();sim?.dispose();predictor?.dispose();for(const o of [...controllerViews.values(),...remoteViews.values(),...handRoot.children])releaseController(o);for(const view of carViews.values())view.userData.badge.dispose();root.removeFromParent();remoteRoot.removeFromParent();hud.dispose();take.remove();touch.remove();marker.remove();hudObserver.disconnect();for(const resource of runtimeResources)resource.dispose();runtimeResources.clear();releaseResources();}};
 }
 const CSS=`
 .rc-driver-marker{position:fixed;left:0;top:0;z-index:12;max-width:170px;padding:5px 9px;border:1px solid;border-radius:12px;background:#18382de8;color:#fff;font:600 11px/1.3 system-ui;cursor:pointer;will-change:transform}.rc-driver-marker[hidden]{display:none}.rc-driver-marker[data-offscreen="true"]{background:#203e35f2}.rc-take[hidden],.rc-touch[hidden]{display:none!important}.rc-take,.rc-control{font:600 13px system-ui;color:#f1f5ee;border:1px solid #ffffff35;border-radius:11px;padding:10px 14px;background:#31454d;cursor:pointer;touch-action:none}.rc-take:focus-visible,.rc-control:focus-visible{outline:3px solid #c9ec70;outline-offset:3px}.rc-take{position:fixed;z-index:12;left:50%;bottom:calc(var(--hud-bottom,76px) + 20px);transform:translateX(-50%);background:#163830f0;max-width:92vw}.rc-control{position:fixed;z-index:31;min-height:58px;min-width:64px;background:#213a40ed}.rc-left{left:16px;bottom:160px}.rc-right{left:92px;bottom:160px}.rc-gas{right:16px;bottom:225px;min-width:110px;background:#487b42ed}.rc-reverse{right:16px;bottom:160px;min-width:110px}.rc-brake{right:16px;bottom:95px;min-width:110px;background:#86543bed}.rc-control:active{filter:brightness(1.3);transform:scale(.97)}body.rc-holding .title-card,body.rc-holding #hud-bottom,body.rc-holding #panel,body.rc-holding #panel-toggle,body.rc-holding #kh-score,body.rc-holding .kh-score,body.rc-holding #kh-hud,body.rc-holding .kh-hud,body.rc-holding #coach,body.rc-holding .party-hud,body.rc-holding .social-hud,body.rc-holding .social-radio,body.rc-holding .party-touch,body.rc-holding .khh-btn,body.rc-holding .khh-hint,body.rc-holding #kw-dock,body.rc-holding .tv-layer,body.rc-controlling .kw-jump,body.rc-controlling .kw-joy,body.rc-holding .kd-hint,body.rc-holding .ks-hint{visibility:hidden!important}

@@ -7,3 +7,22 @@ test('active reset does not heal; wreck repair waits for countdown then restores
 test('stale commands cannot reverse ownership; handoff neutralizes motor and release frees physical car',()=>{const f=fixture();try{f.drive(.5,{throttle:1});assert.ok(f.sim.transfer('a','b','rc-0').ok);assert.equal(f.sim.command(f.p,'input','rc-0',{throttle:1,steer:1,brake:false,seq:999}).ok,false);assert.equal(f.sim.held('a'),null);assert.equal(f.sim.held('b').id,'rc-0');assert.equal(f.sim.snapshot().cars[0].input.throttle,0);assert.ok(f.sim.releasePlayer('b'));assert.equal(f.sim.snapshot().cars[0].status,'ready');}finally{f.sim.dispose();}});
 test('forward and reverse steering remain finite and inside the site polygons under long input',()=>{const f=fixture();try{for(let k=0;k<10;k++)f.drive(2,{throttle:k%2?-1:1,steer:k%3?.8:-.8});const a=f.sim.snapshot().cars[0];assert.ok(a.position.every(Number.isFinite));assert.ok(f.sim.arena.safe(a.position[0],a.position[2]));assert.equal(f.sim.command(f.p,'input','rc-0',{throttle:Infinity,steer:0,brake:false,seq:10000}).ok,false);}finally{f.sim.dispose();}});
 test('ordinary full acceleration, cornering and braking keep chassis upright',()=>{const f=fixture();try{let seq=0,minUp=1;for(const [seconds,input]of[[2,{throttle:1,steer:0,brake:false}],[1,{throttle:1,steer:.8,brake:false}],[.8,{throttle:0,steer:0,brake:true}]])for(let i=0;i<seconds*60;i++){assert.ok(f.sim.command(f.p,'input','rc-0',{...input,seq:++seq}).ok);f.sim.step(1/60);const c=f.sim.snapshot().cars[0],q=c.quaternion;minUp=Math.min(minUp,1-2*(q[0]**2+q[2]**2));}assert.ok(minUp>.65,`minimum chassis up vector ${minUp}`);}finally{f.sim.dispose();}});
+
+test('bullets can hit the cabin above the driving collider and still stop on the wreck', () => {
+  const {sim} = fixture();
+  try {
+    const d = spec.designs[0], snapshot = sim.snapshot(), car = snapshot.cars[0];
+    car.position = [0, 0, -28]; car.quaternion = [0, 0, 0, 1];
+    assert.equal(sim.restore(snapshot), true);
+    const y = d.roof - d.vehicle.centerOfMass[1] - .025;
+    const origin = [0, y, -10], direction = [0, 0, -1];
+    const hit = sim.raycast(origin, direction, 30);
+    assert.equal(hit?.id, car.id);
+    assert.ok(hit.point[1] > d.vehicle.collider.center[1] + d.vehicle.collider.halfExtents[1] - d.vehicle.centerOfMass[1]);
+    assert.deepEqual(hit.normal, [0, 0, 1]);
+    assert.equal(sim.raycast([0, y + .2, -10], direction, 30), null);
+    assert.deepEqual(sim.damage(hit.id, 100), { ok: true, id: car.id, hp: 0, maxHp: 100, destroyed: true });
+    assert.equal(sim.raycast(origin, direction, 30)?.id, car.id);
+    assert.equal(sim.damage(hit.id, 34).ok, false);
+  } finally { sim.dispose(); }
+});

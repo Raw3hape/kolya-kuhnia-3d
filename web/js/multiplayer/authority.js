@@ -424,7 +424,14 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
         if (accepted.length >= R.maxEffectsPerRay) break;
       }
       const vehicleHit = vehicle && vehicle.distance <= range && vehicle.distance <= (animal?.distance ?? Infinity) && vehicle.distance <= (external?.distance ?? Infinity) ? vehicle : null;
-      if (vehicleHit) { rc.damage(vehicleHit.id, w.damage); range = Math.min(range, Math.max(0, vehicleHit.distance - 0.01)); }
+      if (vehicleHit) {
+        const result = rc.damage(vehicleHit.id, w.damage);
+        if (result.ok) {
+          const { hp, maxHp, destroyed } = result;
+          Object.assign(vehicleHit, { hp, maxHp, destroyed });
+        }
+        range = Math.min(range, Math.max(0, vehicleHit.distance - 0.01));
+      }
       const externalHit = external && external.distance <= range && external.distance <= (animal?.distance ?? Infinity) ? external : null;
       if (externalHit) range = Math.min(range, Math.max(0, externalHit.distance - 0.01));
       const hit = hunt.hit({ origin: action.origin, direction: ray.direction, weapon: action.weapon, range, playerId: p.id });
