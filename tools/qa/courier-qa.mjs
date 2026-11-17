@@ -60,9 +60,19 @@ try {
     await p.waitForFunction(()=>__kitchen.social.debug.state.courier?.phase==='waiting',null,{timeout:25000});
     const during=await monsterState(p);check('arrival hides all monsters, voices and colliders',during.visitor&&!during.visible&&during.colliders===0&&during.voices===0,during);
     check('pizza is held by courier and cannot open through closed door',await p.evaluate(async()=>{const s=__kitchen.social.debug.state;return s.pizza.location==='courier'&&!(await __kitchen.social.command('receive')).ok&&!(await __kitchen.social.command('open')).ok;}));
-    await aim(p,[-2.03,1.2,6.53]);await p.waitForFunction(()=>__kitchen.doors.target?.id==='entry_door');await p.keyboard.press('e');
+    await aim(p,[-2.03,1.2,6.53]);await p.waitForFunction(()=>__kitchen.doors.target?.id==='entry_door');await shot(p,'courier-door-closed');await p.keyboard.press('e');
     await p.waitForFunction(()=>__kitchen.social.debug.state.courier?.phase==='offering');await pizzaAim(p);
     await p.waitForFunction(()=>__kitchen.social.debug.target==='courier');await shot(p,'courier-offering');
+    check('surrounding building geometry does not hide the courier on the landing', await p.evaluate(async () => {
+      const { Raycaster, Vector3 } = await import('three');
+      const { scene, camera } = __kitchen;
+      const head = scene.getObjectByName('social_courier').getObjectByName('avatar_head');
+      const face = head.localToWorld(new Vector3(0, 0.13, -0.1));
+      const direction = face.sub(camera.position), distance = direction.length();
+      const ray = new Raycaster(camera.position, direction.normalize(), 0, distance);
+      const facade = scene.getObjectByName('own_walls');
+      return ray.intersectObject(facade, false).length === 0;
+    }));
     check('one box and clear desktop receive action',await p.evaluate(()=>__kitchen.scene.getObjectByName('social_pizza')?.visible&&!document.querySelector('[data-action=receive]').hidden));
     await p.keyboard.press('1');await p.waitForTimeout(150);await pizzaAim(p);
     check('armed hands still target courier',await p.evaluate(()=>__kitchen.social.debug.target==='courier'));

@@ -19,7 +19,7 @@ import * as model from './model.js';
 import { initUI, addSection } from './ui.js';
 import { buildFurniture, placeFurniture, furnitureKey, createFurnitureEditor, registerFurnitureUI,
   furnitureResetPatch, FURN_SPEC, FURN_DEFAULTS, FURN_SCHEMA, FURN_SCHEMA_2, preloadSofas, normalizeFurniture, furnitureAnchors } from './furniture.js';
-import { initWalk } from './walk.js';
+import { initWalk, outdoorAreas } from './walk.js';
 import { initDoors } from './doors.js';
 import { createSeats, registerSeatsUI } from './seats.js';
 import { createTV } from './tv.js';
@@ -228,7 +228,8 @@ cutMeshes.push(...bath.cut);
 aboveMeshes.push(...bath.above);
 bath.ready?.then(requestRender);
 // Окружение по OpenStreetMap: свой дом (этажи выше дают тень), соседи, поле, дороги
-const context = buildContext(site, THREE, { date: state.sunDate, assetUrl, track, afterRoom });   // сезон (листва, трава, поле) — по дате солнца
+const landing = outdoorAreas(plan).find(area => area.id === 'landing');
+const context = buildContext(site, THREE, { date: state.sunDate, assetUrl, track, afterRoom, landing });   // сезон (листва, трава, поле) — по дате солнца
 scene.add(context);
 context.ready.then(() => { lighting.invalidate(); requestRender(); });
 context.later?.then(requestRender);   // после первого вида: земля 512 px и машины

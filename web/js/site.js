@@ -289,8 +289,25 @@ function cap(THREE, g, poly, y, up) {
   }
 }
 
+// Portions of the edge outside the playable landing, in edge coordinates from 0 to 1.
+function wallSpans(p, dx, dz, landing) {
+  if (!landing) return [[0, 1]];
+  let enter = 0, exit = 1;
+  for (const [origin, delta, min, max] of [[p[0], dx, landing.x0, landing.x1], [p[1], dz, landing.z0, landing.z1]]) {
+    if (Math.abs(delta) < 1e-6) {
+      if (origin < min || origin > max) return [[0, 1]];
+      continue;
+    }
+    const a = (min - origin) / delta, b = (max - origin) / delta;
+    enter = Math.max(enter, Math.min(a, b));
+    exit = Math.min(exit, Math.max(a, b));
+  }
+  if (enter >= exit) return [[0, 1]];
+  return [[0, enter], [exit, 1]].filter(([start, end]) => end > start);
+}
+
 // Стены призмы наружу: u — метры вдоль фасада / шаг окон, v — номер этажа от vBase
-function walls(g, poly, y0, y1, bay, storey, vBase) {
+function walls(g, poly, y0, y1, bay, storey, vBase, landing) {
   const s = Math.sign(signedArea(poly)) || 1;
   let run = 0;
   for (let i = 0; i < poly.length; i++) {
@@ -298,11 +315,16 @@ function walls(g, poly, y0, y1, bay, storey, vBase) {
     const dx = q[0] - p[0], dz = q[1] - p[1], L = Math.hypot(dx, dz);
     if (L < 1e-3) continue;
     const n = [s * dz / L, 0, -s * dx / L];
-    const u0 = run / bay, u1 = (run + L) / bay; run += L;
     const v0 = (y0 - vBase) / storey, v1 = (y1 - vBase) / storey;
-    const P0 = [p[0], y0, p[1]], P1 = [q[0], y0, q[1]], P2 = [q[0], y1, q[1]], P3 = [p[0], y1, p[1]];
-    const uv = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
-    if (s > 0) g.quad(P0, P3, P2, P1, n, [uv[0], uv[3], uv[2], uv[1]]); else g.quad(P0, P1, P2, P3, n, uv);
+    for (const [start, end] of wallSpans(p, dx, dz, landing)) {
+      const [ax, az] = start === 0 ? p : [p[0] + dx * start, p[1] + dz * start];
+      const [bx, bz] = end === 1 ? q : [p[0] + dx * end, p[1] + dz * end];
+      const u0 = (run + L * start) / bay, u1 = (run + L * end) / bay;
+      const P0 = [ax, y0, az], P1 = [bx, y0, bz], P2 = [bx, y1, bz], P3 = [ax, y1, az];
+      const uv = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
+      if (s > 0) g.quad(P0, P3, P2, P1, n, [uv[0], uv[3], uv[2], uv[1]]); else g.quad(P0, P1, P2, P3, n, uv);
+    }
+    run += L;
   }
 }
 
@@ -982,7 +1004,8 @@ export function buildContext(site, THREE, opts = {}) {
   for (const m of site.ownMass ?? []) {
     const [w, r] = m.part === 'above' ? above : own;
     const s = fac(w, OWN_STYLE, site.levels ?? 7, 11.7);
-    walls(w, m.poly, m.y0, m.y1, s.bay, st, vBase);
+    // The apartment shell already supplies the playable landing walls.
+    walls(w, m.poly, m.y0, m.y1, s.bay, st, vBase, m.part === 'storey' ? opts.landing : undefined);
     r.set('color', [0.33, 0.34, 0.35]);
     cap(THREE, r, m.poly, m.y1, true); cap(THREE, r, m.poly, m.y0, false);
   }
