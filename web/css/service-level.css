@@ -166,7 +166,7 @@
   border-radius: 5px;
 }
 .sl-vitals > div { display: grid; min-width: 80px; }
-.sl-vitals .sl-scanner { min-width: 116px; }
+.sl-vitals .sl-weapon { min-width: 116px; }
 .sl-vitals > div > span {
   color: var(--sl-muted);
   font: 600 9px/1.26 ui-monospace, 'SFMono-Regular', Consolas, monospace;
@@ -200,6 +200,21 @@
   display: grid;
   justify-items: center;
   gap: 7px;
+}
+.sl-loadout { display: flex; gap: 3px; max-width: calc(100vw - 24px); }
+.sl-hud .sl-loadout button {
+  display: flex; align-items: center; gap: 4px; min-height: 30px; padding: 4px 6px;
+  font-size: 10px; white-space: nowrap; background: #181e19db;
+}
+.sl-hud .sl-loadout button[aria-pressed="true"] { color: var(--sl-accent); border-color: var(--sl-accent); }
+.sl-hud .sl-loadout kbd { padding: 0 2px; }
+.sl-on-touch .sl-loadout { flex-wrap: wrap; width: max-content; justify-content: center; max-width: min(90vw, 340px); }
+.sl-on-touch .sl-loadout kbd { display: none; }
+.sl-hud.sl-on-touch .sl-loadout button { min-height: 40px; }
+.sl-on-touch .sl-controls { bottom: calc(var(--sl-bottom) + 74px); }
+@media (max-width: 540px) {
+  .sl-controls:has(.sl-loadout) { gap: 4px; }
+  .sl-hud .sl-hint { font-size: 9px; gap: 3px; }
 }
 .sl-hint {
   display: flex;
@@ -293,7 +308,7 @@
   .sl-team { display: none; }
   .sl-vitals { bottom: auto; top: calc(var(--sl-top) + 107px); padding: 7px 9px; gap: 10px; }
   .sl-vitals > div { min-width: 48px; }
-  .sl-vitals .sl-scanner { min-width: 99px; }
+  .sl-vitals .sl-weapon { min-width: 99px; }
   .sl-vitals output { font-size: 17px; }
   .sl-vitals > div > span { font-size: 8px; letter-spacing: 0.04em; }
   .sl-announce { top: calc(var(--sl-top) + 168px); }

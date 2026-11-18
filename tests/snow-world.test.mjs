@@ -41,6 +41,46 @@ test('long descent keeps a clear variable route with packed, icy, and powder sno
   assert(previous < -4000, 'course continues to descend thousands of metres');
 });
 
+test('open slopes keep several clear lines downhill and produce cross-slope relief', () => {
+  for (const seed of [0, 89, 197, 30615, 81624]) {
+    const world = createSnowWorld(seed);
+    const lanes = [-0.72, -0.42, 0, 0.42, 0.72];
+    let changingRelief = 0, first = world.course(-92), previous;
+    for (let z = -92; z >= -5000; z -= 96) {
+      const lane = world.course(z);
+      assert(lane.width * 2 >= 128);
+      const heights = lanes.map(offset => {
+        const x = lane.x + offset * lane.width;
+        const sample = world.sample(x, z);
+        assert(!world.obstacle(x, z));
+        assert(Math.hypot(sample.dx, sample.dz) < 0.9);
+        return sample.height;
+      });
+      if (previous) {
+        assert(heights.every((height, i) => height < previous[i] - 5));
+        const delta = heights.map((height, i) => height - previous[i]);
+        changingRelief = Math.max(changingRelief, Math.max(...delta) - Math.min(...delta));
+      }
+      previous = heights;
+    }
+    assert(changingRelief > 4, 'left and right lines change grade independently');
+    assert(previous[2] < first.y - 1400);
+  }
+});
+
+test('seeded rollers blend without a height or grade seam at region boundaries', () => {
+  const world = createSnowWorld(197);
+  for (let distance = 56; distance < 2500; distance += 112) {
+    const z = -distance, c = world.course(z);
+    for (const fraction of [-0.85, -0.3, 0.3, 0.85]) {
+      const x = c.x + fraction * c.width;
+      const before = world.sample(x, z - 0.001), after = world.sample(x, z + 0.001);
+      assert(Math.abs(before.height - after.height) < 0.003);
+      assert(Math.abs(before.dz - after.dz) < 0.003);
+    }
+  }
+});
+
 test('tree intersections and visible decorations share deterministic positions', () => {
   const world = createSnowWorld(9723);
   for (let z = -4; z > -27; --z) {
@@ -99,6 +139,13 @@ test('all stream stages share exact ground edges and bounded storage', () => {
       mesh.position.x < -4 * SNOW_TILE && mesh.position.z < boundary);
     assert(far);
     match(side(rim, axis, boundary), side(far, axis, boundary).filter(v => v.d >= 0 && v.d <= SNOW_TILE));
+    // The coarsest skyline also meets the denser visible ridge band.
+    const farEdge = far.position.z;
+    const skyline = environment.group.children.find(mesh => mesh.material.map && mesh.position.z < farEdge);
+    assert(skyline);
+    const ridgeSide = side(far, axis, farEdge);
+    const skySide = side(skyline, axis, farEdge).filter(v => v.d >= ridgeSide[0].d && v.d <= ridgeSide.at(-1).d);
+    match(ridgeSide, skySide);
 
     for (const [x,z] of [[0, -64], [25, -513], [-54, -1910], [19, -99999]]) {
       environment.update(x, z);

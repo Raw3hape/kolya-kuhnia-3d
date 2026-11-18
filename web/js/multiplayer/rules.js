@@ -1,6 +1,6 @@
 // Shared gameplay limits. Imported by both the browser and the room authority.
 export const NETWORK_RULES = Object.freeze({
-  version: 11, maxPlayers: 10, tickHz: 60, snapshotHz: 20,
+  version: 12, maxPlayers: 10, tickHz: 60, snapshotHz: 20,
   inputHz: 20, interpolationMs: 100, staleMs: 3000,
   heartbeatMs: 1500, timeoutMs: 6500, resumeMs: 60000,
   maxMessageBytes: 192000, maxObjects: 4096, maxEffects: 192,
@@ -16,6 +16,7 @@ export const WEAPON_RULES = Object.freeze({
   pistol: Object.freeze({ rate: 6, mag: 12, reserve: 48, infiniteReserve: true, reload: 1.7, pellets: 1, damage: 34, range: 150 }),
   rifle: Object.freeze({ rate: 10, mag: 30, reserve: 120, infiniteReserve: true, reload: 2.3, pellets: 1, damage: 28, range: 400 }),
   bolt: Object.freeze({ rate: 1.5, mag: 5, reserve: 30, infiniteReserve: true, reload: 2.6, cycle: 0.8, pellets: 1, damage: 120, range: 800 }),
+  uzi: Object.freeze({ rate: 12, mag: 24, reserve: 96, infiniteReserve: true, reload: 1.9, pellets: 1, damage: 21, range: 95 }),
   shotgun: Object.freeze({ rate: 4, mag: 2, reserve: 24, infiniteReserve: true, reload: 2, pellets: 9, damage: 14, range: 70 }),
 });
 

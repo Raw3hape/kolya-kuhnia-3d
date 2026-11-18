@@ -98,7 +98,7 @@
   - Вытяжка над варкой: геометрия `model.js` (`buildHood`, размеры `kitchen.json` → hood), включение в прогулке,
     LED и гул — `hood.js`. `ticker.js` — крипто-биржа на мониторе комнаты 3 (холст поверх меша 'screen', 6 кадров/с,
     только когда экран виден рядом).
-  - `viewmodel.js` — оружие в прогулке: пистолет (2), автомат (3), винтовка (4), двустволка (5), 1 — убрать;
+  - `viewmodel.js` — оружие в прогулке: пистолет (2), автомат (3), винтовка (4), двустволка (5), Uzi (6), 1 — убрать;
     общее наведение ствола, мушки и луча — `weapon-aim.js`, контракт и проверки [docs/weapon-aim.md](docs/weapon-aim.md).
     ПКМ — прицел, R — перезарядка; попадания в зверей через `getHunt` (noise, raycast; `hit.surface` — цвет брызг).
     `impacts.js` — дырки от пуль, частицы и трещины на экранах (`userData.screen`/`tvScreen`, видео под ними играет);
@@ -106,7 +106,7 @@
     ceramic | fruit), осколки с простой физикой, стёкла `userData.glass` (`shatter: false` — нет), звук синтезом;
     `mirrors.js` — плоские отражения зеркал (`userData.mirror` или `mirror` в `spec/break.json`), бьются тоже.
     Всё только растр, до кнопки «Убрать следы и осколки». Вьюмодели — риги рук с оружием с poly.pizza (J-Toastie, AdamKokrito —
-    CC-BY 3.0; Quaternius — CC0); подпись в `web/models/viewmodel/SOURCE.md` и в панели, сборка `tools/viewmodel/build.py`.
+    CC-BY 3.0; Quaternius — CC0) и авторский Uzi (Blender). Источники и сборка — `web/models/viewmodel/SOURCE.md`; каталог общий с лабиринтом.
   - Редкие события на поле: [docs/field-events.md](docs/field-events.md), правила `hunt.json.events`,
     чистая симуляция `field-events-simulation.js`, геометрия/HP `field-events-view.js`.
     Урон/груз/движение/очки общие через `hunt.encounters`, события без звука, HP не виден через стены.
@@ -121,7 +121,8 @@
     `web/models/life/SOURCE.md`. В консоли: `__kitchen.life.debug` (`ring()`, `water(id)`, `mouse()`).
   - [Три встречи за входной дверью](docs/door-encounters.md): курьер, лабиринт, снежный спуск.
     `door-journey.js` задаёт жеребьёвку, `adventure-portal.js` рисует проём, `service-level.js` связывает вход и ввод.
-    Симуляции `service-level-simulation.js` и `snow-simulation.js` общие для solo и Worker.
+    Симуляции `service-level-simulation.js` и `snow-simulation.js` общие для solo и Worker. На спуске камера от первого лица
+    со свободным взглядом и центрированием C; общий рельеф генерируется локально из seed комнаты.
   - `decor.js` + `spec/decor/*.json` — обстановка комнат (реальные вещи IKEA и др.), контракт
     `web/models/decor/README.md`, конвейер `tools/decor/`. Зоны и опции — только в конец.
   - `furniture.js` + `spec/furniture.json` — диван, ТВ, тумба, ковёр, столик и редактор расстановки;

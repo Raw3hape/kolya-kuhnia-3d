@@ -20,11 +20,12 @@
     "launchSpeed": 2.7
   },
   "terrain": {
-    "baseGrade": 0.28,
-    "plateau": 5,
-    "minWidth": 23,
-    "maxWidth": 52,
-    "recoveryWidth": 72
+    "baseGrade": 0.315,
+    "plateau": 6,
+    "runIn": 16,
+    "minWidth": 64,
+    "maxWidth": 106,
+    "treeLineExtent": 360
   },
   "motion": {
     "gravity": 9.81,

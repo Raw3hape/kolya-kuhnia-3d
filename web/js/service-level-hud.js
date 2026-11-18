@@ -1,13 +1,15 @@
+import { WEAPONS, weaponById } from './weapon-catalog.js';
+
 // DOM presentation and accessible controls. Mode ownership and key bindings
 // stay in the first-person controller.
 const STYLE_URL = new URL('../css/service-level.css', import.meta.url);
 const PERKS = {
-  quickCharge: 'Ускоренная зарядка',
-  overclock: 'Усиленный импульс',
+  quickCharge: 'Быстрая перезарядка',
+  overclock: 'Урон повышен',
   reinforced: 'Защита усилена',
 };
 const TERMINAL = {
-  victory: ['Все смены закрыты', 'Сканер обесточил технику во всех раундах. Можно пройти дальше по этажу или вернуться на кухню.'],
+  victory: ['Все смены закрыты', 'Вся техника отключена. Можно пройти дальше по этажу или вернуться на кухню.'],
   defeat: ['Смена прервана', 'Техника вышла из-под контроля. Можно заново начать с первой смены.'],
 };
 
@@ -59,7 +61,7 @@ function holdButton(button, callback) {
   return { release, dispose() { listeners.abort(); release(); } };
 }
 
-export function createServiceLevelHud({ onExit, onRestart, onLock, onFire, onReload, onRevive, touch = false } = {}) {
+export function createServiceLevelHud({ onExit, onRestart, onLock, onFire, onReload, onRevive, onAim, onWeapon, touch = false } = {}) {
   if (!document.getElementById('service-level-style')) {
     const style = document.createElement('link');
     style.id = 'service-level-style';
@@ -94,16 +96,20 @@ export function createServiceLevelHud({ onExit, onRestart, onLock, onFire, onRel
     </div>
     <div class="sl-vitals">
       <div class="sl-armor"><span>Защита</span><output class="sl-hp"></output><meter class="sl-meter" min="0" max="100" low="28" high="60" optimum="100" value="100" aria-label="Защита"></meter></div>
-      <div class="sl-scanner"><span>Импульсный сканер</span><div class="sl-cell"><output class="sl-ammo"></output><span class="sl-reserve"></span></div><small class="sl-reloading" hidden>Зарядка</small></div>
+      <div class="sl-weapon"><span class="sl-equipped"></span><div class="sl-cell"><output class="sl-ammo"></output><span class="sl-reserve"></span></div><small class="sl-reloading" hidden>Перезарядка</small></div>
     </div>
     <div class="sl-controls">
-      <div class="sl-hint"><kbd>WASD</kbd> Ходьба <kbd>ЛКМ</kbd> Импульс <kbd>R</kbd> Зарядка <span class="sl-unlock-hint" hidden><kbd>Esc</kbd> Курсор</span></div>
+      <div class="sl-loadout" role="group" aria-label="Выбор оружия">
+        ${WEAPONS.map(({ id, name }, i) => `<button type="button" data-weapon="${id}" title="${i + 1} · ${id === 'none' ? 'Убрать оружие' : name}" aria-label="${id === 'none' ? 'Убрать оружие' : name}" aria-pressed="false"><kbd>${i + 1}</kbd><span>${id === 'none' ? 'Убрать' : name}</span></button>`).join('')}
+      </div>
+      <div class="sl-hint"><kbd>WASD</kbd> Ходьба <kbd>ЛКМ</kbd> Выстрел <kbd>ПКМ</kbd> Прицел <kbd>R</kbd> Перезарядка <span class="sl-unlock-hint" hidden><kbd>Esc</kbd> Курсор</span></div>
       <button type="button" class="sl-lock" hidden>Управлять мышью</button>
     </div>
     <button type="button" class="sl-revive" hidden><span>Поднять</span><kbd>E</kbd></button>
     <div class="sl-touch" hidden>
-      <button type="button" class="sl-reload" aria-label="Зарядить сканер"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 6.5A7.3 7.3 0 1 1 5 13m2.4-6.5H3.5m3.9 0v4"/></svg></button>
-      <button type="button" class="sl-fire" aria-label="Импульс"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/><circle cx="12" cy="12" r="5"/></svg></button>
+      <button type="button" class="sl-reload" aria-label="Перезарядить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 6.5A7.3 7.3 0 1 1 5 13m2.4-6.5H3.5m3.9 0v4"/></svg></button>
+      <button type="button" class="sl-aim" aria-label="Прицелиться"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/><circle cx="12" cy="12" r="2.5"/></svg></button>
+      <button type="button" class="sl-fire" aria-label="Выстрел"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/><circle cx="12" cy="12" r="5"/></svg></button>
     </div>
     <div class="sl-outcome" hidden aria-labelledby="sl-result">
       <div class="sl-outcome-card">
@@ -125,6 +131,9 @@ export function createServiceLevelHud({ onExit, onRestart, onLock, onFire, onRel
   const status = find('.sl-status'), notice = find('.sl-notice'), revive = find('.sl-revive');
   const touchControls = find('.sl-touch'), hint = find('.sl-hint'), lock = find('.sl-lock'), cross = find('.sl-cross');
   const unlockHint = find('.sl-unlock-hint');
+  const equipped = find('.sl-equipped'), loadout = find('.sl-loadout');
+  const weaponButtons = [...loadout.querySelectorAll('button')];
+  let currentWeapon;
   const outcome = find('.sl-outcome'), outcomeWave = find('.sl-outcome-wave'), title = find('#sl-result'), description = find('.sl-result-description');
   const restart = find('.sl-restart'), continued = find('.sl-continue');
   let stepState = '', locked = false, enabled = true, shown = false, phase = '';
@@ -144,16 +153,20 @@ export function createServiceLevelHud({ onExit, onRestart, onLock, onFire, onRel
   wireButton('.sl-restart', onRestart);
   wireButton('.sl-continue', () => { dismissed = true; outcome.hidden = true; onLock?.(); });
 
+  for (const button of weaponButtons) wireButton(`[data-weapon="${button.dataset.weapon}"]`, () => onWeapon?.(button.dataset.weapon));
+  const aimButton = holdButton(find('.sl-aim'), onAim);
   const fireButton = holdButton(find('.sl-fire'), onFire);
   const reviveButton = holdButton(revive, onRevive);
   function clearHeld() {
     fireButton.release();
+    aimButton.release();
     reviveButton.release();
   }
   function syncControls() {
     const modal = !outcome.hidden;
     lock.hidden = !onLock || locked || isTouch || modal || !isReady;
     hint.hidden = isTouch || modal || !isReady;
+    loadout.hidden = modal || isDown || hasStatus || !isReady;
     unlockHint.hidden = !locked;
     touchControls.hidden = !isTouch || modal || isDown || hasStatus || !isReady;
     cross.hidden = modal || isDown || !isReady;
@@ -252,8 +265,13 @@ export function createServiceLevelHud({ onExit, onRestart, onLock, onFire, onRel
       meter.value = percent;
       meter.style.setProperty('--sl-protection', `${percent}%`);
     }
-    setText(ammo, local ? String(local.ammo) : '—');
-    setText(reserve, local && Number.isFinite(local.reserve) ? `/ ${local.reserve}` : '');
+    if (local?.weapon !== currentWeapon) {
+      currentWeapon = local?.weapon;
+      setText(equipped, currentWeapon === 'none' ? 'Оружие убрано' : weaponById(currentWeapon).name);
+      for (const button of weaponButtons) button.setAttribute('aria-pressed', String(button.dataset.weapon === currentWeapon));
+    }
+    setText(ammo, local?.capacity ? String(local.ammo) : '—');
+    setText(reserve, local?.capacity ? `/ ${local.infiniteReserve ? '∞' : local.reserve}` : '');
     reloading.hidden = !local?.reloadLeft;
     const time = performance.now();
     panel.classList.toggle('sl-hit', lastHit > 0 && time - lastHit < 160);
@@ -282,6 +300,7 @@ export function createServiceLevelHud({ onExit, onRestart, onLock, onFire, onRel
 
   function dispose() {
     fireButton.dispose();
+    aimButton.dispose();
     reviveButton.dispose();
     clearTimeout(noticeTimeout);
     panel.remove();

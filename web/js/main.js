@@ -645,6 +645,7 @@ serviceLevel = createServiceLevelEntrance({ THREE, scene, camera, canvas, render
   canEnter: () => startup.status === 'ready' && walk.walking && !pipe.photo && !seats?.active && !rc?.controlling &&
     !document.body.classList.contains('kmp-modal-open') && (!multiplayer?.active || (multiplayer.client.connected && !multiplayer.applying)),
   courier: () => social.reservesLanding, setDoorVisit: open => social.setDoorVisit(open), net: () => multiplayer, config: loadServiceSpec, snowConfig: loadSnowSpec, getQuality: () => pipe.quality,
+  getWeapon: () => viewmodel.weapon, getWeaponSound: () => viewmodel.sound,
   notify: message => ui.toast(message), requestRender,
   onMode(active) { life.setSuspended(active); social.refreshAudio(); },
 });

@@ -114,7 +114,7 @@ test('Accepted pickup/drop, phone tap, page turn, fire and reload expose timed o
 });
 
 test('External door/device use animates a free hand while every weapon or carried item remains gripped', () => {
-  for (const kind of ['pistol', 'rifle', 'bolt', 'shotgun', 'phone', 'newspaper']) {
+  for (const kind of ['pistol', 'rifle', 'bolt', 'shotgun', 'uzi', 'phone', 'newspaper']) {
     const state = { time: 1, weapon: Object.hasOwn(W, kind) ? kind : 'none', held: ['phone', 'newspaper'].includes(kind) ? kind : null, shotAge: 10 };
     const idle = solveAvatarPose(state);
     const use = solveAvatarPose({ ...state, action: makeAvatarAction('use', 0.7, { targetId: 'hood' }), actionTime: 0.25, interactionTarget: [0.2, 1.5, -0.5] });
@@ -129,7 +129,7 @@ test('Production rig has real joints, hand-parented props, exact grip contact, m
     const avatar = createAvatar({ slot, name: 'Игрок' });
     try {
       for (const name of ['avatar_head', 'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle']) assert.ok(avatar.root.getObjectByName(name));
-      for (const kind of ['pistol', 'rifle', 'bolt', 'shotgun', 'phone', 'newspaper']) {
+      for (const kind of ['pistol', 'rifle', 'bolt', 'shotgun', 'uzi', 'phone', 'newspaper']) {
         avatar.update({ time: 2, weapon: Object.hasOwn(W, kind) ? kind : 'none', held: kind === 'phone' || kind === 'newspaper' ? kind : null, aimPitch: 0.4, aiming: 1, shotAge: 0.03 });
         avatar.root.updateMatrixWorld(true);
         const wrist = avatar.root.getObjectByName('right_wrist'), grip = avatar.root.getObjectByName('avatar_prop_grip');
@@ -155,7 +155,7 @@ test('Production rig has real joints, hand-parented props, exact grip contact, m
 
 test('Prop cache and articulated rig dispose every owned geometry/material exactly once', () => {
   const avatar = createAvatar(), geometry = new Map(), materials = new Map();
-  for (const kind of ['pistol', 'rifle', 'bolt', 'shotgun', 'phone', 'newspaper']) {
+  for (const kind of ['pistol', 'rifle', 'bolt', 'shotgun', 'uzi', 'phone', 'newspaper']) {
     avatar.update({ weapon: Object.hasOwn(W, kind) ? kind : 'none', held: ['phone', 'newspaper'].includes(kind) ? kind : null });
     avatar.root.traverse(o => { if (o.isMesh) {
       if (!geometry.has(o.geometry)) { geometry.set(o.geometry, 0); o.geometry.addEventListener('dispose', () => geometry.set(o.geometry, geometry.get(o.geometry) + 1)); }

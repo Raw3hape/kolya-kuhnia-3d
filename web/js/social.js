@@ -16,6 +16,7 @@ addHelp(
   { mode: 'walk', topic: 'social', keys: ['ЛКМ'], text: 'съесть кусок из открытой коробки — пицца общая для всех', order: 68 },
   { mode: 'seat', topic: 'social', keys: ['ЛКМ'], text: 'можно есть пиццу, сидя рядом с открытой коробкой', order: 46 },
 );
+const COURIER_NOTICE = 'Курьер Żabka у двери';
 const typing = event => event.target?.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(event.target?.tagName);
 export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bathSpec, spec, canPlay, getFurniture, getWalk, getSeats, getVM, getDoors, getParty, getTV, getPaper, getLife, beforeCarry, requestRender }) {
   let sim, state, models, audio, locations, disposed = false, network = null, savedSolo = null, capturing = false, doorVisit = false;
@@ -82,7 +83,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
   function show(message) { notice = message; noticeUntil = performance.now() + 2200; lastUI = ''; }
   function accept(value, initial = false) {
     if (!value) return; state = value;
-    if (!initial && lastBell !== null && value.bell > lastBell) { audio?.bell(); show('Курьер Żabka у двери'); } lastBell = value.bell;
+    if (!initial && lastBell !== null && value.bell > lastBell) { audio?.bell(); show(COURIER_NOTICE); } lastBell = value.bell;
     audio?.sync(value); requestRender();
   }
   async function command(verb, extra = {}) {
@@ -150,7 +151,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     const pizza = state.pizza, phase = state.courier?.phase, transferring = carrying && state.time < (pizza.transferUntil || 0);
     const busyHands = !!(getVM()?.armed || getParty()?.held || getTV()?.status?.held || getPaper()?.held);
     const delivery = !carrying && !target && !washing && !!phase, focused = live && (carrying || target || washing || delivery);
-    const note = performance.now() < noticeUntil ? notice : '';
+    const note = performance.now() < noticeUntil && (notice !== COURIER_NOTICE || phase) ? notice : '';
     const key = [live, carrying, target, pizza?.open, pizza?.remaining, state.shower.owner, pending, state.radio.station, state.radio.playing, state.radio.volume, !!placement, note, audio.status, phase, transferring, busyHands, state.entryOpen].join('|');
     if (key === lastUI) return; lastUI = key;
     hud.hidden = !live || (!focused && !note); hud.classList.toggle('delivery', target === 'courier' || delivery);
@@ -224,7 +225,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
         sim.reconcileSupport(id => { meshes(); const object = supportObjects.get(id); if (!object || !index.visible(object)) return null; const box = new T.Box3().setFromObject(object); return [...box.min.toArray(), ...box.max.toArray()]; });
         state = sim.presentation(); if (held() && (getVM()?.armed || getParty()?.held || getTV()?.status?.held || getPaper()?.held)) { sim.command(pose(), { verb: 'return' }); state = sim.presentation(); }
       }
-      if (lastBell !== null && state.bell > lastBell) { audio.bell(); show('Курьер Żabka у двери'); } lastBell = state.bell;
+      if (lastBell !== null && state.bell > lastBell) { audio.bell(); show(COURIER_NOTICE); } lastBell = state.bell;
       audio.sync(state); audio.update(state, showerPoint);
       getLife()?.setShowerControlled(!!state.shower.owner);
       aimClock += dt; if (aimClock >= 0.12) { aimClock = 0; aim(); } renderUI();

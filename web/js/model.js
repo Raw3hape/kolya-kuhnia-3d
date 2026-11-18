@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { outdoorAreas, areaBeyond } from './walk.js';
 import { compactMaterialGroups } from './material-groups.js';
+import { entryPoster } from './entry-poster.js';
 
 // Углы открытия по умолчанию: межкомнатные открыты, наружные (балконные, входная) закрыты
 const DOOR_OPEN = { interior: 85, exterior: 90 };
@@ -441,6 +442,7 @@ function buildEntry(o, g, M, ang) {
   pivot.add(boxAt(hx - 0.12, hx + 0.01, 1.02, 1.04, -lt / 2 - 0.05, -lt / 2 - 0.03, M.metal));   // ручка изнутри
   pivot.add(boxAt(hx - 0.01, hx + 0.01, 1.0, 1.06, -lt / 2 - 0.03, -lt / 2, M.metal));
   pivot.add(boxAt(hx - 0.015, hx + 0.015, 0.98, 1.1, lt / 2, lt / 2 + 0.03, M.metal));          // скоба снаружи
+  pivot.add(entryPoster(L, head, lt));
   // полотно вдоль +u; поворот +ang уводит его в −t (в холл)
   pivot.userData.door = { id: o.id, closed: 0, open: ang, isOpen: false, dir: 1, length: L, thick: lt };
   g.add(pivot);

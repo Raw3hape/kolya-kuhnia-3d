@@ -253,26 +253,32 @@ function createGear(kind, material, flashMaterial, screenMaterial) {
     for (let i = 0; i < 8; i++) leaf.box([0.16, 0.004, 0.007], '#7e7f76', [0.10, 0.105 - i * 0.027, 0]);
     page.add(leaf.build()); root.add(page); page.visible = false;
   } else {
-    const pistol = kind === 'pistol', profile = W[kind], length = profile.length - (pistol ? 0.09 : 0.16);
-    b.box([0.062, 0.085, pistol ? 0.16 : 0.22], '#363d40', [0, 0.045, -0.065]);
-    b.box([0.045, 0.115, 0.06], '#66503b', [0, -0.035, 0.008], [-0.18, 0, 0]);
+    const pistol = kind === 'pistol', uzi = kind === 'uzi', profile = W[kind];
+    const barrelStart = pistol ? 0.07 : uzi ? 0.225 : 0.12;
+    const length = profile.length - (uzi ? barrelStart : pistol ? 0.09 : 0.16);
+    b.box([uzi ? 0.083 : 0.062, 0.085, pistol ? 0.16 : uzi ? 0.27 : 0.22], '#363d40', [0, 0.045, uzi ? -0.085 : -0.065]);
+    b.box([0.045, 0.115, 0.06], uzi ? INK : '#66503b', [0, -0.035, 0.008], [-0.18, 0, 0]);
     b.box([0.025, 0.009, 0.04], '#959d98', [0, 0.092, -0.075]);
-    if (!pistol) {
+    if (uzi) {
+      b.box([0.088, 0.037, 0.106], INK, [0, 0.01, -0.164]);
+      for (let i = 0; i < 4; i++) b.box([0.092, 0.043, 0.007], '#414a4c', [0, 0.01, -.13 - i * .019]);
+      b.box([0.088, 0.015, 0.129], '#687372', [0, 0.009, -0.046]);
+    } else if (!pistol) {
       b.box([0.065, 0.10, 0.18], '#66513d', [0, 0.018, 0.115]);
       b.box([0.06, 0.07, 0.14], '#655742', [0, 0.025, -0.18]);
     }
     if (kind === 'bolt') { b.cylinder(0.025, 0.025, 0.17, INK, [0, 0.123, -0.095], [Math.PI / 2, 0, 0]); }
     if (kind === 'rifle') { b.box([0.038, 0.018, 0.08], INK, [0, 0.117, -0.06]); }
     root.add(b.build());
-    barrels = joint('weapon_barrel', [0, 0.045, pistol ? -0.07 : -0.12]);
+    barrels = joint('weapon_barrel', [0, 0.045, -barrelStart]);
     const barrel = builder(material);
     if (kind === 'shotgun') {
       for (const x of [-0.018, 0.018]) barrel.cylinder(0.014, 0.014, length, '#707773', [x, 0, -length / 2], [Math.PI / 2, 0, 0]);
     } else barrel.cylinder(pistol ? 0.015 : 0.011, pistol ? 0.015 : 0.011, length, '#65706d', [0, 0, -length / 2], [Math.PI / 2, 0, 0]);
     barrel.box([0.018, 0.025, 0.015], INK, [0, 0.02, -length + 0.025]); barrels.add(barrel.build()); root.add(barrels);
-    if (kind === 'rifle' || pistol) {
+    if (kind === 'rifle' || pistol || uzi) {
       const mag = builder(material); mag.box([0.038, pistol ? 0.09 : 0.14, 0.065], '#333b40', [0, 0, 0]);
-      magazine = mag.build(); magazine.name = 'weapon_magazine'; magazine.position.set(0, pistol ? -0.085 : -0.095, pistol ? 0.01 : -0.09); root.add(magazine);
+      magazine = mag.build(); magazine.name = 'weapon_magazine'; magazine.position.set(0, pistol ? -0.085 : -0.095, pistol || uzi ? 0.01 : -0.09); root.add(magazine);
     }
     if (kind === 'bolt') {
       bolt = joint('weapon_bolt', [0.044, 0.073, -0.015]);

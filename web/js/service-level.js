@@ -1,5 +1,6 @@
 // Lazy apartment adapter. The current canvas and WebGL context serve both scenes.
 import { serviceEntrance, newServiceSeed } from './service-level-entrance.js';
+import { DEFAULT_MAZE_WEAPON, WEAPON_KEYS } from './weapon-catalog.js';
 import { NETWORK_RULES } from './multiplayer/rules.js';
 import { createDoorJourney, DOOR_ENCOUNTERS } from './door-journey.js';
 import { createAdventurePortal, drawAdventureScene } from './adventure-portal.js';
@@ -13,7 +14,7 @@ const KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyE', 'ArrowUp',
 
 export function createServiceLevelEntrance({
   THREE: T, scene, camera, canvas, renderer, walk, doors, plan, canEnter, courier, setDoorVisit, net,
-  config, snowConfig, getQuality, onMode, requestRender, notify,
+  config, snowConfig, getQuality, getWeapon, getWeaponSound, onMode, requestRender, notify,
 }) {
   const entrance = serviceEntrance(plan);
   const soloId = 'solo';
@@ -26,8 +27,9 @@ export function createServiceLevelEntrance({
     else if (localJourney.route.mode === 'courier') setDoorVisit(true);
   });
   let entryRequest = false, rejected = false, active = false, kit;
-  let world, worldSeed, environment, actors, hud, state, solo, predicted, target, dirtyResize = true;
+  let world, worldSeed, environment, actors, weaponView, hud, state, solo, predicted, target, dirtyResize = true;
   let controls, yaw = 0, pitch = 0, seq = 0, sendClock = 0, sentAt = 0;
+  let selected = DEFAULT_MAZE_WEAPON, trigger = 0, aiming = false;
   let fire = false, tap = 0, reload = false, interact = false, paused = false, leaving = false;
   let lastPhase = null, snow = null, requestedMode = null, snowExitPending = false;
   const portal = entrance && createAdventurePortal({ THREE: T, scene, camera, canvas, renderer, entrance });
@@ -58,9 +60,10 @@ export function createServiceLevelEntrance({
         });
       })
       : Promise.all([import('./service-level-simulation.js'), import('./service-level-world.js'),
-        import('./service-level-environment.js'), import('./service-level-actors.js'), import('./service-level-hud.js'), config(),
-      ]).then(([simulator, topology, scenery, cast, ui, rules]) => {
-        kit = { ...simulator, ...topology, ...scenery, ...cast, ...ui, rules };
+        import('./service-level-environment.js'), import('./service-level-actors.js'), import('./service-level-hud.js'),
+        import('./service-level-weapon-view.js'), config(),
+      ]).then(([simulator, topology, scenery, cast, ui, weapons, rules]) => {
+        kit = { ...simulator, ...topology, ...scenery, ...cast, ...ui, ...weapons, rules };
       });
     loads.set(mode, promise.then(requestRender).catch(error => {
       console.warn('Дверь приключений:', error);
@@ -102,10 +105,26 @@ export function createServiceLevelEntrance({
   function entranceLook() {
     const approach = walk.getNetworkPose();
     const diff = approach.yaw - entrance.yaw;
-    return { yaw: Math.atan2(Math.sin(diff), Math.cos(diff)), pitch: T.MathUtils.clamp(approach.pitch, -AIM_LIMIT, AIM_LIMIT), fov: camera.fov };
+    return {
+      yaw: Math.atan2(Math.sin(diff), Math.cos(diff)),
+      pitch: T.MathUtils.clamp(approach.pitch, -AIM_LIMIT, AIM_LIMIT),
+      fov: camera.fov,
+      x: entrance.lateral(camera.position), z: -entrance.depth(camera.position),
+      eyeHeight: camera.position.y,
+    };
   }
 
-  function unlockAudio() { actors?.resumeAudio?.(); }
+  function unlockAudio() { actors?.resumeAudio(); weaponView?.resumeAudio(); }
+  function setFire(held) {
+    fire = held;
+    if (held) { trigger++; tap = 0.075; unlockAudio(); }
+  }
+  function selectWeapon(id) {
+    if (id === selected) return;
+    selected = id;
+    tap = 0; fire = reload = false;
+    weaponView?.preload(id);
+  }
   function lock() {
     unlockAudio();
     if (touch || document.pointerLockElement === canvas) return;
@@ -113,7 +132,7 @@ export function createServiceLevelEntrance({
   }
 
   function resetInput() {
-    keys.clear(); fire = reload = interact = false; tap = 0; mouseLook = null; joyX = joyZ = 0;
+    keys.clear(); fire = reload = interact = aiming = false; tap = 0; mouseLook = null; joyX = joyZ = 0;
     for (const id of touches.keys()) { try { canvas.releasePointerCapture(id); } catch { /* already released */ } }
     touches.clear();
     controls?.joy.classList.remove('visible');
@@ -127,6 +146,7 @@ export function createServiceLevelEntrance({
     portal.hide();
     predicted = { ...me }; target = null; seq = 0; sentAt = sendClock = 0;
     yaw = me.yaw; pitch = me.pitch;
+    selected = me.weapon; trigger = 0;
     if (active) return;
     const approach = entranceLook();
     yaw = approach.yaw; pitch = approach.pitch;
@@ -139,11 +159,15 @@ export function createServiceLevelEntrance({
     enterView('Служебный этаж · камера игрока');
     controls = { joy };
     actors = kit.createServiceLevelActors({ THREE: T, scene: level, camera: eye });
+    weaponView = kit.createServiceLevelWeaponView(T, getWeaponSound);
+    weaponView.preload(selected);
     hud = kit.createServiceLevelHud({
       onExit: () => exit(),
       onRestart: restart,
       onLock: lock,
-      onFire: held => { fire = held; if (held) { tap = 0.12; unlockAudio(); } },
+      onFire: setFire,
+      onAim: held => { aiming = held; },
+      onWeapon: selectWeapon,
       onReload: () => { reload = true; unlockAudio(); },
       onRevive: held => { interact = held; unlockAudio(); },
     });
@@ -158,6 +182,7 @@ export function createServiceLevelEntrance({
     resetInput();
     hud?.dispose(); hud = null;
     actors?.dispose(); actors = null;
+    weaponView?.dispose(); weaponView = null;
     controls?.joy.remove(); controls = null;
     releaseMaze();
     state = solo = target = predicted = lastPhase = null;
@@ -194,7 +219,8 @@ export function createServiceLevelEntrance({
       activateSnow(null, soloId, route.seed);
     } else {
       solo = kit.createServiceLevel({ seed: route.seed, config: kit.rules });
-      solo.join(soloId);
+      const equipped = getWeapon();
+      solo.join(soloId, equipped === 'none' ? DEFAULT_MAZE_WEAPON : equipped);
       activate(solo.snapshot(), soloId);
     }
   }
@@ -225,7 +251,7 @@ export function createServiceLevelEntrance({
     if (solo) {
       localJourney.reseed();
       solo = kit.createServiceLevel({ seed: localJourney.route.seed, config: kit.rules });
-      solo.join(soloId); activate(solo.snapshot(), soloId);
+      solo.join(soloId, selected); activate(solo.snapshot(), soloId);
     } else net()?.adventureRequest('restart');
   }
 
@@ -282,7 +308,7 @@ export function createServiceLevelEntrance({
     return {
       moveX: T.MathUtils.clamp(signed('KeyD', 'KeyA') + joyX, -1, 1),
       moveZ: T.MathUtils.clamp(signed('KeyW', 'KeyS') + signed('ArrowUp', 'ArrowDown') + joyZ, -1, 1),
-      yaw, pitch, fire: fire || tap > 0, reload, interact: interact || keys.has('KeyE'),
+      yaw, pitch, fire: fire || tap > 0, trigger, weapon: selected, aiming, reload, interact: interact || keys.has('KeyE'),
     };
   }
 
@@ -331,11 +357,17 @@ export function createServiceLevelEntrance({
     if (dirtyResize) {
       const alt = canvas.clientWidth / Math.max(1, canvas.clientHeight);
       eye.aspect = Math.max(0.1, alt);
-      eye.fov = alt < 1 ? Math.min(90, camera.fov + 6) : camera.fov;
-      eye.updateProjectionMatrix(); dirtyResize = false;
+      dirtyResize = false;
     }
     eye.position.set(predicted.x, me.downed ? kit.rules.player.downedEyeHeight : kit.rules.player.eyeHeight, predicted.z);
     eye.rotation.set(pitch, yaw, 0, 'YXZ');
+    const zoom = weaponView.update(state, me, {
+      dt: step, moving: !!(input.moveX || input.moveZ), aiming, aspect: eye.aspect,
+      available: state.phase !== 'defeat', playerId: selfId,
+    });
+    const baseFov = eye.aspect < 1 ? Math.min(90, camera.fov + 6) : camera.fov;
+    const nextFov = 360 / Math.PI * Math.atan(Math.tan(baseFov * Math.PI / 360) / zoom);
+    if (Math.abs(eye.fov - nextFov) > 0.01) { eye.fov = nextFov; eye.updateProjectionMatrix(); }
     environment.update(predicted.x, predicted.z);
     actors.update(state, { playerId: selfId, dt: step });
     const canRevive = !me.downed && state.players.some(player => player.downed &&
@@ -343,6 +375,7 @@ export function createServiceLevelEntrance({
       world.hasLineOfSight(me.x, me.z, player.x, player.z));
     hud.update(state, { playerId: selfId, canRevive, canRestart: !paused && !leaving });
     drawAdventureScene(T, renderer, level, eye);
+    weaponView.draw(renderer);
   }
 
   function topLevelInput(event) {
@@ -351,6 +384,12 @@ export function createServiceLevelEntrance({
       resetInput();
       if (document.pointerLockElement === canvas) document.exitPointerLock?.();
       event.stopImmediatePropagation(); return;
+    }
+    const weapon = WEAPON_KEYS[event.code];
+    if (weapon) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (event.type === 'keydown' && !event.repeat) selectWeapon(weapon);
+      return;
     }
     const inHud = event.target?.closest?.('button,input,textarea');
     if (inHud && !KEYS.has(event.code)) return;
@@ -383,10 +422,33 @@ export function createServiceLevelEntrance({
         controls.joy.classList.add('visible');
       }
       try { canvas.setPointerCapture(id); } catch { /* no capture */ }
-    } else if (event.button === 0) {
-      if (document.pointerLockElement === canvas) { fire = true; tap = 0.12; }
+    }
+  }, true);
+  // Pointer events collapse simultaneous mouse buttons into one press. Mouse
+  // events keep aiming and firing independent while the cursor is captured.
+  canvas.addEventListener('mousedown', event => {
+    if (!active) return;
+    event.stopImmediatePropagation();
+    if (event.sourceCapabilities?.firesTouchEvents) return;
+    if (event.button === 0) {
+      if (document.pointerLockElement === canvas) setFire(true);
       else { mouseLook = { x: event.clientX, y: event.clientY, left: true, distance: 0 }; lock(); }
-    } else if (event.button === 2) mouseLook = { x: event.clientX, y: event.clientY };
+    } else if (event.button === 2) {
+      aiming = true;
+      if (!mouseLook && document.pointerLockElement !== canvas) mouseLook = { x: event.clientX, y: event.clientY };
+    }
+  }, true);
+  addEventListener('mouseup', event => {
+    if (!active || event.sourceCapabilities?.firesTouchEvents) return;
+    if (event.button === 2) {
+      aiming = false;
+      if (!mouseLook?.left) mouseLook = null;
+    }
+    if (event.button === 0) {
+      if (mouseLook?.left && mouseLook.distance < 4) setFire(true);
+      fire = false;
+      mouseLook = null;
+    }
   }, true);
   canvas.addEventListener('pointermove', event => {
     if (!active) return;
@@ -413,9 +475,9 @@ export function createServiceLevelEntrance({
     if (tracked?.side === 'move') {
       joyX = joyZ = 0; controls.joy.classList.remove('visible'); controls.joy.firstChild.style.transform = '';
     }
-    if (event.pointerType !== 'touch') {
-      if (event.type === 'pointerup' && mouseLook?.left && mouseLook.distance < 4) tap = 0.12;
-      fire = false; mouseLook = null;
+    if (event.type === 'pointercancel' && event.pointerType !== 'touch') {
+      fire = aiming = false;
+      mouseLook = null;
     }
   }
   for (const event of ['pointerup', 'pointercancel']) addEventListener(event, releasePointer, true);
@@ -426,11 +488,11 @@ export function createServiceLevelEntrance({
   document.addEventListener('visibilitychange', () => { if (document.hidden && active) resetInput(); });
   document.addEventListener('pointerlockchange', () => {
     if (!active) return;
-    fire = false; tap = 0; mouseLook = null;
+    fire = aiming = false; tap = 0; mouseLook = null;
     hud?.setLocked(document.pointerLockElement === canvas);
   });
   document.addEventListener('mousemove', event => {
-    if (active && document.pointerLockElement === canvas) rotate(event.movementX, event.movementY, 0.0023);
+    if (active && document.pointerLockElement === canvas) rotate(event.movementX, event.movementY, aiming ? 0.0015 : 0.0023);
   });
   new ResizeObserver(() => { dirtyResize = true; }).observe(canvas);
   const style = document.createElement('style');

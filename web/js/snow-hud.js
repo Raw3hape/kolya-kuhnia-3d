@@ -1,12 +1,13 @@
 // Lightweight DOM overlay for walking, fitting gear and riding. The controller
 // owns bindings and camera, while the HUD turns touch gestures into intents.
 const STYLE_URL = new URL('../css/snow.css', import.meta.url);
-const SURFACE = { powder: 'Пухляк', groomed: 'Трасса', ice: 'Лёд' };
+const SURFACE = { powder: 'Пухляк', groomed: 'Укатанный снег', ice: 'Лёд' };
 const GEAR = {
   ski: { name: 'Лыжи', take: 'Взять лыжи' },
   board: { name: 'Сноуборд', take: 'Взять сноуборд' },
 };
 const ICON = {
+  center: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3m10 0h3M12 4v3m0 10v3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>',
   users: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M2 20v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2m4 0v-2a5 5 0 0 0-3-4.6M16 4a3.2 3.2 0 0 1 0 6.4"/></svg>',
   left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>',
   right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg>',
@@ -61,7 +62,7 @@ function holdControl(button, changed, signal) {
   return release;
 }
 
-export function createSnowHud({ onEquip, onReturn, onReset, onInput, config } = {}) {
+export function createSnowHud({ onEquip, onReturn, onReset, onInput, onCenter, config } = {}) {
   if (!document.getElementById('snow-hud-style')) {
     const css = document.createElement('link');
     css.id = 'snow-hud-style';
@@ -91,6 +92,7 @@ export function createSnowHud({ onEquip, onReturn, onReset, onInput, config } = 
     </header>
     <nav class="snow-actions" aria-label="Управление спуском">
       <span class="snow-group" aria-label="Участников на склоне" hidden>${ICON.users}<output class="snow-team"></output></span>
+      <button type="button" class="snow-center" aria-label="Смотреть по ходу" hidden>${ICON.center}</button>
       <button type="button" class="snow-reset" hidden>К снаряжению</button>
       <button type="button" class="snow-return">На кухню</button>
     </nav>
@@ -106,6 +108,7 @@ export function createSnowHud({ onEquip, onReturn, onReset, onInput, config } = 
     <div class="snow-legend" aria-label="Клавиши" hidden>
       <span><kbd>A</kbd><kbd>D</kbd> Поворот</span>
       <span><kbd>W</kbd> Разгон</span>
+      <span><kbd>Мышь</kbd> Обзор <kbd>C</kbd> По ходу</span>
       <span><kbd>S</kbd> Тормоз</span>
       <span><kbd>Пробел</kbd> Прыжок</span>
       <span><kbd>Q</kbd><kbd>E</kbd> Вращение</span>
@@ -130,6 +133,7 @@ export function createSnowHud({ onEquip, onReturn, onReset, onInput, config } = 
   const instrument = find('.snow-instruments'), speed = find('.snow-speed'), meter = find('.snow-speed-track i');
   const distance = find('.snow-distance'), gear = find('.snow-gear'), condition = find('.snow-condition');
   const group = find('.snow-group'), team = find('.snow-team'), reset = find('.snow-reset');
+  const center = find('.snow-center');
   const fitting = find('.snow-fitting'), approach = find('.snow-approach'), equip = find('.snow-equip');
   const equipLabel = equip.querySelector('span');
   const legend = find('.snow-legend'), touchControls = find('.snow-touch'), flipControl = find('.snow-flip');
@@ -153,6 +157,7 @@ export function createSnowHud({ onEquip, onReturn, onReset, onInput, config } = 
   window.addEventListener('blur', releaseControls, { signal });
   document.addEventListener('visibilitychange', () => { if (document.hidden) releaseControls(); }, { signal });
   find('.snow-return').addEventListener('click', () => onReturn?.(), { signal });
+  center.addEventListener('click', () => onCenter?.(), { signal });
   reset.addEventListener('click', () => onReset?.({ walk: true }), { signal });
   equip.addEventListener('click', () => { if (nearest) onEquip?.(nearest); }, { signal });
 
@@ -166,7 +171,7 @@ export function createSnowHud({ onEquip, onReturn, onReset, onInput, config } = 
     for (const e of snapshot.events ?? []) {
       if (e.id <= eventId || e.playerId !== playerId) continue;
       eventId = e.id;
-      if (e.type === 'crash') notice = 'Падение · возвращаемся на трассу';
+      if (e.type === 'crash') notice = 'Падение · возвращаемся на склон';
       else if (e.type === 'land' && e.bonus) {
         const rotations = Math.round(Math.abs(e.rotation || 0) / (Math.PI * 2));
         const flips = Math.round(Math.abs(e.flips || 0) / (Math.PI * 2));
@@ -205,6 +210,7 @@ export function createSnowHud({ onEquip, onReturn, onReset, onInput, config } = 
     panel.classList.toggle('is-touch', showTouch);
     reset.hidden = walking || !onReset;
     reset.disabled = !!status;
+    center.hidden = !canRide || !onCenter;
     group.hidden = snapshot.players.length < 2;
     if (!group.hidden) setText(team, String(snapshot.players.length));
     legend.hidden = walking || showTouch || !!status;

@@ -3,6 +3,7 @@ const STYLE = {
   pistol: { speed: 290, width: .014, tail: 7, color: '#ff9c40' },
   rifle: { speed: 520, width: .012, tail: 17, color: '#ffb04f' },
   bolt: { speed: 660, width: .018, tail: 24, color: '#ffd17f' },
+  uzi: { speed: 325, width: .013, tail: 8, color: '#ffab61' },
   shotgun: { speed: 260, width: .009, tail: 5, color: '#ffac55' },
 };
 const LIMIT = 96;

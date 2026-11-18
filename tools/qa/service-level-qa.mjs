@@ -103,6 +103,40 @@ async function measure(page) {
 async function solo() {
   const page = await pageFor();
   await soloAtDoor(page);
+  await page.getByRole('button', { name: 'Скрыть панель', exact: true }).click();
+  await frame(page, () => {
+    const poster = __kitchen.scene.getObjectByName('Входная дверь · Открывай на удачу');
+    return poster?.parent.userData.door.id === 'entry_door' && poster.children[0].children[0].material.map.image?.complete;
+  });
+  await shot(page, 'door-poster');
+  await page.evaluate(() => {
+    __kitchen.doors.setOpen('room3_balcony_door', true, { instant: true });
+    __kitchen.walk.enter({ x: -1.37, z: -0.9 }, 0);
+  });
+  const uziAsset = page.waitForResponse(response => /\/uzi\.glb(?:\?|$)/.test(response.url()) && response.ok());
+  await page.keyboard.press('6');
+  await uziAsset;
+  await frame(page, () => __kitchen.viewmodel.weapon === 'uzi' && __kitchen.viewmodel.armed);
+  await page.waitForTimeout(500);
+  const shotsBefore = await attr(page, () => __kitchen.viewmodel.shots);
+  await page.mouse.click(600, 380);
+  await frame(page, before => __kitchen.viewmodel.shots > before, shotsBefore);
+  await shot(page, 'uzi-balcony');
+  await soloAtDoor(page);
+  await frame(page, () => Math.abs(__kitchen.walk.getNetworkPose().z - 5.47) < 0.02);
+  assert.equal(await page.evaluate(() => {
+    const p = __kitchen.walk.getNetworkPose();
+    return __kitchen.walk.lookAtPoint([p.x + 0.15, __kitchen.walk.eyeHeight + 1, p.z - 1]);
+  }), true);
+  await frame(page, () => !__kitchen.doors.target && !__kitchen.seats.target);
+  const apartmentShots = await attr(page, () => __kitchen.viewmodel.shots);
+  await page.mouse.click(600, 380);
+  await frame(page, before => __kitchen.viewmodel.shots > before, apartmentShots);
+  await page.evaluate(() => {
+    const p = __kitchen.walk.getNetworkPose();
+    __kitchen.walk.lookAtPoint([p.x, __kitchen.walk.eyeHeight, p.z + 1]);
+  });
+  await frame(page, () => __kitchen.doors.target?.id === 'entry_door');
   await openDestination(page, 'service');
   await frame(page, () => __kitchen.serviceLevel.previewVisible);
   await page.waitForTimeout(750);
@@ -112,6 +146,8 @@ async function solo() {
   await page.keyboard.up('w');
   await frame(page, () => document.querySelector('.sl-hud')?.offsetWidth > 0);
   assert.equal((await service(page)).phase, 'prep');
+  assert.equal((await service(page)).players[0].weapon, 'uzi');
+  await page.waitForTimeout(500);
   assert.equal(await attr(page, () => document.querySelector('.title-card').checkVisibility({checkVisibilityCSS:true})), false);
   await shot(page, 'inside');
   pass('Desktop door preview → walking transition → scene/HUD', await measure(page));
@@ -128,7 +164,23 @@ async function solo() {
   await page.keyboard.press('r');
   await frame(page, () => __kitchen.serviceLevel.snapshot?.players[0].reloadLeft > 0);
   await frame(page, () => __kitchen.serviceLevel.snapshot?.players[0].reloadLeft === 0);
-  pass('Native walking, pulse, reload and enemies in Chrome');
+  await page.mouse.down({ button: 'right' });
+  await frame(page, () => __kitchen.serviceLevel.snapshot.players[0].aiming);
+  const aimedAmmo = (await service(page)).players[0].ammo;
+  await page.mouse.click(600, 380);
+  await frame(page, before => __kitchen.serviceLevel.snapshot.players[0].aiming &&
+    __kitchen.serviceLevel.snapshot.players[0].ammo < before, aimedAmmo);
+  await page.mouse.up({ button: 'right' });
+  await page.keyboard.press('5');
+  await frame(page, () => __kitchen.serviceLevel.snapshot.players[0].weapon === 'shotgun');
+  await page.mouse.click(600, 380);
+  await frame(page, () => __kitchen.serviceLevel.snapshot.events.some(event =>
+    event.type === 'shot' && event.weapon === 'shotgun' && event.rays.length === 9));
+  await page.keyboard.press('1');
+  await frame(page, () => __kitchen.serviceLevel.snapshot.players[0].capacity === 0);
+  await page.keyboard.press('6');
+  await frame(page, () => __kitchen.serviceLevel.snapshot.players[0].weapon === 'uzi');
+  pass('Poster on moving door leaf, apartment and balcony Uzi, inherited maze loadout, ADS, switching and reloading');
   await shot(page, 'combat');
   await returnToHall(page);
   assert((await pose(page)).z < 6.43);
@@ -145,6 +197,13 @@ async function mobileAndCourier() {
   await frame(page, () => __kitchen.serviceLevel.active);
   await page.keyboard.up('w');
   await frame(page, () => document.querySelector('.sl-touch')?.getBoundingClientRect().height > 0);
+  await page.getByRole('button', { name: 'Uzi', exact: true }).tap();
+  await frame(page, () => __kitchen.serviceLevel.snapshot.players[0].weapon === 'uzi');
+  await page.getByRole('button', { name: 'Выстрел', exact: true }).tap();
+  await frame(page, () => __kitchen.serviceLevel.snapshot.players[0].ammo < 24);
+  const separated = await attr(page, () => document.querySelector('.sl-loadout').getBoundingClientRect().bottom <
+    document.querySelector('.sl-touch').getBoundingClientRect().top);
+  assert.equal(separated, true);
   await shot(page, 'mobile');
   const before = await attr(page, () => __kitchen.serviceLevel.view);
   const cdp = await page.context().newCDPSession(page);
@@ -236,10 +295,13 @@ async function online(destination = 'service') {
     await frame(guest, () => __kitchen.serviceLevel.snapshot.phase === 'combat');
     await guest.mouse.click(600,380);
     await frame(guest, () => document.pointerLockElement?.id === 'scene');
+    await guest.keyboard.press('6');
+    await frame(host, id => __kitchen.serviceLevel.snapshot.players.some(p => p.id === id && p.weapon === 'uzi'), guestId);
     await guest.mouse.down();
-    await frame(host, id => __kitchen.serviceLevel.snapshot.players.some(p => p.id === id && p.ammo < p.capacity), guestId);
+    await frame(host, id => __kitchen.serviceLevel.snapshot.players.some(p => p.id === id && p.weapon === 'uzi' && p.ammo < p.capacity), guestId);
     await guest.mouse.up();
-    pass('Two WebRTC clients share seed, roster and guest pulse state', { seed: a.seed });
+    await frame(host, id => __kitchen.serviceLevel.snapshot.events.some(e => e.type === 'shot' && e.playerId === id && e.weapon === 'uzi'), guestId);
+    pass('Two WebRTC clients share seed, roster, Uzi selection, ammo and shots', { seed: a.seed });
   }
   await shot(host, 'online');
   await guest.bringToFront();
@@ -275,11 +337,60 @@ async function pickGear(page, kind, mobile = false) {
   }, kind);
 }
 
+async function snowLook(page, mobile, dx, dy) {
+  if (mobile) {
+    const session = await page.context().newCDPSession(page);
+    try {
+      const x = 235, y = 330;
+      await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx, y: y + dy }] });
+      await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } finally { await session.detach(); }
+  } else {
+    await page.mouse.move(600, 360);
+    if (!await attr(page, () => document.pointerLockElement?.id === 'scene')) {
+      await page.mouse.click(600, 360);
+      await frame(page, () => document.pointerLockElement?.id === 'scene');
+    }
+    await page.mouse.move(600 + dx, 360 + dy, { steps: 5 });
+  }
+}
+
+async function snowFirstPerson(page, mobile) {
+  const gear = mobile ? 'ski' : 'board';
+  await frame(page, kind => __kitchen.serviceLevel.view?.gear === kind, gear);
+  const before = await attr(page, () => __kitchen.serviceLevel.view);
+  await snowLook(page, mobile, mobile ? 105 : 210, 0);
+  await frame(page, yaw => Math.abs(Math.sin(__kitchen.serviceLevel.view.yaw - yaw)) > 0.25, before.yaw);
+  const side = await attr(page, () => ({
+    view: __kitchen.serviceLevel.view, rider: __kitchen.serviceLevel.snapshot.players[0],
+  }));
+  assert(Math.hypot(side.view.x - side.rider.x, side.view.z - side.rider.z) < 0.65, 'camera travels at the rider');
+  assert(side.view.y - side.rider.y > 0.65 && side.view.y - side.rider.y < 1.85, 'camera remains at head height');
+  assert(Math.abs(side.rider.lean) < 0.1, 'looking aside does not steer');
+  async function center() {
+    if (mobile) await page.getByRole('button', { name: 'Смотреть по ходу', exact: true }).tap();
+    else await page.keyboard.press('c');
+  }
+  await center();
+  await frame(page, () => Math.abs(__kitchen.serviceLevel.view.pitch) < 0.42);
+  await snowLook(page, mobile, 0, mobile ? 220 : 600);
+  await frame(page, () => __kitchen.serviceLevel.view.pitch < -1.16);
+  await shot(page, mobile ? 'snow-mobile-skis-down' : 'snow-board-down');
+  await center();
+  await frame(page, () => Math.abs(__kitchen.serviceLevel.view.pitch) < 0.42);
+  pass(mobile ? 'Touch first-person look and visible ski gear' : 'Mouse first-person head look, snowboard, and recenter', {
+    gear, eyeHeight: side.view.y - side.rider.y, lookRadians: Math.abs(side.view.yaw - before.yaw),
+  });
+}
+
 async function snowSolo(mobile = false) {
   const page = await pageFor(url, mobile);
   await soloAtDoor(page);
   await openDestination(page, 'snow', mobile);
   await frame(page, () => __kitchen.serviceLevel.previewVisible);
+  const courierToast = page.locator('.social-hud:not([hidden])').getByText('Курьер Żabka у двери', { exact: true });
+  assert.equal(await courierToast.count(), 0);
   await page.waitForTimeout(750);
   await shot(page, mobile ? 'snow-mobile-door' : 'snow-door');
   await page.keyboard.down('w');
@@ -291,6 +402,7 @@ async function snowSolo(mobile = false) {
   await page.keyboard.down('w');
   await frame(page, () => __kitchen.serviceLevel.snapshot.players[0].speed > 6);
   await page.keyboard.up('w');
+  await snowFirstPerson(page, mobile);
   if (mobile) await page.getByRole('button', { name: 'Прыжок', exact: true }).tap();
   else await page.keyboard.press('Space');
   await frame(page, () => __kitchen.serviceLevel.snapshot.players[0].phase === 'air');
@@ -311,11 +423,11 @@ async function snowSolo(mobile = false) {
 try {
   browser = await chromium.launch({ channel:'chrome', headless:true,
     args:['--mute-audio','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows'] });
-  if (mode === 'all' || mode === 'solo') await solo();
-  if (mode === 'all' || mode === 'mobile') await mobileAndCourier();
+  if (['all', 'solo', 'arsenal'].includes(mode)) await solo();
+  if (['all', 'mobile', 'arsenal'].includes(mode)) await mobileAndCourier();
   if (mode === 'all' || mode === 'online') await online();
-  if (mode === 'all' || mode === 'snow') await snowSolo();
-  if (mode === 'all' || mode === 'snow-mobile') await snowSolo(true);
+  if (['all', 'snow', 'snow-first-person'].includes(mode)) await snowSolo();
+  if (['all', 'snow-mobile', 'snow-first-person'].includes(mode)) await snowSolo(true);
   if (mode === 'all' || mode === 'snow-online') await online('snow');
   assert.deepEqual(report.pageErrors, []);
 } catch (error) {

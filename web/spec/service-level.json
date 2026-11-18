@@ -23,21 +23,10 @@
     "spawnSpace": 0.8,
     "spawnRings": 2
   },
-  "pulse": {
-    "capacity": 12,
-    "reserve": 54,
-    "damage": 27,
-    "recovery": 0.24,
-    "reload": 1.35,
-    "range": 27,
-    "enemyReturn": 4,
-    "emergencySeconds": 4,
-    "emergencyReserve": 12
-  },
   "perks": [
     { "wave": 3, "id": "quickCharge", "reloadFactor": 0.71 },
     { "wave": 6, "id": "overclock", "damageFactor": 1.34 },
-    { "wave": 9, "id": "reinforced", "healthBonus": 30, "capacityBonus": 4 }
+    { "wave": 9, "id": "reinforced", "healthBonus": 30 }
   ],
   "director": {
     "initialPrep": 11,

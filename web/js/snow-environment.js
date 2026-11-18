@@ -3,32 +3,26 @@
 import * as THREE from 'three';
 import { SNOW_TILE as TILE, snowHash } from './snow-world.js';
 
-export const SNOW_LOOK = Object.freeze({ sky: 0x98bfd7, fog: 0xb0cbdc, fogNear: 175, fogFar: 1100, far: 3200 });
+export const SNOW_LOOK = Object.freeze({
+  sky: 0xb4cddd, fog: 0xb4cddd, fogNear: 145, fogFar: 1150, far: 3200,
+});
 const CHUNK_RADIUS = 4;
-const OUTER_SIZE = 640;
-const OUTER_STEP = 32;
 const EDGE_STEP = 2;
+const HORIZON_BANDS = [
+  { width: 384, spacing: 16 },
+  { width: 640, spacing: 32 },
+];
 const LIMIT = Object.freeze({ eco: { near: 32, middle: 8, budget: 3 }, fast: { near: 32, middle: 8, budget: 3 }, high: { near: 32, middle: 16, budget: 4 }, ultra: { near: 32, middle: 16, budget: 4 } });
 const clamp01 = x => Math.min(1, Math.max(0, x));
 const smooth = x => { const k = clamp01(x); return k * k * (3 - 2 * k); };
 const lerp = (a, b, u) => a * (1 - u) + b * u;
 const keyOf = (x, z) => x + ',' + z;
-const sun = new THREE.Vector3(-0.48, 0.68, -0.55).normalize();
+const sun = new THREE.Vector3(-0.72, 0.42, -0.36).normalize();
 const sunHorizontal = Math.hypot(sun.x, sun.z);
 const shadeX = -sun.x / sunHorizontal, shadeZ = -sun.z / sunHorizontal;
 
-function grain(seed) {
-  const n = 128;
-  const image = new Uint8Array(n * n * 4);
-  for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) {
-    const i = (z * n + x) * 4;
-    const wind = Math.sin((x * 6 + z * 3) * Math.PI / n + 0.61 * Math.sin(z * 10 * Math.PI / n));
-    const light = 233 + Math.round(snowHash(x, z, seed) * 16 + wind * 5);
-    image[i] = image[i + 1] = image[i + 2] = light;
-    image[i + 3] = 255;
-  }
+function tiledTexture(n, image) {
   const texture = new THREE.DataTexture(image, n, n, THREE.RGBAFormat);
-  texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.magFilter = THREE.LinearFilter;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -37,30 +31,81 @@ function grain(seed) {
   return texture;
 }
 
-function atmosphere() {
-  const light = new THREE.Color(0xc7deeb), high = new THREE.Color(0x588bb9), sunColor = new THREE.Color(0xffefd4);
+function periodicNoise(u, v, cells, seed) {
+  const x = u * cells, z = v * cells;
+  const ix = Math.floor(x), iz = Math.floor(z);
+  const fx = smooth(x - ix), fz = smooth(z - iz);
+  const a = ix % cells, b = iz % cells, nextA = (a + 1) % cells, nextB = (b + 1) % cells;
+  return lerp(lerp(snowHash(a, b, seed), snowHash(nextA, b, seed), fx),
+    lerp(snowHash(a, nextB, seed), snowHash(nextA, nextB, seed), fx), fz);
+}
+
+function grain(seed) {
+  const n = 128, tau = 2 * Math.PI;
+  const image = new Uint8Array(n * n * 4);
+  for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) {
+    const i = (z * n + x) * 4, u = x / n, v = z / n;
+    const packed = periodicNoise(u, v, 7, seed ^ 0x163b);
+    const warp = periodicNoise(u, v, 5, seed ^ 0x19ac);
+    const curl = (5 * u + 4 * v + warp * .62) * tau;
+    const gust = (.3 + .7 * warp) * Math.sin(curl);
+    const light = Math.round(242 + 4 * gust + 6 * (packed - .5) +
+      13 * (snowHash(x, z, seed) - .5));
+    image[i] = light - 1;
+    image[i + 1] = light;
+    image[i + 2] = light + 2;
+    image[i + 3] = 255;
+  }
+  const texture = tiledTexture(n, image);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function cloudCover(seed) {
+  const n = 128, image = new Uint8Array(n * n * 4);
+  for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) {
+    const i = (z * n + x) * 4;
+    const u = x / n, v = z / n;
+    image[i] = Math.round(255 * (0.65 * periodicNoise(u, v, 5, seed ^ 5) +
+      0.24 * periodicNoise(u, v, 11, seed ^ 11) + 0.11 * periodicNoise(u, v, 28, seed ^ 28)));
+    image[i + 3] = 255;
+  }
+  return tiledTexture(n, image);
+}
+
+function atmosphere(cover) {
+  const horizon = new THREE.Color(SNOW_LOOK.fog), high = new THREE.Color(0x477eae);
+  const cloud = new THREE.Color(0xf5f4ee), sunColor = new THREE.Color(0xfff2cd);
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(SNOW_LOOK.far * 0.61, 28, 16), new THREE.ShaderMaterial({
-    uniforms: { horizon: { value: light }, high: { value: high }, sunDir: { value: sun }, sunColor: { value: sunColor } },
+    uniforms: {
+      horizon: { value: horizon }, high: { value: high }, sunDir: { value: sun },
+      cloud: { value: cloud }, sunColor: { value: sunColor }, cover: { value: cover },
+    },
     side: THREE.BackSide, depthWrite: false,
     vertexShader: `
       varying vec3 vDirection;
       void main() {
-        vDirection = normalize(position);
+        vDirection = position;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
       }`,
     fragmentShader: `
-      uniform vec3 horizon, high, sunDir, sunColor;
+      uniform vec3 horizon, high, sunDir, cloud, sunColor;
+      uniform sampler2D cover;
       varying vec3 vDirection;
       void main() {
         vec3 direction = normalize(vDirection);
-        float elevation = max(0., direction.y);
+        float elevation = direction.y;
         float sunLight = max(0., dot(sunDir, direction));
-        vec3 sky = mix(horizon, high, smoothstep(-.045, .81, direction.y));
-        sky = mix(sky, sunColor, .12 * pow(sunLight, 12.) + .32 * pow(sunLight, 220.));
-        vec2 drift = direction.xz / max(.13, direction.y + .04);
-        float cirrus = .5 + .3 * sin(21. * drift.x + 7. * drift.y) + .2 * sin(8. * drift.x - 3. * drift.y);
-        float cloud = smoothstep(.55, 1., cirrus) * smoothstep(.08,.23,elevation) * (1. - smoothstep(.36,.52,elevation));
-        sky = mix(sky, horizon * 1.12, .14 * cloud);
+        vec3 sky = mix(horizon, high, pow(clamp(elevation, 0., 1.), .65));
+        vec2 drift = direction.xz / max(.09, elevation + .09);
+        vec2 wisps = vec2(drift.x + .46 * drift.y, drift.y - .46 * drift.x);
+        float cloudMap = .72 * texture2D(cover, wisps * vec2(.127, .29)).r
+          + .28 * texture2D(cover, wisps * vec2(.251, .53) + .37).r;
+        float veil = smoothstep(.50, .76, cloudMap) * smoothstep(.035, .21, elevation);
+        sky = mix(sky, cloud, .63 * veil);
+        float halo = .11 * pow(sunLight, 12.) + .28 * pow(sunLight, 156.);
+        sky = mix(sky, sunColor, halo);
         gl_FragColor = vec4(sky, 1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -69,6 +114,19 @@ function atmosphere() {
   mesh.frustumCulled = false;
   mesh.renderOrder = -100;
   return mesh;
+}
+
+// Radial distance keeps the snow/sky transition continuous during free look,
+// including the edges of a wide field of view.
+function withRadialHaze(material) {
+  material.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader.replace('#include <fog_vertex>', `
+      #ifdef USE_FOG
+        vFogDepth = length(mvPosition.xyz);
+      #endif
+    `);
+  };
+  return material;
 }
 
 function pineShadows(world, x, z) {
@@ -84,9 +142,9 @@ function pineShadows(world, x, z) {
   return props;
 }
 
-function fillTerrain(world, left, top, dx, dz, nx, nz, borders, shadows = []) {
+function fillTerrain(world, left, top, dx, dz, nx, nz, borders, shadows = [], borderStep = EDGE_STEP) {
   const width = nx + 1;
-  const extraX = Math.max(0, dx / EDGE_STEP - 1), extraZ = Math.max(0, dz / EDGE_STEP - 1);
+  const extraX = Math.max(0, dx / borderStep - 1), extraZ = Math.max(0, dz / borderStep - 1);
   const spare = 2 * nx * extraX + 2 * nz * extraZ;
   const fan = spare ? 2 * (nx + nz) : 0;
   const count = (nx + 1) * (nz + 1) + spare + fan;
@@ -96,8 +154,10 @@ function fillTerrain(world, left, top, dx, dz, nx, nz, borders, shadows = []) {
   const pivotY = world.height(left + dx * nx / 2, top + dz * nz / 2);
   const row = {}, north = {}, south = {};
   const height = world.heightOnCourse;
-  const cold = new THREE.Color(0x91afc7), lit = new THREE.Color(0xfffef3);
-  const ice = new THREE.Color(0x86b5d4), rock = new THREE.Color(0x52606c), color = new THREE.Color();
+  const cold = new THREE.Color(0x8cabc4), lit = new THREE.Color(0xfffcf1);
+  const windward = new THREE.Color(0xc8dce2), drift = new THREE.Color(0xf2f4ef);
+  const rock = new THREE.Color(0x3f4b57), rockLit = new THREE.Color(0x737e86);
+  const color = new THREE.Color(), exposedRock = new THREE.Color();
   const normalStep = 1.1;
   let rowZ = NaN, vertexCount = 0, indexCount = 0;
 
@@ -115,18 +175,28 @@ function fillTerrain(world, left, top, dx, dz, nx, nz, borders, shadows = []) {
     positions[n * 3 + 2] = z - top;
     uvs[n * 2] = x / 15;
     uvs[n * 2 + 1] = z / 15;
-    const tiltX = (height(x + normalStep, row) - height(x - normalStep, row)) / (2 * normalStep);
-    const tiltZ = (height(x, south) - height(x, north)) / (2 * normalStep);
+    const east = height(x + normalStep, row), west = height(x - normalStep, row);
+    const foreground = height(x, south), background = height(x, north);
+    const tiltX = (east - west) / (2 * normalStep);
+    const tiltZ = (foreground - background) / (2 * normalStep);
     const facing = (sun.y - sun.x * tiltX - sun.z * tiltZ) / Math.hypot(1, tiltX, tiltZ);
-    const grade = Math.hypot(tiltX, tiltZ), lateral = Math.abs(x - row.x);
-    const angular = smooth((facing + 0.17) / 1.19);
-    const wind = Math.sin(x * 0.09 + z * 0.053 + 0.8 * Math.sin(z * 0.041));
-    color.copy(cold).lerp(lit, 0.22 + angular * 0.72 + wind * 0.035);
-    const exposed = smooth((grade - 0.63 - wind * 0.12) / 1.12) * smooth((lateral - row.width * 0.85) / 40);
-    color.lerp(rock, exposed * (0.53 + 0.25 * smooth((lateral - row.width) / 100)));
+    const grade = Math.hypot(tiltX, tiltZ);
+    const angular = smooth((facing + 0.19) / 1.06);
+    const wind = Math.sin(x * .076 + z * .042 + 1.1 * Math.sin(z * .039));
+    // The prevailing wind lifts thin ridges on the exposed side while
+    // broad dips scatter light toward blue. Terrain relief stays readable.
+    const localRelief = foot - (east + west + foreground + background) * .25;
+    const summit = smooth((foot - row.y - 18) / 46);
+    color.copy(cold).lerp(lit, 0.26 + angular * 0.71 + wind * 0.024);
     const snow = world.snow(x, z, row);
-    if (snow === 'ice') color.lerp(ice, 0.31);
-    else if (snow === 'powder' && grade < 0.37) color.lerp(lit, 0.13);
+    if (snow === 'ice') color.lerp(windward, 0.16);
+    else if (snow === 'powder') color.lerp(drift, 0.06 + angular * 0.07);
+    // Dark layered bedrock is visible in patches on wind-scoured faces.
+    const strata = 0.55 * Math.sin(x * 0.091 - z * 0.041 + foot * 0.21) + 0.45 * wind;
+    const exposure = smooth((grade - 0.65 + strata * 0.23 + summit * 0.10) / 0.70);
+    const cornice = smooth((localRelief - .003) / .019) * (1 - exposure);
+    exposedRock.copy(rock).lerp(rockLit, angular * 0.88);
+    color.lerp(drift, cornice * 0.16).lerp(exposedRock, exposure * 0.91);
     let shaded = 0;
     for (const shadow of shadows) {
       const cx = x - shadow.x, cz = z - shadow.z;
@@ -186,7 +256,7 @@ function fillTerrain(world, left, top, dx, dz, nx, nz, borders, shadows = []) {
 const brush = Object.freeze({
   trunk: new THREE.Color(0x594a43),
   twig: new THREE.Color(0x344f54), needle: new THREE.Color(0x50716e), ice: new THREE.Color(0xbed2d7),
-  snow: new THREE.Color(0xe3edf0), marker: new THREE.Color(0xe85c38), dark: new THREE.Color(0x92402a),
+  snow: new THREE.Color(0xe3edf0),
 });
 
 function foliage(world, x, z, detail) {
@@ -233,20 +303,6 @@ function foliage(world, x, z, detail) {
         i % 2 ? brush.needle : brush.twig, tree.snowcap > 0.58 ? brush.snow : brush.ice, lean * 0.56);
     }
   }
-  // Flexible trail markers give the line visual rhythm in featureless snow.
-  const stride = 31;
-  for (let index = Math.floor(-originZ / stride); -index * stride >= originZ; index++) {
-    const z = -index * stride;
-    if (z >= originZ + TILE || z > -26) continue;
-    const line = world.course(z);
-    for (const side of [-1, 1]) {
-      const x = line.x + side * line.width * (0.56 + 0.11 * Math.sin(index));
-      if (x < originX || x >= originX + TILE) continue;
-      const y = world.height(x, z);
-      cone(x, y - 0.08, z, 0.10, 1.45, 4, 0.71, brush.dark);
-      cone(x, y + 0.96, z, 0.16, 0.56, 4, 0.71, brush.marker);
-    }
-  }
   if (!positions.length) return null;
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -257,9 +313,10 @@ function foliage(world, x, z, detail) {
 
 export function createSnowEnvironment(world, { quality = 'eco' } = {}) {
   const settings = LIMIT[quality] ?? LIMIT.eco;
-  const floorTexture = grain(world.seed), sky = atmosphere(), group = new THREE.Group();
-  const land = new THREE.MeshBasicMaterial({ vertexColors: true, map: floorTexture });
-  const plants = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const floorTexture = grain(world.seed), cover = cloudCover(world.seed);
+  const sky = atmosphere(cover), group = new THREE.Group();
+  const land = withRadialHaze(new THREE.MeshBasicMaterial({ vertexColors: true, map: floorTexture }));
+  const plants = withRadialHaze(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   group.name = 'snow_world';
   group.add(sky);
   const active = new Map();
@@ -291,19 +348,26 @@ export function createSnowEnvironment(world, { quality = 'eco' } = {}) {
   function horizonAround(tx, tz) {
     for (const mesh of horizon) drop(mesh);
     horizon = [];
-    const x0 = (tx - CHUNK_RADIUS) * TILE, x1 = (tx + CHUNK_RADIUS + 1) * TILE;
-    const z0 = (tz - CHUNK_RADIUS) * TILE, z1 = (tz + CHUNK_RADIUS + 1) * TILE;
-    const left = x0 - OUTER_SIZE, right = x1 + OUTER_SIZE;
-    const top = z0 - OUTER_SIZE, bottom = z1 + OUTER_SIZE;
-    const patches = [
-      [left, top, right, z0, 2], [left, z0, x0, z1, 1],
-      [x1, z0, right, z1, 3], [left, z1, right, bottom, 0],
-    ];
-    for (const [a, b, c, d, boundary] of patches) {
-      const stitches = (side, coordinate) => side === boundary && (side % 2 === 1 || (coordinate >= x0 && coordinate <= x1));
-      const { geometry, pivotY } = fillTerrain(world, a, b, OUTER_STEP, OUTER_STEP,
-        (c - a) / OUTER_STEP, (d - b) / OUTER_STEP, stitches);
-      horizon.push(setGround(geometry, a, b, pivotY));
+    let x0 = (tx - CHUNK_RADIUS) * TILE, x1 = (tx + CHUNK_RADIUS + 1) * TILE;
+    let z0 = (tz - CHUNK_RADIUS) * TILE, z1 = (tz + CHUNK_RADIUS + 1) * TILE;
+    let borderStep = EDGE_STEP;
+    // The inner band resolves cliff silhouettes, the coarser outer band
+    // carries only the skyline through the atmospheric falloff.
+    for (const { width, spacing } of HORIZON_BANDS) {
+      const left = x0 - width, right = x1 + width;
+      const top = z0 - width, bottom = z1 + width;
+      const patches = [
+        [left, top, right, z0, 2], [left, z0, x0, z1, 1],
+        [x1, z0, right, z1, 3], [left, z1, right, bottom, 0],
+      ];
+      for (const [a, b, c, d, boundary] of patches) {
+        const stitches = (side, coordinate) => side === boundary && (side % 2 === 1 || (coordinate >= x0 && coordinate <= x1));
+        const { geometry, pivotY } = fillTerrain(world, a, b, spacing, spacing,
+          (c - a) / spacing, (d - b) / spacing, stitches, [], borderStep);
+        horizon.push(setGround(geometry, a, b, pivotY));
+      }
+      x0 = left; x1 = right; z0 = top; z1 = bottom;
+      borderStep = spacing;
     }
   }
 
@@ -372,7 +436,7 @@ export function createSnowEnvironment(world, { quality = 'eco' } = {}) {
     for (const mesh of horizon) drop(mesh);
     horizon = [];
     drop(sky); sky.material.dispose();
-    floorTexture.dispose(); plants.dispose(); land.dispose();
+    cover.dispose(); floorTexture.dispose(); plants.dispose(); land.dispose();
     group.removeFromParent();
   }
 

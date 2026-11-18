@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createServiceLevel, moveServicePlayer, normalizeServiceInput } from '../web/js/service-level-simulation.js';
 import { createRoomAuthority } from '../web/js/multiplayer/authority.js';
-import { NETWORK_RULES } from '../web/js/multiplayer/rules.js';
+import { NETWORK_RULES, WEAPON_RULES } from '../web/js/multiplayer/rules.js';
 
 const readSpec = name => JSON.parse(readFileSync(new URL(`../web/spec/${name}.json`, import.meta.url), 'utf8'));
 const authored = readSpec('service-level');
@@ -16,7 +16,7 @@ test('shared service-level motion normalizes input and releases stale controls',
   assert.equal(sim.join('a'), true);
   assert.equal(sim.join('a'), false);
   const input = normalizeServiceInput({ seq: 4, yaw: Math.PI * 2, pitch: 4, moveX: 4, moveZ: 4, fire: 1 });
-  assert.deepEqual(input, { seq: 4, yaw: 0, pitch: Math.PI / 2, moveX: 1, moveZ: 1, fire: false, reload: false, interact: false });
+  assert.deepEqual(input, { seq: 4, yaw: 0, pitch: Math.PI / 2, moveX: 1, moveZ: 1, fire: false, trigger: null, weapon: null, aiming: false, reload: false, interact: false });
   const origin = sim.snapshot().players[0];
   const prediction = moveServicePlayer(sim.world, origin, input, 0.1, authored);
   assert.ok(Math.abs(range(origin, prediction) - authored.player.speed * 0.1) < 1e-8);
@@ -205,7 +205,9 @@ test('two room peers cross the original apartment threshold and share one run', 
     assert.equal(room.snapshot().serviceLevel.seed, seed);
     march('guest', { x, z: 3.97 });
     march('guest', { x, z: door.z1 + 0.04 });
+    assert.equal(action('guest', { kind: 'weapon', weapon: 'uzi' }), true);
     assert.equal(command('guest', 'enter'), true);
+    assert.equal(room.snapshot().serviceLevel.players.find(member => member.id === ids.get('guest')).weapon, 'uzi');
     assert.equal(command('guest', 'restart'), false);
     assert.equal(command('guest', 'input', { seq: 1, moveZ: 1, yaw: 0, pitch: 0, fire: true }), true);
     for (let i = 0; i < 3; i++) step();
@@ -216,8 +218,10 @@ test('two room peers cross the original apartment threshold and share one run', 
     assert.equal(guest.phase, 'combat');
     const guestPlayer = guest.players.find(member => member.id === ids.get('guest'));
     assert.ok(guestPlayer.z < 0);
-    assert.equal(guestPlayer.ammo, serviceSpec.pulse.capacity - 1);
-    assert.ok(guest.events.some(event => event.type === 'shot' && event.playerId === guestPlayer.id));
+    const shots = guest.events.filter(event => event.type === 'shot' && event.playerId === guestPlayer.id);
+    assert.equal(shots.length, 2);
+    assert.ok(shots.every(event => event.weapon === 'uzi' && event.rays.length === 1));
+    assert.equal(guestPlayer.ammo, WEAPON_RULES.uzi.mag - shots.length);
     assert.equal(command('guest', 'leave'), true);
     assert.deepEqual(room.snapshot().serviceLevel.players.map(member => member.id), [ids.get('local')]);
     room.disconnect('local');
@@ -226,4 +230,43 @@ test('two room peers cross the original apartment threshold and share one run', 
   } finally {
     room.dispose();
   }
+});
+
+
+test('maze loadout keeps magazines per weapon and resolves shared pellet, trigger and reload rules', () => {
+  const sim = createServiceLevel({ config: authored, seed: 73 });
+  sim.join('tester', 'shotgun');
+  let seq = 0;
+  const active = () => sim.snapshot().players[0];
+  const send = controls => {
+    assert.equal(sim.input('tester', { ...controls, seq: ++seq }), true);
+    sim.tick(.05);
+  };
+  const shotgun = WEAPON_RULES.shotgun;
+  send({ fire: true, trigger: 1 });
+  assert.equal(active().ammo, shotgun.mag - 1);
+  const shot = sim.snapshot().events.find(event => event.type === 'shot');
+  assert.equal(shot.weapon, 'shotgun');
+  assert.equal(shot.rays.length, shotgun.pellets);
+  assert.ok(new Set(shot.rays.map(ray => ray.join(','))).size > 1);
+  for (let i = 0; i < 8; i++) send({ fire: true, trigger: 1 });
+  assert.equal(active().ammo, shotgun.mag - 1, 'holding a single-shot trigger cannot fire twice');
+  send({ weapon: 'uzi', fire: true, trigger: 2, aiming: true });
+  assert.equal(active().weapon, 'uzi');
+  assert.equal(active().aiming, true);
+  assert.equal(active().ammo, WEAPON_RULES.uzi.mag - 1);
+  send({ weapon: 'none' });
+  assert.equal(active().capacity, 0);
+  send({ weapon: 'shotgun', reload: true });
+  assert.equal(active().ammo, shotgun.mag - 1);
+  assert.ok(active().reloadLeft > 0);
+  for (let i = 0; i <= Math.ceil(shotgun.reload / .05); i++) send({});
+  assert.equal(active().ammo, shotgun.mag);
+  assert.equal(active().reserve, shotgun.reserve);
+  send({ weapon: 'uzi' });
+  assert.equal(active().ammo, WEAPON_RULES.uzi.mag - 1);
+  send({ fire: true, trigger: 3 });
+  send({ weapon: 'shotgun', fire: true, trigger: 4 });
+  send({ fire: false });
+  assert.equal(active().ammo, shotgun.mag - 1, 'a click just after switching survives the previous weapon cooldown');
 });

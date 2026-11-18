@@ -170,6 +170,16 @@
 .snow-maneuvers .snow-jump { background: #d9eafa; color: #173049; }
 .snow-maneuvers .snow-jump.is-held { background: var(--snow-accent); }
 
+.snow-actions .snow-center {
+  display: grid;
+  width: 42px;
+  padding: 0;
+  place-items: center;
+}
+.snow-center svg {
+  width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.5;
+}
+
 @media (max-width: 650px) {
   .snow-panel { min-width: 132px; padding: 8px 10px 9px; }
   .snow-speed { font-size: 39px; }

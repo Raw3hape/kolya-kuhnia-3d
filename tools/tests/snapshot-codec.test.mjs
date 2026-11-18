@@ -12,8 +12,8 @@ const bytes = packet => packet.data instanceof ArrayBuffer
 function fixture() {
   const sim = createHuntSimulation({ spec: json('web/spec/hunt.json'), site: json('web/spec/site.json'), plan: json('web/spec/plan.generated.json'), seed: 'bandwidth' });
   let seq = 0;
-  const players = Array.from({ length: 10 }, (_, i) => ({ id: `player-${i}`, name: `Игрок ${i}`, avatar: i, x: 1 + i * 0.55, y: 0, z: 4.3, yaw: 0, pitch: 0, weapon: ['pistol', 'rifle', 'bolt', 'shotgun'][i % 4], score: i * 100, kills: i, held: null, seat: null, seatY: null, ack: 0,
-    ammo: { pistol: { mag: 12, reserve: 48 }, rifle: { mag: 30, reserve: 120 }, bolt: { mag: 5, reserve: 30 }, shotgun: { mag: 2, reserve: 24 } } }));
+  const players = Array.from({ length: 10 }, (_, i) => ({ id: `player-${i}`, name: `Игрок ${i}`, avatar: i, x: 1 + i * 0.55, y: 0, z: 4.3, yaw: 0, pitch: 0, weapon: ['pistol', 'rifle', 'bolt', 'shotgun', 'uzi'][i % 5], score: i * 100, kills: i, held: null, seat: null, seatY: null, ack: 0,
+    ammo: { pistol: { mag: 12, reserve: 48 }, rifle: { mag: 30, reserve: 120 }, bolt: { mag: 5, reserve: 30 }, shotgun: { mag: 2, reserve: 24 }, uzi: { mag: 24, reserve: 96 } } }));
   let effects = [];
   function playerFrame(p, index) {
     const time = seq * 0.05, rule = WEAPON_RULES[p.weapon], reloading = index % 3 === 0;

@@ -2,7 +2,11 @@
 // The same function drives ground patches, snow feel and the room's collision.
 export const SNOW_START = Object.freeze({ x: 0, y: 0, z: 0 });
 export const SNOW_TILE = 64;
-const DEFAULTS = Object.freeze({ baseGrade: 0.30, plateau: 6, runIn: 12, minWidth: 21, maxWidth: 38, recoveryWidth: 106 });
+const DEFAULTS = Object.freeze({
+  baseGrade: 0.315, plateau: 6, runIn: 16, minWidth: 64, maxWidth: 106, treeLineExtent: 360,
+});
+const REGION_LENGTH = 186;
+const ROLLER_SPACING = 112;
 const TAU = Math.PI * 2;
 const DERIVATIVE_STEP = 0.22;
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -38,76 +42,94 @@ export function createSnowWorld(seed, config = {}) {
   seed >>>= 0;
   const settings = { ...DEFAULTS, ...config };
   const phase = i => snowHash(i, 0, seed) * TAU;
-  const p1 = phase(1), p2 = phase(2), p3 = phase(3);
+  const p1 = phase(1), p2 = phase(2);
   const c1 = phase(4), c2 = phase(5), c3 = phase(6);
-  const originLevels = [Math.sin(p1), Math.sin(p2), Math.sin(p3)];
+  const originLevels = [Math.sin(p1), Math.sin(p2)];
   const k1 = seed ^ 0x93684a1f, k2 = seed ^ 0x10dafc7d, k3 = seed ^ 0x766da48d;
   const forest = new Map();
 
   function course(z, out = {}) {
     const d = -z;
     const t = runDistance(d, settings.plateau, settings.runIn);
-    const steady = between(settings.plateau + 3, 94, d);
-    const sin1 = Math.sin(t / 82 + p1), sin2 = Math.sin(t / 35 + p2), sin3 = Math.sin(t / 12 + p3);
-    out.x = steady * (Math.sin(d / 76 + c1) * 23 + Math.sin(d / 38 + c2) * 9);
-    out.y = -settings.baseGrade * t +
-      (sin1 - originLevels[0]) * 7.8 + (sin2 - originLevels[1]) * 2.3 + (sin3 - originLevels[2]) * 0.52;
+    const steady = between(settings.plateau + 3, 72, d);
+    const region = Math.floor(t / REGION_LENGTH), regionT = t / REGION_LENGTH - region;
+    const regionHeight = (snowHash(region, 472, k1) - 0.5) * 7.2;
+    const fold = Math.sin(t / 91 + p1), roll = Math.sin(t / 29 + p2);
+    // A seeded section envelope changes the skyline and grade without
+    // carrying cumulative height state or creating a seam at region edges.
+    const rim = Math.sin(Math.PI * regionT);
+    out.x = steady * (Math.sin(d / 94 + c1) * 20 + Math.sin(d / 41 + c2) * 7);
+    out.y = -settings.baseGrade * t + (fold - originLevels[0]) * 8.1 +
+      (roll - originLevels[1]) * 2.1 + regionHeight * rim ** 4;
     out.z = z;
-    out.width = lerp(settings.minWidth, settings.maxWidth, 0.5 + 0.5 * Math.sin(d / 105 + c3)) * lerp(0.85, 1, steady);
-    out.grade = settings.baseGrade - Math.cos(t / 82 + p1) * (7.8 / 82) -
-      Math.cos(t / 35 + p2) * (2.3 / 35) - Math.cos(t / 12 + p3) * (0.52 / 12);
-    out.grade *= between(settings.plateau, settings.plateau + settings.runIn, d);
-    out.zone = Math.floor(Math.max(0, d) / 240) % 3;
-    out.ridgeLeft = 188 + 44 * Math.sin(d / 165 + p2);
-    out.ridgeRight = 205 + 38 * Math.sin(d / 144 + c1);
-    out.leftRise = 92 + 168 * Math.abs(Math.sin(d / 108 + c2)) ** 3;
-    out.rightRise = 103 + 183 * Math.abs(Math.sin(d / 137 + p3)) ** 3;
+    out.width = lerp(settings.minWidth, settings.maxWidth, 0.5 + 0.5 * Math.sin(d / 124 + c3));
+    out.grade = (settings.baseGrade - Math.cos(t / 91 + p1) * (8.1 / 91) -
+      Math.cos(t / 29 + p2) * (2.1 / 29) -
+      4 * Math.PI / REGION_LENGTH * regionHeight * rim ** 3 * Math.cos(Math.PI * regionT)) *
+      between(settings.plateau, settings.plateau + settings.runIn, d);
+    out.bowl = 1.1 + 8.2 * noise(d / 158, 14, k1);
+    out.relief = 5.8 + 6.7 * noise(d / 193, 16, k2);
+    out.warp = 22 * Math.sin(d / 136 + c2);
     out.ramp = steady;
+    out.reverseRamp = between(5, 42, z);
+
+    // Each roller has one compact footprint and an asymmetric runout. Its
+    // position, scale and direction differ between sections of the descent.
+    const roller = Math.floor((d + ROLLER_SPACING / 2) / ROLLER_SPACING);
+    const variation = snowHash(roller, 421, k3);
+    out.rollerOrigin = roller * ROLLER_SPACING + (variation - 0.5) * 22;
+    out.rollerSide = (snowHash(roller, 91, k2) - 0.5) * out.width * 1.62;
+    out.rollerRise = 1.2 + variation * 2.65;
+    out.rollerBreadth = 14 + snowHash(roller, 274, k1) * 22;
+    out.rollerSkew = (snowHash(roller, 38, k3) - 0.5) * 0.50;
     return out;
   }
 
   function heightOnCourse(x, row) {
+    const offset = x - row.x, lateral = Math.abs(offset), normalized = lateral / row.width;
     const z = row.z;
-    const d = -z;
-    const xOffset = x - row.x, lateral = Math.abs(xOffset);
-    const turnIn = row.ramp;
-    const routeCulture = between(8, row.width * 1.08, lateral);
-    const bankNear = between(row.width * 0.43, row.width * 1.8, lateral);
-    // Short rolling rises have a flat approach and a forgiving landing.
-    const lipCell = Math.floor((d + 32) / 83);
-    const lipSeed = snowHash(lipCell, 421, k3);
-    const lipOrigin = lipCell * 83 + (lipSeed - 0.5) * 32;
-    const kickSide = (snowHash(lipCell, 91, k2) - 0.5) * row.width * 0.85;
-    const lipOffset = d - lipOrigin;
-    const crest = lipOffset < 0 ? between(-12, 0, lipOffset) : 1 - between(0, 6, lipOffset);
-    const jump = crest * (1 - between(1, 8, Math.abs(xOffset - kickSide))) * (0.71 + lipSeed * 1.35);
+    const intro = 1 - (1 - row.ramp) * (1 - between(8, 38, lateral)) * (1 - row.reverseRamp);
+    if (intro === 0) return row.y;
 
-    const rolling = (noise(x / 18, z / 31, k1) - 0.5) * 2.8 +
-      (noise(x / 7, z / 11, k2) - 0.5) * 0.48;
-    const bank = (2.9 + 2.4 * noise(x / 36, z / 62, k3)) * bankNear;
-    const rockiness = between(row.width + 4, 240, lateral);
-    const massif = Math.pow(noise(x / 220, z / 246, k2), 2.25);
-    const ridge = 1 - Math.abs(noise(x / 65, z / 91, k1) * 2 - 1);
-    const serrated = (noise(x / 19, z / 33, k3) - 0.5) * 9;
-    const broken = (noise(x / 27, z / 32, k2) - 0.45) * 11 + serrated;
-    const ridgeCenter = xOffset < 0 ? row.ridgeLeft : row.ridgeRight;
-    const ridgeHeight = xOffset < 0 ? row.leftRise : row.rightRise;
-    const shoulder = Math.max(0, 1 - Math.abs(lateral - ridgeCenter) / 150);
-    const scree = Math.max(0, shoulder) ** 1.4 * (ridgeHeight + broken * 2.5);
-    const mountain = scree * between(row.width, row.width + 38, lateral) + rockiness * ((massif * 275 + 54 * ridge * massif + broken) * (0.7 + 0.3 * Math.min(1, lateral / 240)));
-    // The start platform stays in the threshold plane, then opens naturally.
-    const intro = Math.max(turnIn, between(9, 34, lateral), between(5, 36, z));
-    return row.y + intro * (rolling * (0.3 + routeCulture * 0.7) + bank + mountain) + turnIn * jump;
+    const diagonal = z + offset * 0.28;
+    const waves = (noise((x + row.warp) / 49, diagonal / 76, k1) - 0.5) * row.relief;
+    const snowRoll = (noise(x / 12, diagonal / 24, k3) - 0.5) * 0.80;
+    // A broad glacial basin can open onto a nearly flat shelf. Playable
+    // cross slopes blend continuously into the rougher alpine terrain.
+    const bowl = between(0, 1.65, normalized) * row.bowl;
+    const outerShelf = between(0.92, 2.15, normalized);
+    const foothills = outerShelf ? outerShelf * (noise(x / 93, z / 132, k2) - 0.33) * 29 : 0;
+    const distanceFade = between(Math.max(136, row.width * 1.72), Math.max(404, row.width * 4.4), lateral);
+    let massifs = 0;
+    if (distanceFade > 0) {
+      const massif = noise(x / 188, (z + 0.38 * x) / 170, k2);
+      const shoulders = between(0.37, 0.93, massif);
+      const ridge = 1 - Math.abs(noise(x / 98, z / 132, k1) * 2 - 1);
+      const spine = between(0.51, 0.90, massif) * ridge;
+      const faces = (noise(x / 29, z / 45, k3) - 0.5) * 22;
+      const rock = (noise(x / 9, z / 17, k2) - 0.5) * 3.9;
+      massifs = distanceFade * (shoulders * 112 + spine * 196 + shoulders * (faces + rock));
+    }
+
+    let lip = 0;
+    const shift = offset - row.rollerSide;
+    if (Math.abs(shift) < row.rollerBreadth) {
+      const at = -z - row.rollerOrigin - shift * row.rollerSkew;
+      const profile = at <= 0 ? between(-25, 0, at) : 1 - between(0, 16, at);
+      lip = profile * (1 - between(2, row.rollerBreadth, Math.abs(shift))) * row.rollerRise;
+    }
+    return row.y + intro * (waves + bowl + snowRoll + foothills + massifs) + row.ramp * lip;
   }
 
   const row = {}, rowLo = {}, rowHi = {};
   const height = (x, z) => heightOnCourse(x, course(z, row));
   function snow(x, z, at = course(z, row)) {
     const lateral = Math.abs(x - at.x) / at.width;
-    if (-z <= settings.plateau + 16) return 'groomed';
-    const patch = noise(x / 9, z / 14, k3);
-    if (lateral > 0.62 + 0.42 * patch || (at.zone === 1 && lateral > 0.29 && patch < 0.55)) return 'powder';
-    if (patch > (at.zone === 2 ? 0.64 : 0.8) && lateral < 0.72) return 'ice';
+    if (-z <= settings.plateau + settings.runIn) return 'groomed';
+    const patch = noise(x / 16, z / 22, k3);
+    const drift = noise(x / 74, z / 112, k2);
+    if (lateral > 0.62 + 0.38 * patch || (drift < 0.34 && patch < 0.46)) return 'powder';
+    if (patch > 0.8 - 0.16 * drift && lateral < 1.04) return 'ice';
     return 'groomed';
   }
   function sample(x, z, out = {}) {
@@ -135,11 +157,12 @@ export function createSnowWorld(seed, config = {}) {
       const z = tileZ * span + (row + 0.12 + snowHash(a, b, k3) * 0.76) * size;
       const courseRow = course(z, at), lateral = Math.abs(x - courseRow.x);
       const woodland = noise(x / 94, z / 107, k3);
-      const trailhead = z < -29 && z > -190;
-      const forestEdge = trailhead ? Math.max(21, courseRow.width * 0.54 + 8) : courseRow.width * 0.83 + 7;
-      if (lateral < forestEdge || lateral > settings.recoveryWidth * 1.65) continue;
-      if (z > -29 && Math.abs(x) < 40) continue;
-      const cluster = trailhead && Math.abs(lateral - forestEdge) < 18 ? 0.78 : (courseRow.zone === 2 ? 1.25 : 0.97);
+      const trailhead = z < -29 && z > -205;
+      // Trees form detached pockets downwind, away from the traversable
+      // expanse. Their exact positions drive both scenery and collisions.
+      const minimum = courseRow.width * (trailhead ? 0.88 : 1.06);
+      if (lateral < minimum || lateral > settings.treeLineExtent) continue;
+      const cluster = trailhead ? 1.05 : 1.42;
       if (f + woodland < cluster) continue;
       sample(x, z, ground);
       const grade = Math.hypot(ground.dx, ground.dz);

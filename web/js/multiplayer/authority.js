@@ -1,3 +1,4 @@
+import { DEFAULT_MAZE_WEAPON } from '../weapon-catalog.js';
 import { seededRandom } from '../network-objects.js';
 import { createDoorJourney, DOOR_ENCOUNTERS } from '../door-journey.js';
 import { createSnowSimulation } from '../snow-simulation.js';
@@ -156,7 +157,8 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
           p.seat || rc?.isDriving(p.id) || social?.reservesLanding() || !doors[entrance.id] ||
           !entrance.crossed(p, 0.16)) return false;
       const run = destinations.get(route.mode) ?? createRun(route.mode, route.seed);
-      if (!run.simulation.join(p.id)) return false;
+      const weapon = p.weapon === 'none' ? DEFAULT_MAZE_WEAPON : p.weapon;
+      if (!run.simulation.join(p.id, weapon)) return false;
       release(p); p.destination = route.mode; p.y = p.vy = 0; p.action = null;
       return true;
     }
@@ -167,12 +169,14 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     if (p.destination === 'snow') {
       if (action.verb === 'equip') return simulation.select(p.id, action.equipment);
       if (action.verb === 'reset') return simulation.reset(p.id, { walk: action.walk === true });
-    } else if (action.verb === 'restart' && ['victory', 'defeat'].includes(simulation.snapshot().phase)) {
+    } else if (action.verb === 'restart') {
+      const previous = simulation.snapshot();
+      if (!['victory', 'defeat'].includes(previous.phase)) return false;
       // Maze retries get a new seed even when the door currently opens to snow.
       const nextSeed = Math.floor(seededRandom(`retry:${destinations.get('service').seed}`)() * 0x100000000);
       if (journey.route.mode === 'service') journey.reseed(nextSeed);
       const run = createRun('service', nextSeed);
-      for (const player of active()) if (player.destination === 'service') run.simulation.join(player.id);
+      for (const player of previous.players) run.simulation.join(player.id, player.weapon);
       return true;
     }
     return false;

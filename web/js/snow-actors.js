@@ -5,6 +5,7 @@ const COLORS = {
   snow: 0xcadce9, boot: 0x243849, joint: 0x334858, goggles: 0x91d7e6,
   lensEdge: 0x284657, bindings: 0x30414a, steel: 0xb4bec1, wood: 0x987050,
   ski: 0xe85c35, board: 0x205d9b, flag: 0xf7ba53,
+  sole: 0x1c2936, bootTrim: 0x4f6271, buckle: 0xbca078,
 };
 const OUTFITS = [0xde724d, 0x336eaa, 0x477d64, 0x994d7e, 0xb88a30, 0x547396, 0xb25845, 0x508c88];
 const GEAR = {
@@ -19,18 +20,26 @@ const PARTICLE_COUNT = 280;
 const SKI_POSE = { footSpacing: 0.15, face: 0 };
 const BOARD_POSE = { footSpacing: 0.31, face: Math.PI / 2 };
 
+export function snowRiderCrouch(rider) {
+  return (rider.equipment === 'board' ? 0.18 : 0.12) + Math.min(0.12, rider.speed * 0.0036)
+    + (rider.phase === 'air' ? 0.1 : 0.08 * rider.skid);
+}
+
 function gearShape(T, { length, width, tips }) {
   const vertices = [], colors = [], indices = [], rows = 29;
   const baseColor = new T.Color(0xffffff), edgeColor = new T.Color(0x586e7b);
-  const stripeColor = new T.Color(0xc7e0e9);
+  const stripeColor = new T.Color(0xb2d0db);
+  const capColor = new T.Color(0x607f94);
+  const graphic = position => position < 0.12 || position > 0.9 ? capColor :
+    (position > 0.18 && position < 0.25) || (position > 0.70 && position < 0.76) ? stripeColor : baseColor;
   for (let i = 0; i < rows; i++) {
     const along = i / (rows - 1), t = Math.abs(along * 2 - 1);
     const tip = Math.max(0, (t - 0.78) / 0.22);
     const halfWidth = width * (0.41 + 0.18 * t - 0.53 * Math.pow(t, 10));
     const height = tips * tip * tip;
     for (const [x, y, color] of [
-      [-halfWidth, height + 0.024, along > 0.65 && along < 0.76 ? stripeColor : baseColor],
-      [halfWidth, height + 0.024, along > 0.65 && along < 0.76 ? stripeColor : baseColor],
+      [-halfWidth, height + 0.024, graphic(along)],
+      [halfWidth, height + 0.024, graphic(along + 0.024)],
       [-halfWidth, height, edgeColor], [halfWidth, height, edgeColor],
     ]) {
       vertices.push(x, y, (along - 0.5) * length);
@@ -349,7 +358,7 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
   const right = new T.Vector3(), up = new T.Vector3(), back = new T.Vector3();
   const segmentDirection = new T.Vector3(), yAxis = new T.Vector3(0, 1, 0), yTurn = new T.Quaternion();
   const color = new T.Color(), angles = new T.Euler(0, 0, 0, 'YXZ');
-  let age = 0;
+  let age = 0, localGear = null;
 
   function append(kind, tone, orientation) {
     const mesh = batches[kind];
@@ -398,13 +407,14 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
     root.updateMatrix();
   }
 
-  function pose(rider, stride) {
-    const { equipment, phase, speed, lean, skid } = rider;
+  function pose(rider, stride, firstPerson) {
+    const { equipment, phase, speed, lean } = rider;
     const board = equipment === 'board', ride = equipment && phase !== 'walk';
-    const airborne = phase === 'air', crashed = phase === 'crashed';
+    const crashed = phase === 'crashed';
     const garment = outfit(rider.id);
     boardAlignment(rider);
     if (ride) {
+      if (firstPerson) localGear = equipment;
       for (const center of GEAR[equipment].centers) {
         part(equipment, COLORS[equipment], center, 0, 0, 1, 1, 1, 0, 0, 0, root.matrix);
       }
@@ -418,7 +428,7 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
     if (crashed) rotation.multiply(yTurn.setFromEuler(angles.set(0.05, -0.32, -1.38)));
     frameBody.compose(root.position, rotation, scale);
     const stance = ride ? rig.footSpacing : 0.16;
-    const crouch = ride ? (board ? 0.18 : 0.12) + Math.min(0.12, speed * 0.0036) + (airborne ? 0.1 : 0.08 * skid) : 0;
+    const crouch = ride ? snowRiderCrouch(rider) : 0;
     const hipsY = 0.77 - crouch;
     const centerX = ride ? lean * (board ? 0.085 : 0.18) : 0;
     const spineZ = ride ? -0.10 - crouch * 0.4 : 0;
@@ -433,15 +443,25 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
       const kneeX = (bootX + hipX) * 0.5;
       const elbowX = shoulderX + side * (ride ? 0.31 + 0.13 * Math.abs(lean) : 0.31);
       const gloveX = elbowX + side * (board && ride ? 0.17 : 0.024);
-      const gloveY = collarY - (board && ride ? 0.18 : 0.42) + Math.abs(lean) * 0.05;
-      const gloveZ = spineZ + step * 0.65 - (ride ? 0.17 : 0.02);
+      const gloveY = collarY - (board && ride ? 0.18 : 0.42) + Math.abs(lean) * 0.05 - (firstPerson && board ? 0.15 : 0);
+      const gloveZ = spineZ + step * 0.65 - (firstPerson && board ? 0.29 : ride ? 0.17 : 0.02);
       limb(COLORS.joint, hipX, hipsY, spineZ, kneeX, kneeY, kneeZ, 0.117);
       limb(COLORS.boot, kneeX, kneeY, kneeZ, bootX, ankleY, step, 0.103);
-      part('box', COLORS.boot, bootX, ankleY - 0.042, step - 0.05, 0.146, 0.137, 0.29, 0, side * 0.21);
-      limb(garment, shoulderX + side * 0.19, collarY - 0.07, spineZ,
-        elbowX, collarY - 0.2, spineZ + step * 0.25, 0.103);
-      limb(garment, elbowX, collarY - 0.2, spineZ + step * 0.25, gloveX, gloveY, gloveZ, 0.089);
-      part('body', COLORS.boot, gloveX, gloveY, gloveZ, 0.076, 0.075, 0.082);
+      const bootTurn = side * 0.21;
+      if (firstPerson) {
+        part('box', COLORS.sole, bootX, ankleY - 0.092, step - 0.05, 0.151, 0.043, 0.28, 0, bootTurn);
+        part('body', COLORS.boot, bootX, ankleY - 0.029, step - 0.059, 0.077, 0.067, 0.147, 0, bootTurn);
+        part('box', COLORS.bootTrim, bootX + side * 0.012, ankleY + 0.025, step - 0.094, 0.127, 0.024, 0.049, 0, bootTurn);
+        part('box', COLORS.buckle, bootX + side * 0.055, ankleY + 0.038, step - 0.088, 0.025, 0.013, 0.032, 0, bootTurn);
+      } else part('box', COLORS.boot, bootX, ankleY - 0.042, step - 0.05, 0.146, 0.137, 0.29, 0, bootTurn);
+      const sleeveY = collarY - (firstPerson ? 0.27 : 0.07);
+      const elbowY = collarY - (firstPerson && board ? 0.34 : 0.2);
+      const elbowZ = spineZ + step * 0.25 - (firstPerson && board ? 0.09 : 0);
+      limb(garment, shoulderX + side * 0.19, sleeveY, spineZ,
+        elbowX, elbowY, elbowZ, firstPerson ? 0.070 : 0.103);
+      limb(garment, elbowX, elbowY, elbowZ, gloveX, gloveY, gloveZ, firstPerson ? 0.061 : 0.089);
+      part('body', COLORS.boot, gloveX, gloveY, gloveZ, firstPerson ? 0.061 : 0.076, 0.059, 0.071);
+      if (firstPerson) part('body', COLORS.bootTrim, gloveX - side * 0.047, gloveY + 0.012, gloveZ - 0.028, 0.035, 0.028, 0.047);
       if (ride && !board && !crashed) {
         const poleAngle = side * 0.18;
         part('tube', COLORS.steel, gloveX + side * 0.078, gloveY - 0.4, gloveZ + 0.20,
@@ -450,6 +470,9 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
           0.048, 0.015, 0.046);
       }
     }
+    // Through the rider's eyes the limbs and equipment share the terrain
+    // transform. Full torso, pack, and helmet stay in the observer view.
+    if (firstPerson) return;
     part('body', garment, centerX, hipsY + 0.21, spineZ, 0.249, 0.323, 0.155, 0.13 + crouch * 0.6, 0, -lean * 0.2);
     part('body', COLORS.joint, shoulderX, hipsY + 0.26, spineZ + 0.136, 0.177, 0.246, 0.12,
       0.09, 0, -lean * 0.15);
@@ -468,6 +491,7 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
   function update(snapshot, { playerId, dt = 0, nearGear } = {}) {
     dt = Math.min(0.075, Math.max(0, dt));
     age += dt;
+    localGear = null;
     const players = snapshot?.players ?? [];
     const local = players.find(player => player.id === playerId);
     for (const [kind, { anchor, ring }] of gearNodes) {
@@ -477,7 +501,8 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
     for (const batch of Object.values(batches)) batch.count = 0;
     for (const rider of players) {
       if (local && Math.hypot(rider.x - local.x, rider.z - local.z) > RIDER_RANGE) continue;
-      if (rider.id === playerId && rider.phase === 'walk') continue;
+      const firstPerson = rider.id === playerId;
+      if (firstPerson && rider.phase === 'walk') continue;
       let animated = riders.get(rider.id);
       if (!animated) {
         animated = { stride: 0, spray: 0, seen: age };
@@ -485,7 +510,7 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
       }
       animated.seen = age;
       animated.stride += dt * Math.min(12, rider.speed * 7);
-      pose(rider, animated.stride);
+      pose(rider, animated.stride, firstPerson);
       tracks.mark(rider, age);
       if (rider.phase === 'ride') {
         const effort = Math.min(1, Math.max(rider.skid, Math.abs(rider.lean) * 0.34));
@@ -513,5 +538,5 @@ export function createSnowActors({ THREE: T, scene, world, config }) {
     riders.clear();
   }
 
-  return { update, dispose };
+  return { update, dispose, get localGear() { return localGear; } };
 }

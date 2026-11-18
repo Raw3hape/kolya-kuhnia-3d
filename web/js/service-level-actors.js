@@ -1,6 +1,8 @@
 // Render-only office machinery and maintenance crews. Each articulated part is a
 // vertex-colored instanced batch, so a large wave does not add one draw per enemy.
 import * as Three from 'three';
+import { createAvatar } from './multiplayer/avatars.js';
+import { createShotRenderer } from './multiplayer/shots.js';
 
 const VIEW_RANGE = 34;
 const ACTOR_LIMIT = 48;
@@ -105,54 +107,12 @@ function cabinet() {
   return [body.parts, drawer.parts];
 }
 
-function teammate() {
-  const torso = partList(), leg = partList(), beacon = partList();
-  torso.chamfer('#c6bfa4', 0, 1.157, 0.025, 0.46, 0.57, 0.29);
-  torso.chamfer('#727a65', 0, 1.17, 0.181, 0.36, 0.428, 0.19);
-  torso.box(LIME, 0, 1.118, 0.281, 0.29, 0.074, 0.02);
-  torso.chamfer(INK, 0, 0.948, 0, 0.47, 0.13, 0.31);
-  torso.ball('#c4b78a', 0, 1.586, 0, 0.209, 0.204, 0.197);
-  torso.chamfer('#63634f', 0, 1.545, -0.038, 0.428, 0.095, 0.356);
-  torso.chamfer('#293b38', 0, 1.49, -0.102, 0.343, 0.141, 0.228);
-  torso.chamfer(CYAN, 0, 1.519, -0.202, 0.232, 0.036, 0.023);
-  for (const x of [-0.24, 0.24]) {
-    torso.chamfer(ALLOY, x, 1.249, 0.005, 0.164, 0.28, 0.22, 0.35, 0, -x);
-    torso.chamfer('#c6bfa4', x * 0.91, 1.094, -0.17, 0.147, 0.142, 0.353, -0.11, x * 1.1);
-    torso.chamfer(INK, x * 0.71, 1.118, -0.336, 0.108, 0.115, 0.146);
-  }
-  torso.chamfer(RED, 0, 1.154, -0.425, 0.331, 0.27, 0.26);
-  torso.chamfer(LIME, 0, 1.155, -0.565, 0.222, 0.096, 0.025);
-  leg.chamfer(ALLOY, 0, -0.39, 0.004, 0.193, 0.795, 0.234);
-  leg.chamfer('#52574a', 0, -0.51, -0.046, 0.173, 0.24, 0.221);
-  leg.chamfer('#383b2e', 0, -0.791, -0.06, 0.203, 0.21, 0.348);
+function reviveBeacon() {
+  const beacon = partList();
   beacon.chamfer('#293b38', 0, 0, 0, 0.29, 0.29, 0.022);
   beacon.box(CYAN, 0, 0, -0.017, 0.16, 0.044, 0.007);
   beacon.box(CYAN, 0, 0, -0.017, 0.044, 0.16, 0.007);
-  return [torso.parts, leg.parts, beacon.parts];
-}
-
-function scanner() {
-  const handle = partList(), bulb = partList();
-  handle.chamfer('#675e4c', 0.107, -0.18, 0.148, 0.159, 0.144, 0.48, -0.32, 0.12, 0.26);
-  handle.chamfer('#555443', 0.067, -0.108, 0.063, 0.163, 0.16, 0.174, -0.09, 0.05, 0.27);
-  handle.chamfer(INK, 0, -0.044, 0.025, 0.235, 0.155, 0.262);
-  for (const x of [-0.08, -0.037, 0.003]) {
-    handle.chamfer('#77755b', x, -0.094, 0.015, 0.024, 0.048, 0.193, 0, x * 1.7);
-  }
-  handle.chamfer('#ac6542', 0, 0.014, -0.013, 0.272, 0.174, 0.316);
-  handle.chamfer('#d79e64', 0, 0.062, 0.014, 0.273, 0.09, 0.247);
-  handle.chamfer('#191f1d', 0, 0.079, 0.095, 0.194, 0.06, 0.144, 0.25);
-  handle.chamfer(CYAN, 0, 0.098, 0.118, 0.135, 0.032, 0.088, 0.25);
-  for (const x of [-0.082, 0.082]) {
-    handle.chamfer(INK, x, 0.106, -0.01, 0.041, 0.024, 0.047);
-    handle.chamfer(WARNING, x, 0.112, -0.01, 0.023, 0.013, 0.027);
-  }
-  handle.ring(INK, 0, 0.031, -0.177, 0.118, 0.089, 0.091);
-  handle.ring(ALLOY, 0, 0.032, -0.19, 0.101, 0.077, 0.055);
-  handle.ring('#655d41', 0, 0.032, -0.19, 0.069, 0.053, 0.047);
-  bulb.ring(LIME, 0, 0.034, -0.201, 0.048, 0.035, 0.039);
-  bulb.chamfer(CYAN, -0.039, 0.116, 0.096, 0.018, 0.017, 0.055, 0.2);
-  return [handle.parts, bulb.parts];
+  return beacon.parts;
 }
 
 function makeGeometries(T, own) {
@@ -201,7 +161,7 @@ function makeGeometries(T, own) {
     geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
     return geometry;
   }
-  const rigs = { stamper: stamper().map(compose), printer: printer().map(compose), cabinet: cabinet().map(compose), player: teammate().map(compose), tool: scanner().map(compose) };
+  const rigs = { stamper: stamper().map(compose), printer: printer().map(compose), cabinet: cabinet().map(compose), beacon: compose(reviveBeacon()) };
   for (const geometry of Object.values(primitives)) geometry.dispose();
   return rigs;
 }
@@ -260,15 +220,13 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
   const own = resource => { resources.push(resource); return resource; };
   const rigs = makeGeometries(T, own);
   const material = own(new T.MeshLambertMaterial({ vertexColors: true, emissive: '#797760', emissiveIntensity: 0.17 }));
-  const toolMaterial = own(new T.MeshLambertMaterial({ vertexColors: true, emissive: '#a6957d', emissiveIntensity: 0.23, fog: false, transparent: true }));
-  const toolLight = own(new T.MeshBasicMaterial({ vertexColors: true, fog: false, transparent: true }));
   const traceMaterial = own(new T.MeshBasicMaterial({ toneMapped: false, fog: true }));
   const dummy = new T.Object3D(), tint = new T.Color(), direction = new T.Vector3(), head = new T.Vector3(), tail = new T.Vector3();
   const axisY = new T.Vector3(0, 1, 0);
   const audio = createAudio();
   const reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const tintNormal = new T.Color(0xffffff), tintHit = new T.Color('#ff7459');
-  const tintAttack = new T.Color('#ffd589'), tintDown = new T.Color('#a5b4b1');
+  const tintAttack = new T.Color('#ffd589');
   const traceColors = { friendly: new T.Color('#c6fff1'), enemy: new T.Color('#ff9763'), stamp: new T.Color('#ffdb66') };
   function batch(geometry, mat, size) {
     const mesh = own(new T.InstancedMesh(geometry, mat, size));
@@ -284,25 +242,14 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
     printer: rigs.printer.map(geo => batch(geo, material, ACTOR_LIMIT)),
     cabinet: rigs.cabinet.map(geo => batch(geo, material, ACTOR_LIMIT)),
   };
-  const teammateBatches = [0, 1, 1, 2].map(index => batch(rigs.player[index], material, ACTOR_LIMIT));
+  const beacons = batch(rigs.beacon, material, ACTOR_LIMIT);
+  const avatars = new Map();
+  const tracers = createShotRenderer({ THREE: T, scene: root, requestRender: () => {} });
+  const shotFrom = new T.Vector3(), shotTo = new T.Vector3();
   const traceGeometry = own(new T.CylinderGeometry(1, 1, 1, 6, 1, true));
   const sparkGeometry = own(new T.OctahedronGeometry(1));
   const traceBatch = batch(traceGeometry, traceMaterial, FX_LIMIT);
   const sparkBatch = batch(sparkGeometry, traceMaterial, FX_LIMIT * 4);
-  const tool = new T.Group();
-  tool.name = 'fault scanner';
-  camera.add(tool);
-  const toolCase = new T.Mesh(rigs.tool[0], toolMaterial), toolRing = new T.Mesh(rigs.tool[1], toolLight);
-  // Draw the handheld shell after scenery and transparent contact shadows.
-  // A fresh depth buffer prevents wall clipping and still occludes the shell's own parts.
-  toolCase.renderOrder = 100;
-  toolCase.onBeforeRender = renderer => {
-    renderer.state.buffers.depth.setMask(true);
-    renderer.clearDepth();
-  };
-  toolRing.renderOrder = 101;
-  tool.add(toolCase, toolRing);
-
   const resolution = 32, contact = new Uint8Array(resolution * resolution * 4);
   for (let y = 0; y < resolution; y++) for (let x = 0; x < resolution; x++) {
     const offset = (y * resolution + x) * 4;
@@ -330,8 +277,7 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
     mesh.count++;
   }
 
-  let time = 0, shotAt = -1, lastTick = -1, lastSeed, lastEvent = -1;
-  let lastPosition, moving = 0;
+  let time = 0, lastTick = -1, lastSeed, lastEvent = -1;
   const caches = new Map(), flashes = new Map(), traces = [], sparks = [];
   function rigPose(entity, dt, maxSpeed) {
     let state = caches.get(entity.id);
@@ -360,17 +306,10 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
   }
 
   function eventAudio(event, localId) {
-    if (event.type === 'shot') {
-      const local = event.playerId === localId;
-      const distance = Math.hypot(event.x - camera.position.x, event.z - camera.position.z);
-      const volume = local ? 0.25 : 0.13 * Math.max(0, 1 - distance / 16);
-      if (volume > 0) audio.tone({ type: 'triangle', from: 710, to: 155, duration: 0.096, volume });
-    } else if (event.type === 'hit' && event.playerId === localId) {
+    if (event.type === 'hit' && event.playerId === localId) {
       audio.tone({ type: 'sine', from: 230, to: 92, duration: 0.11, volume: 0.16 });
     } else if (event.type === 'hurt' && event.playerId === localId) {
       audio.tone({ type: 'triangle', from: 150, to: 54, duration: 0.32, volume: 0.2 });
-    } else if (event.type === 'reload' && event.playerId === localId) {
-      audio.tone({ type: 'sine', from: 350, to: 805, duration: 0.19, volume: 0.11 });
     }
   }
 
@@ -378,6 +317,7 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
     if (lastSeed !== snapshot.seed || snapshot.tick < lastTick) {
       caches.clear();
       traces.length = sparks.length = 0;
+      tracers.clear();
       flashes.clear();
       lastSeed = snapshot.seed;
       lastEvent = -1;
@@ -387,14 +327,20 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
       if (event.id <= lastEvent) continue;
       lastEvent = Math.max(lastEvent, event.id);
       eventAudio(event, localId);
-      if (event.type === 'shot' || event.type === 'enemyAttack') {
-        const local = event.type === 'shot' && event.playerId === localId;
-        if (local) shotAt = time;
-        const attackType = event.type === 'enemyAttack' && snapshot.enemies.find(enemy => enemy.id === event.enemyId)?.type;
+      if (event.type === 'shot') {
+        const local = event.playerId === localId;
+        for (const ray of event.rays) {
+          shotFrom.set(event.x, event.y - .14, event.z);
+          shotTo.fromArray(ray);
+          if (local) shotFrom.lerp(shotTo, 0.04);
+          tracers.trace(shotFrom, shotTo, event.weapon);
+        }
+      } else if (event.type === 'enemyAttack') {
+        const attackType = snapshot.enemies.find(enemy => enemy.id === event.enemyId)?.type;
         if (attackType === 'stamper' || attackType === 'cabinet') {
           emit(sparks, { born: time, x: event.x, y: 0.06, z: event.z, seed: hashActor(event.enemyId) % 29, color: 'stamp' });
         } else if ([event.x, event.y, event.z, event.toX, event.toY, event.toZ].every(Number.isFinite)) {
-          emit(traces, { born: time, local, x: event.x, y: event.y, z: event.z, toX: event.toX, toY: event.toY, toZ: event.toZ, color: event.type === 'shot' ? 'friendly' : 'enemy' });
+          emit(traces, { born: time, x: event.x, y: event.y, z: event.z, toX: event.toX, toY: event.toY, toZ: event.toZ, color: 'enemy' });
         }
       }
       if (event.type === 'hit' || event.type === 'defeatEnemy') {
@@ -427,22 +373,27 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
 
   function teammatePose(entity, dt) {
     const pose = rigPose(entity, dt, 4.2);
-    const sway = reduceMotion ? 0 : Math.sin(pose.step) * pose.stride;
     transform(shadows, pose.x, 0.008, pose.z, pose.yaw, 0.39, 1, 0.43);
-    const down = entity.downed;
-    const hue = 0.09 + (hashActor(entity.id) % 13) * 0.024;
-    tint.setHSL(hue, 0.15, 0.84);
-    if (down) tint.copy(tintDown);
-    transform(teammateBatches[0], pose.x, down ? 0.04 : Math.abs(sway) * 0.048, pose.z, pose.yaw, 1, down ? 0.46 : 1, 1, tint, down ? 0.37 : 0.045);
-    for (let i = 0; i < 2; i++) {
-      const offset = (i ? -1 : 1) * 0.13;
-      const height = down ? 0.5 : 0.9 + Math.abs(sway) * 0.035;
-      const swing = (i ? -1 : 1) * sway * 0.48;
-      transform(teammateBatches[i + 1], pose.x + Math.cos(pose.yaw) * offset, height, pose.z - Math.sin(pose.yaw) * offset, pose.yaw, 1, down ? 0.56 : 1, 1, tint, down ? 0.4 : swing);
+    let avatar = avatars.get(entity.id);
+    if (!avatar) {
+      avatar = createAvatar({ slot: hashActor(entity.id) % 10, showNameplate: false });
+      avatars.set(entity.id, avatar);
+      root.add(avatar.root);
     }
+    const down = entity.downed;
+    avatar.root.position.set(pose.x, 0, pose.z);
+    avatar.root.rotation.set(down ? -0.85 : 0, pose.yaw, 0, 'YXZ');
+    avatar.root.scale.y = down ? 0.55 : 1;
+    avatar.root.visible = true;
+    avatar.update({
+      time, speed: down || reduceMotion ? 0 : pose.motion,
+      weapon: down ? 'none' : entity.weapon, aimPitch: entity.pitch,
+      aiming: entity.aiming ? 1 : 0, shotAge: entity.shotAge,
+      reloading: entity.reloadLeft > 0, reloadProgress: entity.reloadLeft ? 1 - entity.reloadLeft / entity.reloadDuration : 0,
+    });
     if (down) {
       const yawToEye = Math.atan2(pose.x - camera.position.x, pose.z - camera.position.z);
-      transform(teammateBatches[3], pose.x, 1.09, pose.z, yawToEye, 1, 1, 1, tintNormal);
+      transform(beacons, pose.x, 1.09, pose.z, yawToEye, 1, 1, 1, tintNormal);
     }
   }
 
@@ -452,18 +403,13 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
     for (const fx of traces) {
       tail.set(fx.x, fx.y, fx.z);
       head.set(fx.toX, fx.toY, fx.toZ);
-      if (fx.local) {
-        // A small offset keeps the near end below the center of the view.
-        tail.lerp(head, 0.05);
-        tail.y -= 0.16;
-      }
       direction.subVectors(head, tail);
       const length = direction.length();
       if (length < 0.001) continue;
       const life = 1 - (time - fx.born) / TRACE_AGE;
       dummy.position.copy(tail).lerp(head, 0.5);
       dummy.quaternion.setFromUnitVectors(axisY, direction.normalize());
-      const width = (fx.local ? 0.017 : 0.025) * life;
+      const width = 0.025 * life;
       dummy.scale.set(width, length, width);
       dummy.updateMatrix();
       traceBatch.setMatrixAt(traceBatch.count, dummy.matrix);
@@ -483,49 +429,37 @@ export function createServiceLevelActors({ THREE: T = Three, scene, camera }) {
   function update(snapshot, { playerId, dt = 1 / 60 } = {}) {
     dt = Math.min(0.1, Math.max(0, dt));
     time += dt;
-    tool.visible = false;
+    for (const avatar of avatars.values()) avatar.root.visible = false;
     for (const mesh of batches) { mesh.count = 0; mesh.visible = false; }
     if (!snapshot) return;
     ingest(snapshot, playerId);
-    let local;
     for (const enemy of snapshot.enemies) {
       if (Math.hypot(enemy.x - camera.position.x, enemy.z - camera.position.z) <= VIEW_RANGE) enemyPose(enemy, dt);
     }
     for (const player of snapshot.players) {
-      if (player.id === playerId) local = player;
-      else if (Math.hypot(player.x - camera.position.x, player.z - camera.position.z) <= VIEW_RANGE) teammatePose(player, dt);
+      if (player.id !== playerId && Math.hypot(player.x - camera.position.x, player.z - camera.position.z) <= VIEW_RANGE) teammatePose(player, dt);
+    }
+    for (const [id, avatar] of avatars) {
+      if (snapshot.players.some(player => player.id === id)) continue;
+      avatar.dispose(); avatars.delete(id);
     }
     for (const [id, pose] of caches) if (time - pose.seen > 1.3) caches.delete(id);
     for (const [id, hitAt] of flashes) if (time - hitAt > SPARK_AGE) flashes.delete(id);
     drawFx();
+    tracers.update(dt);
     for (const mesh of batches) {
       if (mesh.count === 0) continue;
       mesh.visible = true;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
-    if (!local || local.downed) return;
-    const velocity = lastPosition ? Math.min(3, Math.hypot(camera.position.x - lastPosition[0], camera.position.z - lastPosition[1]) / Math.max(dt, 0.001)) : 0;
-    lastPosition ??= [0, 0];
-    lastPosition[0] = camera.position.x;
-    lastPosition[1] = camera.position.z;
-    moving += (velocity - moving) * (1 - Math.exp(-8 * dt));
-    const recoil = Math.max(0, 1 - (time - shotAt) * 7) ** 2;
-    const breadth = camera.aspect * Math.tan(camera.fov * Math.PI / 360);
-    const height = Math.tan(camera.fov * Math.PI / 360);
-    const depth = -0.64 + (reduceMotion ? 0 : 0.062 * recoil);
-    const sway = reduceMotion ? 0 : Math.sin(time * 9) * moving * 0.004;
-    const lower = local.reloadLeft > 0 ? 0.09 + Math.min(0.1, local.reloadLeft * 0.16) : 0;
-    tool.visible = true;
-    tool.scale.setScalar(Math.min(0.78, Math.max(0.52, 0.58 + breadth * 0.12)));
-    tool.position.set(-depth * breadth * 0.69 + sway, depth * height * 0.81 - lower + Math.abs(sway) * 0.93, depth);
-    tool.rotation.set(-0.095 - recoil * 0.16 - lower, 0.112, -0.12 + sway);
-    toolRing.scale.setScalar(1 + recoil * 0.12);
   }
 
   function dispose() {
     root.removeFromParent();
-    tool.removeFromParent();
+    tracers.dispose();
+    for (const avatar of avatars.values()) avatar.dispose();
+    avatars.clear();
     if (ownsCamera && camera.parent === scene) scene.remove(camera);
     for (const resource of resources) resource.dispose();
     audio.dispose();
