@@ -16,7 +16,7 @@ await mkdir(output, { recursive: true });
 const watchdog = setTimeout(() => {
   report.failure = 'Browser QA deadline';
   browser?.close().catch(() => {});
-}, 210_000);
+}, mode === 'all' ? 420_000 : 210_000);
 
 function pass(name, details) {
   report.checks.push({ name, details });
@@ -168,12 +168,22 @@ async function mobileAndCourier() {
 
 async function online() {
   const host = await pageFor();
+  // Ready both browsers before starting the room clock. Otherwise a cold
+  // guest startup can let the real courier reserve the tested entrance.
+  const guest = await pageFor();
+  await host.bringToFront();
   await host.evaluate(() => __kitchen.multiplayer.lobby.open());
   await host.locator('#kmp-name').fill('Service QA host');
   await host.getByRole('button', { name: 'Создать комнату', exact: true }).click();
   await frame(host, () => __kitchen.multiplayer.client.connected, null, 60_000);
   await host.evaluate(() => __kitchen.multiplayer.lobby.close());
-  const guest = await pageFor(await attr(host, () => __kitchen.multiplayer.client.inviteUrl));
+  const invite = await attr(host, () => __kitchen.multiplayer.client.inviteUrl);
+  await guest.bringToFront();
+  await guest.evaluate(invite => {
+    const target = new URL(invite);
+    history.replaceState(null, '', target);
+    __kitchen.multiplayer.lobby.open({ room: target.searchParams.get('room') });
+  }, invite);
   await guest.locator('#kmp-name').fill('Service QA guest');
   await guest.locator('.kmp-form button[type=submit]').click();
   await frame(guest, () => __kitchen.multiplayer.client.connected, null, 60_000);
@@ -231,7 +241,7 @@ try {
     await shot(page, 'failure-'+i).catch(() => {});
     report.lastStates ??= [];
     const lastState = await page.evaluate(() => ({ pose: __kitchen.walk.getNetworkPose(), door: __kitchen.doors.target?.id,
-      preview: __kitchen.serviceLevel.previewVisible, run: __kitchen.serviceLevel.snapshot, room: __kitchen.multiplayer.client.status, self: __kitchen.multiplayer.client.self })).catch(() => null);
+      preview: __kitchen.serviceLevel.previewVisible, courier: __kitchen.social.reservesLanding, run: __kitchen.serviceLevel.snapshot, room: __kitchen.multiplayer.client.status, self: __kitchen.multiplayer.client.self })).catch(() => null);
     report.lastStates.push(lastState);
   }
   console.error(error);
