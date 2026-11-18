@@ -1,3 +1,6 @@
+import { seededRandom } from '../network-objects.js';
+import { createDoorJourney, DOOR_ENCOUNTERS } from '../door-journey.js';
+import { createSnowSimulation } from '../snow-simulation.js';
 import { serviceEntrance } from '../service-level-entrance.js';
 import { createServiceLevel } from '../service-level-simulation.js';
 // Transport-independent room authority. Only the creator runs this module.
@@ -67,7 +70,7 @@ export function rayBox(origin, direction, bounds, range = Infinity) {
   return { distance: near, point: origin.map((v, i) => q(v + direction[i] * near)), normal };
 }
 
-export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
+export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
   const players = new Map(), links = new Map(), objects = new Map(), broken = new Set();
   const completedExternal = new Set(), killedExternal = new Set();
   const effectSizes = new Map(), pendingExternal = new Map();
@@ -78,7 +81,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   let interactionMeta = { media: {}, newspaperPages: [], hoodPosition: null }, interactions = {};
   let showerPoint = null;
   const socialSupport = id => { const object = objects.get(id); return object && !broken.has(object.unitId) ? object.bounds : null; };
-  const social = socialSpec ? createSocialSimulation({ spec: socialSpec, plan,
+  const social = socialSpec ? createSocialSimulation({ spec: socialSpec, plan, doorDriven: !!(serviceSpec && snowSpec),
     isEntryOpen: () => !!doors[plan.openings.find(o => o.type === 'entry')?.id],
     blocked: (p, point) => pathBlocked(p, { x: point[0], z: point[2] }),
     validatePlacement(point, kind) {
@@ -114,48 +117,69 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   const started = now();
 
   const entrance = serviceSpec && serviceEntrance(plan);
-  let service = null, serviceSerial = 0;
-  const nextServiceSeed = () => (seed + Math.imul(serviceSerial + 1, 0x9e3779b9)) >>> 0;
-  function nextService() {
-    const run = createServiceLevel({ config: serviceSpec, seed: nextServiceSeed() });
-    serviceSerial++; return run;
+  const journey = entrance && createDoorJourney(seed, snowSpec ? DOOR_ENCOUNTERS.filter(mode => mode !== 'courier' || social) : ['service']);
+  const destinations = new Map();
+  const createRun = (mode, seed) => {
+    const simulation = mode === 'snow'
+      ? createSnowSimulation({ config: snowSpec, seed })
+      : createServiceLevel({ config: serviceSpec, seed });
+    const run = { seed, simulation };
+    destinations.set(mode, run);
+    return run;
+  };
+  function doorJourney() {
+    const route = journey.route;
+    return { ...route, seed: destinations.get(route.mode)?.seed ?? route.seed };
   }
 
-  function leaveService(p, { restore = true } = {}) {
-    if (!p.inService) return false;
-    service.leave(p.id); p.inService = false;
-    if (!active().some(other => other.inService)) service = null;
+  function leaveDestination(p, { restore = true } = {}) {
+    if (!p.destination) return false;
+    const mode = p.destination, run = destinations.get(mode);
+    run.simulation.leave(p.id); p.destination = null;
+    if (!active().some(other => other.destination === mode)) {
+      if (journey.route.mode === mode && journey.route.seed !== run.seed) journey.reseed(run.seed);
+      destinations.delete(mode);
+    }
     if (restore) {
-      const place = findFree(plan, entrance.returnPose, col, obstacles(p));
+      const place = findFree(plan, entrance.returnPose, col, obstacles(p)) || findFree(plan, WALK.start, col, obstacles(p));
       if (place) Object.assign(p, entrance.returnPose, place, { lookYaw: entrance.yaw, vy: 0 });
     }
     return true;
   }
 
-  function serviceAction(p, action) {
+  function adventureAction(p, action) {
     if (!entrance) return false;
     if (action.verb === 'enter') {
-      if (p.inService) return true;
-      if (p.seat || rc?.isDriving(p.id) || social?.reservesLanding() || !doors[entrance.id] ||
+      const route = doorJourney();
+      if (p.destination) return p.destination === action.mode;
+      if (route.mode === 'courier' || action.mode !== route.mode || action.revision !== route.revision || action.seed !== route.seed ||
+          p.seat || rc?.isDriving(p.id) || social?.reservesLanding() || !doors[entrance.id] ||
           !entrance.crossed(p, 0.16)) return false;
-      service ??= nextService();
-      if (!service.join(p.id)) return false;
-      release(p); p.inService = true; p.y = p.vy = 0; p.action = null;
+      const run = destinations.get(route.mode) ?? createRun(route.mode, route.seed);
+      if (!run.simulation.join(p.id)) return false;
+      release(p); p.destination = route.mode; p.y = p.vy = 0; p.action = null;
       return true;
     }
-    if (!p.inService) return action.verb === 'leave';
-    if (action.verb === 'leave') return leaveService(p);
-    if (action.verb === 'input' && plain(action.input)) return service.input(p.id, action.input);
-    if (action.verb === 'restart' && ['victory', 'defeat'].includes(service.snapshot().phase)) {
-      service = nextService();
-      for (const player of active()) if (player.inService) service.join(player.id);
+    if (!p.destination) return action.verb === 'leave';
+    if (action.verb === 'leave') return leaveDestination(p);
+    const { simulation } = destinations.get(p.destination);
+    if (action.verb === 'input' && plain(action.input)) return simulation.input(p.id, action.input);
+    if (p.destination === 'snow') {
+      if (action.verb === 'equip') return simulation.select(p.id, action.equipment);
+      if (action.verb === 'reset') return simulation.reset(p.id, { walk: action.walk === true });
+    } else if (action.verb === 'restart' && ['victory', 'defeat'].includes(simulation.snapshot().phase)) {
+      // Maze retries get a new seed even when the door currently opens to snow.
+      const nextSeed = Math.floor(seededRandom(`retry:${destinations.get('service').seed}`)() * 0x100000000);
+      if (journey.route.mode === 'service') journey.reseed(nextSeed);
+      const run = createRun('service', nextSeed);
+      for (const player of active()) if (player.destination === 'service') run.simulation.join(player.id);
       return true;
     }
     return false;
   }
 
   const active = () => [...players.values()].filter(p => p.link !== null);
-  const inApartment = () => active().filter(p => !p.inService);
+  const inApartment = () => active().filter(p => !p.destination);
   const others = self => inApartment().filter(p => p !== self).map(p => ({ x: p.x, z: p.z, radius: WALK.radius }));
   const doorObstacles = () => doorMeta.map(d => ({ ...(doors[d.id] ? d.opened : d.closed), door: d.id }));
   const obstacles = p => [...(social?.reservesLanding() ? [] : ambientExtra), ...extra.filter(o => !o.door), ...doorObstacles(), ...others(p)];
@@ -259,7 +283,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     doorMeta = boundedArray(payload.doors?.doors, 32).filter(d => plain(d) && typeof d.id === 'string' && d.id.length <= 96 &&
       sanitizeCollision({ extra: [d.closed, d.opened] }).length === 2).map(d => ({ id: d.id, open: !!d.open,
         closed: sanitizeCollision({ extra: [d.closed] })[0], opened: sanitizeCollision({ extra: [d.opened] })[0] }));
-    doors = Object.fromEntries(doorMeta.map(d => [d.id, !!d.open]));
+    doors = Object.fromEntries(doorMeta.map(d => [d.id, d.id === entrance?.id ? doors[d.id] ?? d.open : d.open]));
     extra.push(...sanitizeCollision({ boxes: payload.doors?.blockers || [] }));
     objects.clear(); for (const o of sanitizeObjects(payload.objects)) objects.set(o.id, o);
     itemMeta = boundedArray(payload.items, 2).filter(i => plain(i) && ['phone', 'newspaper'].includes(i.id) && vec(i.position));
@@ -291,6 +315,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       if (hostId || link !== 'local' || !plain(hello.apartment)) return post(link, { type: 'error', error: 'room_exists' });
       if (JSON.stringify(hello.apartment).length > 32000) return post(link, { type: 'error', error: 'invalid_apartment' });
       apartment = copy(hello.apartment); revision = 1; setGeometry(hello);
+      if (journey?.route.mode === 'courier' && doors[entrance.id]) social.setDoorVisit(true);
     } else if (!hostId) return post(link, { type: 'error', error: 'room_missing' });
     const known = typeof hello.token === 'string' ? [...players.values()].find(p => p.token === hello.token) : null;
     if (known && known.id === hostId && link !== 'local') return post(link, { type: 'error', error: 'host_reserved' });
@@ -302,7 +327,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       if (p.link !== null) { links.delete(p.link); post(p.link, { type: 'error', error: 'session_replaced' }); }
       const used = new Set(active().filter(q => q !== p).map(q => q.avatar));
       if (used.has(p.avatar)) p.avatar = [...Array(R.maxPlayers).keys()].find(n => !used.has(n));
-      leaveService(p, { restore: false });
+      leaveDestination(p, { restore: false });
       releaseSeat(p);
       p.link = null;
       if (!spawn(p)) return post(link, { type: 'error', error: 'spawn_blocked' });
@@ -330,7 +355,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   function disconnect(link) {
     const p = players.get(links.get(link)); links.delete(link);
     if (!p || p.link !== link) return;
-    p.link = null; p.lastSeen = now(); leaveService(p, { restore: false }); release(p);
+    p.link = null; p.lastSeen = now(); leaveDestination(p, { restore: false }); release(p);
     event({ kind: 'left', actorId: p.id }); emitSnapshot();
   }
 
@@ -370,7 +395,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   // changes on clients; two simultaneous handoffs can never duplicate a prop.
   function handoff(p, action) {
     const target = players.get(action.targetId);
-    if (!target || target === p || target.link === null || target.inService || p.held !== action.id || target.held ||
+    if (!target || target === p || target.link === null || target.destination || p.held !== action.id || target.held ||
       social?.heldBy(target.id) || party.held(target.id) || rc?.held(target.id) ||
       distance([p.x, p.eyeY ?? p.y + 1.2, p.z], [target.x, target.eyeY ?? target.y + 1.2, target.z]) > R.itemReach || pathBlocked(p, target)) return false;
     // Walking proxies have no height. Use actual 3D item bounds so a low
@@ -511,13 +536,13 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     }
     if (++p.actions > 120) return result(link, action, false, 'rate_limited');
     const kind = action.kind || action.type;
-    if (kind === 'service-level') {
-      const ok = serviceAction(p, action);
+    if (kind === 'adventure') {
+      const ok = adventureAction(p, action);
       result(link, action, ok, ok ? null : 'action_rejected');
       if (ok && action.verb !== 'input') emitSnapshot();
       return;
     }
-    if (p.inService && !['ambient', 'geometry'].includes(kind)) return result(link, action, false, 'action_rejected');
+    if (p.destination && !['ambient', 'geometry'].includes(kind)) return result(link, action, false, 'action_rejected');
     let ok = false;
     switch (kind) {
       case 'inputs': ok = applyInputs(p, action.inputs); break;
@@ -578,8 +603,20 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
             return false;
           });
           if (!blocked) {
-            if (doors[action.id] !== action.open) animate(p, 'use', action.id, [d.closed.ax, 1.1, d.closed.az]);
-            doors[action.id] = !!action.open; ok = true; event({ kind: 'door', actorId: p.id, targetId: action.id, open: !!action.open });
+            const changed = doors[d.id] !== action.open;
+            if (changed) animate(p, 'use', action.id, [d.closed.ax, 1.1, d.closed.az]);
+            doors[d.id] = action.open; ok = true;
+            const isEntrance = changed && journey && d.id === entrance.id;
+            if (isEntrance) {
+              if (action.open) {
+                if (journey.route.mode === 'courier') social.setDoorVisit(true);
+              } else {
+                social?.setDoorVisit(false);
+                journey.close();
+              }
+            }
+            event({ kind: 'door', actorId: p.id, targetId: d.id, open: action.open, ...(isEntrance ? { route: doorJourney() } : {}) });
+            if (isEntrance) emitSnapshot();
           }
         } break;
       }
@@ -676,7 +713,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
 
   function snapshot() {
     return { type: 'snapshot', seq: ++seq, time, epoch, hostId, apartment, revision,
-      players: active().map(p => ({ id: p.id, name: p.name, avatar: p.avatar, ...(p.inService ? { inService: true } : {}), x: q(p.x), y: q(p.y), z: q(p.z),
+      players: active().map(p => ({ id: p.id, name: p.name, avatar: p.avatar, ...(p.destination ? { destination: p.destination } : {}), x: q(p.x), y: q(p.y), z: q(p.z),
         yaw: q(p.yaw), lookYaw: q(p.lookYaw ?? p.yaw), pitch: q(p.pitch), vy: q(p.vy), verticalSpeed: q(p.vy), grounded: p.y <= 0.001 && p.vy <= 0,
         aiming: q(p.aiming || 0), action: p.action ? copy(p.action) : null,
         reloading: !!p.ammo[p.weapon]?.reloadAt,
@@ -686,7 +723,9 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
         seatY: p.seat ? seatMeta.find(seat => seat.id === p.seat)?.position[1] ?? 0 : null,
         reclined: !!p.seat && seatMeta.find(seat => seat.id === p.seat)?.posture === 'recline', ack: p.ack,
         ammo: Object.fromEntries(Object.entries(p.ammo).map(([id, a]) => [id, { mag: a.mag, reserve: a.reserve, reloading: !!a.reloadAt }])) })),
-      ...(entrance ? { serviceLevel: service?.snapshot() ?? null, serviceSeed: nextServiceSeed() } : {}),
+      ...(entrance ? { doorJourney: doorJourney(),
+        serviceLevel: destinations.get('service')?.simulation.snapshot() ?? null,
+        snowLevel: destinations.get('snow')?.simulation.snapshot() ?? null } : {}),
       doors: { ...doors }, items: { ...items }, seats: { ...seats }, interactions: copy(interactions), broken: [...broken], effects: [...effects], hunt: hunt.snapshot(), ambient, party: party.snapshot(), ...(social ? { social: social.snapshot() } : {}), ...(rc ? { rc: rc.snapshot() } : {}) };
   }
   // Called only by the creator's private simulation bridge after its scene target
@@ -717,7 +756,8 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   function step(dt) {
     if (disposed || !hostId) return;
     dt = clamp(dt, 0, 0.05); time += dt; snapshotClock += dt;
-    hunt.step(dt); service?.tick(dt);
+    hunt.step(dt);
+    for (const { simulation } of destinations.values()) simulation.tick(dt);
     const apartmentPlayers = inApartment();
     party.step(dt, apartmentPlayers.map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
     social?.step(dt, apartmentPlayers.map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
@@ -739,7 +779,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     if (snapshotClock >= 1 / R.snapshotHz) { snapshotClock %= 1 / R.snapshotHz; emitSnapshot(); }
     if (now() - started > R.maxRoomMs) { broadcast({ type: 'error', error: 'room_expired' }); disposed = true; }
   }
-  return { connect, receive, disconnect, step, snapshot, completeExternal, dispose() { disposed = true; rc?.dispose(); links.clear(); players.clear(); },
+  return { connect, receive, disconnect, step, snapshot, completeExternal, dispose() { disposed = true; rc?.dispose(); destinations.clear(); links.clear(); players.clear(); },
     get size() { return active().length; }, get hostId() { return hostId; },
     exportState() { return { roomId, snapshot: snapshot() }; } };
 }

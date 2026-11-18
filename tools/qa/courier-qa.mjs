@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { awaitPlayable } from './await-playable.mjs';
+import { drawDoorEncounter } from './door-encounter.mjs';
 const { chromium } = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href);
 const url = process.env.QA_URL || 'http://127.0.0.1:8765/';
 const output = path.resolve(process.env.QA_OUTPUT || 'output/playwright/courier-qa'); fs.mkdirSync(output, { recursive: true });
@@ -12,7 +13,6 @@ function check(name, pass, details) { report.checks.push({ name, pass, details }
 async function page(target = url, mobile = false) {
   const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 }, isMobile: mobile, hasTouch: mobile });
   await context.addInitScript(() => { localStorage.setItem('kitchen-ui-v1', JSON.stringify({ quality: 'eco', seen: { intro: true } })); localStorage.setItem('kitchen-life-v1', JSON.stringify({ life: true, sound: 'walk', mute: false })); });
-  await context.route('**/spec/social.json', async route => { const response = await route.fetch(), spec = await response.json(); spec.rules.firstDelivery = 12; spec.rules.courierWait = 180; await route.fulfill({ response, json: spec }); });
   const p = await context.newPage(); p.on('pageerror', e => report.errors.push(e.message)); p.setDefaultTimeout(15000);
   await p.goto(target, { waitUntil: 'domcontentloaded' }); await awaitPlayable(p);
   await p.getByRole('button', { name: 'Понятно', exact: true }).click({ timeout: 500 }).catch(() => {});
@@ -50,7 +50,9 @@ try {
     const p = await page();
     const pipe = await p.evaluate(() => { const item = __kitchen.party.debug.state.items.find(i => i.kind === 'vape'); __kitchen.walk.enter({x:item.position[0],z:item.position[2]+.6}); return item; });
     await p.waitForTimeout(900); const picked = await p.evaluate(id => __kitchen.party.command('take',id), pipe.id); check('hands occupied by an actual pipe before visit',picked.ok);
-    await p.evaluate(()=>{__kitchen.walk.enter({x:-2.03,z:5.3},Math.PI);__kitchen.doors.setOpen('entry_door',true,{instant:true});});
+    await p.evaluate(()=>__kitchen.walk.enter({x:-2.03,z:5.3},Math.PI));
+    await drawDoorEncounter(p,'courier');
+    await p.evaluate(()=>__kitchen.doors.setOpen('entry_door',true,{instant:true}));
     await p.waitForFunction(()=>__kitchen.social.debug.state.courier?.phase==='offering',null,{timeout:25000});
     const visit = await portalState(p); check('open entry remains available for a courier handoff',portalSuppressed(visit),visit);
     await pizzaAim(p); await p.waitForFunction(()=>__kitchen.social.debug.target==='courier'); await p.mouse.click(640,400); await p.waitForFunction(()=>__kitchen.social.held&&!__kitchen.party.held);
@@ -58,17 +60,20 @@ try {
   }
   if(!process.env.QA_ROOM_ONLY && !process.env.QA_PIPE_ONLY){
     const p=await page();
-    await p.evaluate(()=>{__kitchen.walk.enter({x:-2.03,z:5.3},Math.PI);__kitchen.doors.setOpen('entry_door',true,{instant:true});});
+    await p.evaluate(()=>__kitchen.walk.enter({x:-2.03,z:5.3},Math.PI));
+    await drawDoorEncounter(p,'service');
+    await p.evaluate(()=>__kitchen.doors.setOpen('entry_door',true,{instant:true}));
     await p.waitForFunction(()=>__kitchen.serviceLevel.previewVisible);
-    const before=await portalState(p);check('an open door previews the service level before the visit',!before.reserved&&before.preview&&!before.inside,before);
+    const before=await portalState(p);check('an open door previews a destination before the visit',!before.reserved&&before.preview&&!before.inside,before);
     await p.evaluate(()=>__kitchen.doors.setOpen('entry_door',false,{instant:true}));
-    await p.waitForFunction(()=>__kitchen.social.debug.state.courier?.phase==='waiting',null,{timeout:25000});
-    const during=await portalState(p);check('courier reserves the landing behind the closed door',portalSuppressed(during),during);
-    check('pizza is held by courier and cannot open through closed door',await p.evaluate(async()=>{const s=__kitchen.social.debug.state;return s.pizza.location==='courier'&&!(await __kitchen.social.command('receive')).ok&&!(await __kitchen.social.command('open')).ok;}));
+    await drawDoorEncounter(p,'courier');
+    check('closed door keeps the courier encounter inactive',await p.evaluate(async()=>{
+      return !__kitchen.social.debug.state.courier && !(await __kitchen.social.command('receive')).ok;
+    }));
     await aim(p,[-2.03,1.2,6.53]);await p.waitForFunction(()=>__kitchen.doors.target?.id==='entry_door');await shot(p,'courier-door-closed');await p.keyboard.press('e');
     await p.waitForFunction(()=>__kitchen.social.debug.state.courier?.phase==='offering');await pizzaAim(p);
     await p.waitForFunction(()=>__kitchen.social.debug.target==='courier');await shot(p,'courier-offering');
-    const offer=await portalState(p);check('delivery suppresses the service level through the open door',portalSuppressed(offer),offer);
+    const offer=await portalState(p);check('delivery suppresses the destination through the open door',portalSuppressed(offer),offer);
     check('surrounding building geometry does not hide the courier on the landing', await p.evaluate(async () => {
       const { Raycaster, Vector3 } = await import('three');
       const { scene, camera } = __kitchen;
@@ -90,11 +95,15 @@ try {
     await p.keyboard.press('x');await p.waitForFunction(()=>!__kitchen.social.held);await pizzaAim(p);await p.keyboard.press('e');await p.waitForFunction(()=>__kitchen.social.debug.state.pizza.open);await p.mouse.click(640,400);await p.waitForFunction(()=>__kitchen.social.debug.state.pizza.remaining===11);
     check('received pizza opens and shares edible slices',true);await shot(p,'pizza-shared');
     await p.evaluate(()=>__kitchen.doors.setOpen('entry_door',false,{instant:true}));await p.waitForFunction(()=>!__kitchen.social.reservesLanding);
+    await drawDoorEncounter(p,'service');
     await aim(p,[-2.03,1.5,6.53]);await p.evaluate(()=>__kitchen.doors.setOpen('entry_door',true,{instant:true}));
     await p.waitForFunction(()=>__kitchen.serviceLevel.previewVisible);
     check('closing and reopening restores the portal after delivery',true);
     await p.context().close();
-    const mobile=await page(url,true);await mobile.evaluate(()=>{__kitchen.walk.enter({x:-2.03,z:5.3},Math.PI);__kitchen.doors.setOpen('entry_door',true,{instant:true});});
+    const mobile=await page(url,true);
+    await mobile.evaluate(()=>__kitchen.walk.enter({x:-2.03,z:5.3},Math.PI));
+    await drawDoorEncounter(mobile,'courier');
+    await mobile.evaluate(()=>__kitchen.doors.setOpen('entry_door',true,{instant:true}));
     await mobile.waitForFunction(()=>__kitchen.social.debug.state.courier?.phase==='offering',null,{timeout:25000});await pizzaAim(mobile);await mobile.waitForFunction(()=>__kitchen.social.debug.target==='courier');await shot(mobile,'mobile-offering');
     const mobileOffer=await portalState(mobile);check('mobile offering keeps the doorway clear',portalSuppressed(mobileOffer),mobileOffer);
     await mobile.getByRole('button',{name:'Забрать пиццу',exact:true}).tap();await mobile.waitForFunction(()=>__kitchen.social.held);check('mobile receives from hands with one large button',true);await mobile.context().close();
@@ -104,7 +113,7 @@ try {
     const link=await host.evaluate(()=>__kitchen.multiplayer.client.inviteUrl);const guest=await page(link);await guest.locator('#kmp-name').fill('Courier Guest');await guest.locator('.kmp-form button[type=submit]').click();await connected(guest);
     await walkTo(host,-1.2,4.35);await walkTo(host,-1.25,5.3);await walkTo(host,-2.03,5.3);
     await walkTo(guest,-1.05,4.35);await walkTo(guest,-1.05,5.2);
-    await host.waitForFunction(()=>__kitchen.social.debug.state.courier?.phase==='waiting',null,{timeout:25000});
+    await drawDoorEncounter(host,'courier');
     await aim(host,[-2.03,1.2,6.53]);await host.waitForFunction(()=>__kitchen.doors.target?.id==='entry_door');await host.keyboard.press('e');await host.waitForFunction(()=>__kitchen.social.debug.state.courier?.phase==='offering');
     await Promise.all([host,guest].map(p=>pizzaAim(p)));await Promise.all([host,guest].map(p=>p.waitForFunction(()=>__kitchen.social.debug.target==='courier')));await shot(guest,'room-offering');
     const offers=await Promise.all([host,guest].map(portalState));check('host and guest see the same reserved entry during the offer',offers.every(portalSuppressed),offers);

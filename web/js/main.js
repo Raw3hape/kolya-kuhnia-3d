@@ -629,18 +629,22 @@ let life = createLife({ THREE, scene, camera, renderer, pipe, plan, kit, shell, 
   getWalk: () => walk, getDoors: () => doors, getHunt: () => hunt,
   getObstacles: () => [...walk.boxesOf(kitchen?.group), ...(furn?.colliders || []), ...bath.colliders, ...(decor?.colliders || [])] });
 // --- /LIFE ---
-let serviceSpec;
-function loadServiceSpec() {
-  serviceSpec ??= fetch('spec/service-level.json').then(response => {
-    if (!response.ok) throw new Error('service_level_config');
-    return response.json();
-  }).catch(error => { serviceSpec = null; throw error; });
-  return serviceSpec;
+function adventureSpec(name) {
+  let pending;
+  return () => {
+    pending ??= fetch(`spec/${name}.json`).then(response => {
+      if (!response.ok) throw new Error(`${name}_config`);
+      return response.json();
+    }).catch(error => { pending = null; throw error; });
+    return pending;
+  };
 }
+const loadServiceSpec = adventureSpec('service-level');
+const loadSnowSpec = adventureSpec('snow');
 serviceLevel = createServiceLevelEntrance({ THREE, scene, camera, canvas, renderer, walk, doors, plan,
   canEnter: () => startup.status === 'ready' && walk.walking && !pipe.photo && !seats?.active && !rc?.controlling &&
     !document.body.classList.contains('kmp-modal-open') && (!multiplayer?.active || (multiplayer.client.connected && !multiplayer.applying)),
-  courier: () => social.reservesLanding, net: () => multiplayer, config: loadServiceSpec,
+  courier: () => social.reservesLanding, setDoorVisit: open => social.setDoorVisit(open), net: () => multiplayer, config: loadServiceSpec, snowConfig: loadSnowSpec, getQuality: () => pipe.quality,
   notify: message => ui.toast(message), requestRender,
   onMode(active) { life.setSuspended(active); social.refreshAudio(); },
 });
@@ -707,7 +711,7 @@ Object.defineProperty(window.__kitchen, 'social', { get: () => social });
 Object.defineProperty(window.__kitchen, 'rc', { get: () => rc });
 window.__kitchen.mirrors = mirrors;   // BREAK
 multiplayer = createMultiplayerSession({ THREE, scene, plan, site, getState: () => state,
-  whenReady: startup.whenPlayable, loadServiceSpec,
+  whenReady: startup.whenPlayable, loadServiceSpec, loadSnowSpec,
   applyState: patch => setState(patch, { push: false, network: true }), requestRender, ui,
   getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, party, social, rc, serviceLevel, partyPropsReady, furnEditor, furniture: furn, decor }) });
 window.__kitchen.multiplayer = multiplayer;

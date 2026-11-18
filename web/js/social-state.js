@@ -15,7 +15,7 @@ export function socialLocations(plan, spec) {
   const x = (door.x0 + door.x1) / 2, z = door.z0;
   return { door: door.id, delivery: [x, 0.01, z - spec.pizza.deliveryInset], courier: [x, 0, door.z1 + spec.courier.outside] };
 }
-export function createSocialSimulation({ spec, plan, blocked = () => false, validatePlacement = () => true, isEntryOpen = () => false }) {
+export function createSocialSimulation({ spec, plan, blocked = () => false, validatePlacement = () => true, isEntryOpen = () => false, doorDriven = false }) {
   const rules = spec.rules, locations = socialLocations(plan, spec);
   let time = 0, nextDelivery = rules.firstDelivery, serial = 0, bell = 0, nextBell = 0;
   let courier = null, pizza = null, shower = { owner: null, until: 0 }, landingReserved = false, landingClearAt = 0;
@@ -107,21 +107,40 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     }
     return false;
   }
+  function startDelivery() {
+    if (courier) return false;
+    courier = { arrived: time, phase: 'arriving', phaseAt: time, until: time + spec.courier.arriveSeconds + rules.courierWait, leaving: null, recipient: null };
+    landingReserved = true;
+    if (!pizza) {
+      pizza = { id: ++serial, location: 'courier', owner: null, position: courierPose(spec, locations, courier, time).box,
+        safePosition: [...locations.delivery], open: false, remaining: rules.slices, eaters: [], emptyAt: null, transferUntil: 0 };
+    }
+    bell++; nextBell = time + rules.bellEvery;
+    return true;
+  }
+
+  function setDoorVisit(open) {
+    if (!doorDriven) return false;
+    if (open && isEntryOpen()) return startDelivery();
+    if (!landingReserved && !courier) return false;
+    if (pizza?.location === 'courier') pizza = null;
+    courier = null; landingReserved = false; landingClearAt = 0;
+    return true;
+  }
+
   function step(dt, players = []) {
     time += Math.max(0, Math.min(dt, 0.1));
-    if (!pizza && !courier && time >= nextDelivery) {
-      courier = { arrived: time, phase: 'arriving', phaseAt: time, until: time + spec.courier.arriveSeconds + rules.courierWait, leaving: null, recipient: null };
-      landingReserved = true;
-      pizza = { id: ++serial, location: 'courier', owner: null, position: courierPose(spec, locations, courier, time).box, safePosition: [...locations.delivery], open: false, remaining: rules.slices, eaters: [], emptyAt: null, transferUntil: 0 };
-      bell++; nextBell = time + rules.bellEvery;
-    }
+    if (!doorDriven && !pizza && !courier && time >= nextDelivery) startDelivery();
     if (courier) {
       const elapsed = time - courier.phaseAt;
-      if (courier.phase === 'arriving' && elapsed >= spec.courier.arriveSeconds) courierWaiting();
+      if (courier.phase === 'arriving' && elapsed >= spec.courier.arriveSeconds) {
+        if (pizza?.location === 'courier') courierWaiting();
+        else setPhase('thanks');
+      }
       if (['offering', 'waiting'].includes(courier.phase)) {
         if ((courier.phase === 'offering') !== !!isEntryOpen()) courierWaiting();
         if (time >= courier.until) startLeaving();
-        else if (time >= nextBell) { bell++; nextBell = time + rules.bellEvery; }
+        else if (!doorDriven && time >= nextBell) { bell++; nextBell = time + rules.bellEvery; }
       } else if (courier.phase === 'handoff' && !transferBusy()) setPhase('thanks');
       else if (courier.phase === 'thanks' && elapsed >= spec.courier.thanksSeconds) startLeaving();
       else if (courier.phase === 'leaving' && elapsed >= spec.courier.leaveSeconds) {
@@ -149,7 +168,7 @@ export function createSocialSimulation({ spec, plan, blocked = () => false, vali
     get bell() { return bell; }, get nextBell() { return nextBell; }, get courier() { return present('courier', courier); }, get pizza() { return present('pizza', pizza); },
     get shower() { return present('shower', shower); }, get radio() { return present('radio', radio); }, get landingReserved() { return landingReserved; },
     get landingClearAt() { return landingClearAt; }, get entryOpen() { return !!isEntryOpen(); } });
-  return { step, canTake, command, release, releaseItem, presentation: () => localPresentation, heldBy: id => pizza?.owner === id, reservesLanding: () => landingReserved,
+  return { step, setDoorVisit, canTake, command, release, releaseItem, presentation: () => localPresentation, heldBy: id => pizza?.owner === id, reservesLanding: () => landingReserved,
     transfer(from, to, id) {
       if (id !== 'pizza' || pizza?.owner !== from || !to || to === from || transferBusy()) return { ok: false };
       pizza.owner = to; pizza.open = false; touch('pizza'); return { ok: true };

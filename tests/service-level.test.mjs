@@ -173,7 +173,7 @@ test('two room peers cross the original apartment threshold and share one run', 
     room.receive(link, { type: 'action', action: { ...value, requestId: 'run-' + ++request } });
     return packets.get(link + ':result')?.ok;
   };
-  const command = (link, verb, input) => action(link, { kind: 'service-level', verb, input });
+  const command = (link, verb, input) => action(link, { kind: 'adventure', verb, input, ...room.snapshot().doorJourney });
   const step = () => {
     clock += 50;
     for (const link of ids.keys()) room.receive(link, { type: 'ping', clientTime: clock });
@@ -196,7 +196,7 @@ test('two room peers cross the original apartment threshold and share one run', 
 
   try {
     assert.equal(command('local', 'enter'), false);
-    const seed = room.snapshot().serviceSeed;
+    const seed = room.snapshot().doorJourney.seed;
     march('local', { x, z: 3.97 });
     march('local', { x, z: door.z0 - 0.35 });
     assert.equal(action('local', { kind: 'door', id: door.id, open: true }), true);
@@ -222,7 +222,7 @@ test('two room peers cross the original apartment threshold and share one run', 
     assert.deepEqual(room.snapshot().serviceLevel.players.map(member => member.id), [ids.get('local')]);
     room.disconnect('local');
     assert.equal(room.snapshot().serviceLevel, null);
-    assert.notEqual(room.snapshot().serviceSeed, seed);
+    assert.equal(room.snapshot().doorJourney.seed, seed);
   } finally {
     room.dispose();
   }

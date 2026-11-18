@@ -1,0 +1,187 @@
+.snow-hud {
+  --snow-ink: #f2f7fc;
+  --snow-muted: #c2d5e6;
+  --snow-accent: #ffa966;
+  --snow-panel: #152f46ef;
+  --snow-edge: #bad8ef54;
+  --snow-gutter: clamp(12px, 2.4vw, 36px);
+  --snow-top: max(var(--snow-gutter), calc(env(safe-area-inset-top, 0px) + 10px));
+  --snow-left: max(var(--snow-gutter), calc(env(safe-area-inset-left, 0px) + 10px));
+  --snow-right: max(var(--snow-gutter), calc(env(safe-area-inset-right, 0px) + 10px));
+  --snow-bottom: max(var(--snow-gutter), calc(env(safe-area-inset-bottom, 0px) + 10px));
+  position: fixed;
+  z-index: 82;
+  inset: 0;
+  pointer-events: none;
+  color: var(--snow-ink);
+  font: 500 13px/1.35 system-ui, sans-serif;
+  color-scheme: dark;
+  user-select: none;
+}
+
+.snow-hud[hidden], .snow-hud [hidden] { display: none !important; }
+.snow-hud :is(h2, p) { margin: 0; }
+.snow-hud :is(output, kbd) { font-variant-numeric: tabular-nums; }
+.snow-hud button {
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid var(--snow-edge);
+  border-radius: 6px;
+  background: var(--snow-panel);
+  color: inherit;
+  font: 650 13px/1.3 system-ui, sans-serif;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+}
+.snow-hud button:hover { background: #234d6e; }
+.snow-hud button:disabled { opacity: 0.55; }
+.snow-hud button:focus-visible { outline: 2px solid var(--snow-accent); outline-offset: 3px; }
+.snow-hud button.is-held { background: #d9eafa; color: #173049; }
+.snow-hud svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.snow-panel {
+  position: absolute;
+  top: var(--snow-top);
+  left: var(--snow-left);
+  min-width: 156px;
+  padding: 9px 13px 10px;
+  border: 1px solid var(--snow-edge);
+  border-radius: 6px;
+  background: var(--snow-panel);
+}
+.snow-mode {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font: 700 10px/1.4 system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.snow-mode::before {
+  content: "";
+  width: 5px;
+  height: 9px;
+  border-radius: 1px;
+  background: var(--snow-accent);
+  transform: skew(-20deg);
+}
+.snow-speed-line { display: flex; align-items: baseline; gap: 6px; margin: 6px 0 3px; color: var(--snow-muted); font-size: 11px; }
+.snow-speed {
+  min-width: 2.25ch;
+  color: var(--snow-ink);
+  font: 730 48px/0.95 "Inter Tight", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.055em;
+}
+.snow-speed-track { height: 3px; border-radius: 4px; overflow: hidden; background: #bad8ef3d; }
+.snow-speed-track i { display: block; width: 100%; height: 100%; background: var(--snow-accent); transform: scaleX(0); transform-origin: left; }
+.snow-readout { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; margin-top: 5px; }
+.snow-distance { font-size: 12px; font-weight: 650; }
+.snow-gear, .snow-condition { color: var(--snow-muted); font-size: 11px; }
+.snow-condition { display: block; margin-top: 3px; }
+
+.snow-actions {
+  position: absolute;
+  top: var(--snow-top);
+  right: var(--snow-right);
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.snow-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 5px 9px;
+  border: 1px solid var(--snow-edge);
+  border-radius: 6px;
+  background: var(--snow-panel);
+}
+.snow-group svg { width: 15px; height: 15px; color: var(--snow-muted); }
+
+.snow-fitting,
+.snow-legend,
+.snow-message {
+  position: absolute;
+  left: 50%;
+  max-width: calc(100% - var(--snow-left) - var(--snow-right));
+  transform: translateX(-50%);
+}
+.snow-fitting { bottom: calc(var(--snow-bottom) + 22px); }
+.snow-approach, .snow-message, .snow-legend {
+  padding: 8px 11px;
+  border: 1px solid var(--snow-edge);
+  border-radius: 6px;
+  background: var(--snow-panel);
+}
+.snow-approach { display: grid; gap: 3px; text-align: center; }
+.snow-approach small { color: var(--snow-muted); font-size: 10px; }
+.snow-walk-touch, .snow-hud.is-touch .snow-walk-keys { display: none; }
+.snow-hud.is-touch .snow-walk-touch { display: inline; }
+.snow-message { top: max(calc(var(--snow-top) + 72px), 14%); margin: 0; font-weight: 680; text-align: center; }
+.snow-equip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: #152f46 !important;
+  background: #e9f5ff !important;
+  box-shadow: 0 2px 12px #0b1d4552;
+}
+.snow-equip:hover { background: #ffffff !important; }
+.snow-hud kbd {
+  margin-right: 3px;
+  padding: 1px 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 9px;
+  opacity: 0.78;
+}
+.snow-legend {
+  bottom: var(--snow-bottom);
+  display: flex;
+  gap: 12px;
+  width: max-content;
+  padding-block: 6px;
+  font-size: 11px;
+}
+.snow-legend span { white-space: nowrap; }
+.snow-hud.is-touch .snow-equip kbd { display: none; }
+
+.snow-touch {
+  position: absolute;
+  inset: auto var(--snow-right) var(--snow-bottom) var(--snow-left);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.snow-edges { display: flex; gap: 7px; }
+.snow-edges button { display: flex; align-items: center; justify-content: center; width: 47px; padding: 0; }
+.snow-edges svg { width: 27px; height: 27px; }
+.snow-maneuvers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; justify-items: end; }
+.snow-maneuvers button { width: 100%; min-height: 45px; }
+.snow-maneuvers .snow-jump, .snow-maneuvers .snow-flip { grid-column: 1 / -1; width: max-content; }
+.snow-maneuvers .snow-jump { background: #d9eafa; color: #173049; }
+.snow-maneuvers .snow-jump.is-held { background: var(--snow-accent); }
+
+@media (max-width: 650px) {
+  .snow-panel { min-width: 132px; padding: 8px 10px 9px; }
+  .snow-speed { font-size: 39px; }
+  .snow-legend { gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .snow-actions { flex-wrap: wrap; justify-content: flex-end; max-width: max(50%, 138px); }
+  .snow-actions .snow-return { order: 1; }
+  .snow-actions .snow-reset { order: 2; }
+  .snow-actions button, .snow-group { min-height: 42px; }
+  .snow-actions button { padding-inline: 9px; }
+  .snow-group { padding-inline: 7px; }
+}
+@media (max-width: 375px) {
+  .snow-maneuvers button { padding-inline: 9px; font-size: 12px; }
+  .snow-edges button { width: 43px; }
+}

@@ -119,8 +119,9 @@
     `neighbours.js` (соседи за стенами и звонок), `water.js` (вода сама: кухня, раковина, душ), `mice.js`
     (мыши вдоль стен, мишени через `hunt.addTargets` + `award`). Модели и лицензии —
     `web/models/life/SOURCE.md`. В консоли: `__kitchen.life.debug` (`ring()`, `water(id)`, `mouse()`).
-  - [Служебный этаж](docs/service-level.md) — проход через входную дверь в пустой подъезд, если его не заняла доставка.
-    `service-level.js` связывает вид порога и ввод. `service-level-simulation.js` идёт в solo и Worker.
+  - [Три встречи за входной дверью](docs/door-encounters.md): курьер, лабиринт, снежный спуск.
+    `door-journey.js` задаёт жеребьёвку, `adventure-portal.js` рисует проём, `service-level.js` связывает вход и ввод.
+    Симуляции `service-level-simulation.js` и `snow-simulation.js` общие для solo и Worker.
   - `decor.js` + `spec/decor/*.json` — обстановка комнат (реальные вещи IKEA и др.), контракт
     `web/models/decor/README.md`, конвейер `tools/decor/`. Зоны и опции — только в конец.
   - `furniture.js` + `spec/furniture.json` — диван, ТВ, тумба, ковёр, столик и редактор расстановки;

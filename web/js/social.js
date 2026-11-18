@@ -18,7 +18,7 @@ addHelp(
 );
 const typing = event => event.target?.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(event.target?.tagName);
 export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bathSpec, spec, canPlay, getFurniture, getWalk, getSeats, getVM, getDoors, getParty, getTV, getPaper, getLife, beforeCarry, requestRender }) {
-  let sim, state, models, audio, locations, disposed = false, network = null, savedSolo = null, capturing = false;
+  let sim, state, models, audio, locations, disposed = false, network = null, savedSolo = null, capturing = false, doorVisit = false;
   const offLive = pipe.onLive?.(live => { capturing = !live; if (models) models.root.visible = live && !pipe.photo; });
   let target = null, pending = false, generation = 0, aimClock = 0, lastBell = null, lastUI = '', noticeUntil = 0, notice = '', players = [], lastCommand = null;
   const index = acquireSceneIndex(scene), walls = buildColliders(plan).boxes;
@@ -82,7 +82,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
   function show(message) { notice = message; noticeUntil = performance.now() + 2200; lastUI = ''; }
   function accept(value, initial = false) {
     if (!value) return; state = value;
-    if (!initial && lastBell !== null && value.bell > lastBell) { audio?.bell(); show('Дзынь! Курьер Żabka ждёт с пиццей'); } lastBell = value.bell;
+    if (!initial && lastBell !== null && value.bell > lastBell) { audio?.bell(); show('Курьер Żabka у двери'); } lastBell = value.bell;
     audio?.sync(value); requestRender();
   }
   async function command(verb, extra = {}) {
@@ -155,7 +155,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     if (key === lastUI) return; lastUI = key;
     hud.hidden = !live || (!focused && !note); hud.classList.toggle('delivery', target === 'courier' || delivery);
     const deliveryTitle = ['handoff', 'thanks'].includes(phase) ? 'Smacznego! Приятного аппетита' : phase === 'leaving' ? 'Курьер уходит' : 'Żabka · доставка пиццы';
-    const deliveryHint = phase === 'arriving' ? 'Курьер подходит к входной двери' : phase === 'waiting' ? '1 / 3 · Откройте входную дверь · E у ручки' : phase === 'offering' ? '2 / 3 · Подойдите к курьеру и наведите на коробку' : phase === 'handoff' ? 'Другой игрок забирает пиццу' : phase === 'thanks' ? 'Коробка у вашего друга · поставьте её и угощайтесь вместе' : pizza?.location === 'courier' ? 'В следующий раз заберите коробку из рук курьера' : 'Пицца общая для всей комнаты';
+    const deliveryHint = phase === 'arriving' ? 'Курьер подходит к входной двери' : phase === 'waiting' ? '1 / 3 · Откройте входную дверь · E у ручки' : phase === 'offering' ? '2 / 3 · Подойдите к курьеру и наведите на коробку' : phase === 'handoff' ? 'Другой игрок забирает пиццу' : phase === 'thanks' ? 'Пицца уже у вас · приятного аппетита' : pizza?.location === 'courier' ? 'В следующий раз заберите коробку из рук курьера' : 'Пицца общая для всей комнаты';
     caption.textContent = transferring ? 'Курьер передаёт коробку…' : target === 'courier' ? 'Пицца для вас · заберите из рук' : carrying ? (phase === 'thanks' ? 'Smacznego! Приятного аппетита' : '3 / 3 · Поставьте пиццу и откройте коробку') : target === 'pizza' ? `Żabka Pizza · ${pizza.remaining} / ${spec.rules.slices} кусочков` : target === 'radio' ? 'Радио · музыка для всех' : washing ? 'Моемся · тёплая вода' : delivery ? deliveryTitle : note || (state.shower.owner ? 'Душ занят' : 'Тёплый душ');
     hint.textContent = transferring ? 'Сейчас коробка окажется у вас в руках' : target === 'courier' ? (busyHands ? 'E — забрать · предмет в руках вернётся на своё место' : 'E или клик по коробке · пицца общая для всех') : carrying ? (placement ? 'Q — поставить здесь · X — вернуть' : 'Наведите на пол, стол или другую поверхность · X — вернуть') : target === 'pizza' ? (pizza.open ? 'ЛКМ — кусочек · E — закрыть · G — взять' : 'E — открыть · G — взять') : target === 'shower' || washing ? 'E — включить / закончить' : target === 'radio' ? 'E — питание · выберите станцию и громкость' : delivery ? deliveryHint : '';
     if (coarse && target === 'courier') hint.textContent = busyHands ? 'Заберите коробку · предмет в руках вернётся на своё место' : 'Нажмите «Забрать пиццу» · угоститься сможет каждый';
@@ -193,7 +193,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     const head = scene.getObjectByName('shower_head');
     if (head) { const box = new T.Box3().setFromObject(head), center = box.getCenter(new T.Vector3()); showerPoint[0] = center.x; showerPoint[2] = center.z; showerTop = box.min.y; }
     locations = socialLocations(plan, spec);
-    sim = createSocialSimulation({ spec, plan, isEntryOpen: () => !!getDoors()?.list?.find(d => d.id === locations.door)?.open, blocked: (p, pos) => !clearLine(p, pos), validatePlacement(pos, kind) {
+    sim = createSocialSimulation({ spec, plan, doorDriven: true, isEntryOpen: () => !!getDoors()?.list?.find(d => d.id === locations.door)?.open, blocked: (p, pos) => !clearLine(p, pos), validatePlacement(pos, kind) {
       if (kind === 'shower') return Math.hypot(...pos.map((n, i) => n - showerPoint[i])) < 0.02;
       if (!roomOf(plan, pos[0], pos[2])) return false;
       if (pos[1] < 0.03) return true;
@@ -203,9 +203,15 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     } });
     models = createSocialModels({ THREE: T, scene, spec, locations });
     audio = createSocialAudio({ camera, spec, locations, isAudible: () => active() && !getLife()?.muted && !document.hidden });
+    if (doorVisit) sim.setDoorVisit(true);
     accept(sim.presentation(), true);
   });
   return { ready, command,
+    setDoorVisit(open) {
+      if (network) return;
+      doorVisit = open;
+      if (sim?.setDoorVisit(open)) accept(sim.presentation());
+    },
     get spec() { return spec; }, get reservesLanding() { return !!state?.landingReserved; },
     refreshAudio() { if (state) audio?.update(state, showerPoint); }, get target() { return target ? { id: `social:${target}`, label: target } : null; }, get held() { return held(); },
     metadata() { refreshRadio(); return { showerPoint, radioPose }; },
@@ -218,7 +224,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
         sim.reconcileSupport(id => { meshes(); const object = supportObjects.get(id); if (!object || !index.visible(object)) return null; const box = new T.Box3().setFromObject(object); return [...box.min.toArray(), ...box.max.toArray()]; });
         state = sim.presentation(); if (held() && (getVM()?.armed || getParty()?.held || getTV()?.status?.held || getPaper()?.held)) { sim.command(pose(), { verb: 'return' }); state = sim.presentation(); }
       }
-      if (lastBell !== null && state.bell > lastBell) { audio.bell(); show('Дзынь! Курьер Żabka ждёт с пиццей'); } lastBell = state.bell;
+      if (lastBell !== null && state.bell > lastBell) { audio.bell(); show('Курьер Żabka у двери'); } lastBell = state.bell;
       audio.sync(state); audio.update(state, showerPoint);
       getLife()?.setShowerControlled(!!state.shower.owner);
       aimClock += dt; if (aimClock >= 0.12) { aimClock = 0; aim(); } renderUI();

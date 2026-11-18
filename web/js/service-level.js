@@ -1,27 +1,37 @@
 // Lazy apartment adapter. The current canvas and WebGL context serve both scenes.
 import { serviceEntrance, newServiceSeed } from './service-level-entrance.js';
 import { NETWORK_RULES } from './multiplayer/rules.js';
+import { createDoorJourney, DOOR_ENCOUNTERS } from './door-journey.js';
+import { createAdventurePortal, drawAdventureScene } from './adventure-portal.js';
 
 const LOAD_DISTANCE = 5;
 const PREVIEW_DISTANCE = 3.6;
-const PREVIEW_WIDTH = 640;
 const AIM_LIMIT = Math.PI * 0.42;
 const JOYSTICK_RADIUS = 50;
 const SEND_INTERVAL = 1 / NETWORK_RULES.inputHz;
 const KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 export function createServiceLevelEntrance({
-  THREE: T, scene, camera, canvas, renderer, walk, doors, plan, canEnter, courier, net,
-  config, onMode, requestRender, notify,
+  THREE: T, scene, camera, canvas, renderer, walk, doors, plan, canEnter, courier, setDoorVisit, net,
+  config, snowConfig, getQuality, onMode, requestRender, notify,
 }) {
   const entrance = serviceEntrance(plan);
   const soloId = 'solo';
-  let soloSeed = newServiceSeed(), nextSeed, roomState = null, selfId = soloId;
-  let entryRequest = false, rejected = false, active = false, kit, loading, retryAt = 0;
+  const localJourney = createDoorJourney(newServiceSeed(), DOOR_ENCOUNTERS);
+  let networkRoute = null, selfId = soloId;
+  const currentRoute = () => net()?.active ? networkRoute : localJourney.route;
+  doors.onToggle((id, open) => {
+    if (id !== entrance?.id || net()?.active) return;
+    if (!open) { setDoorVisit(false); localJourney.close(); }
+    else if (localJourney.route.mode === 'courier') setDoorVisit(true);
+  });
+  let entryRequest = false, rejected = false, active = false, kit;
   let world, worldSeed, environment, actors, hud, state, solo, predicted, target, dirtyResize = true;
   let controls, yaw = 0, pitch = 0, seq = 0, sendClock = 0, sentAt = 0;
-  let renderedPreview = false, fire = false, tap = 0, reload = false, interact = false, paused = false, leaving = false;
-  let portal, previewTarget, previewSignature = '', lastPhase = null;
+  let fire = false, tap = 0, reload = false, interact = false, paused = false, leaving = false;
+  let lastPhase = null, snow = null, requestedMode = null, snowExitPending = false;
+  const portal = entrance && createAdventurePortal({ THREE: T, scene, camera, canvas, renderer, entrance });
+  const adventureActive = () => active || !!snow?.active;
   let touch = matchMedia('(pointer: coarse)').matches;
   const touches = new Map(), keys = new Set();
   let joyX = 0, joyZ = 0, mouseLook = null;
@@ -35,56 +45,27 @@ export function createServiceLevelEntrance({
   const eye = new T.PerspectiveCamera(61, 1, 0.06, 46);
   eye.rotation.order = 'YXZ';
   level.add(eye);
-  const previewCamera = new T.PerspectiveCamera();
-  const frustum = new T.Frustum(), projection = new T.Matrix4();
-  const turn = new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), -(entrance?.yaw ?? 0));
-
-  function load() {
-    if (loading || performance.now() < retryAt) return;
-    loading = Promise.all([
-      import('./service-level-simulation.js'), import('./service-level-world.js'),
-      import('./service-level-environment.js'), import('./service-level-actors.js'), import('./service-level-hud.js'), config(),
-    ]).then(([simulator, topology, scenery, cast, ui, rules]) => {
-      kit = { ...simulator, ...topology, ...scenery, ...cast, ...ui, rules };
-      if (!entrance) return;
-      const material = new T.ShaderMaterial({
-        uniforms: { corridor: { value: null }, sceneExposure: { value: 0 } },
-        side: T.FrontSide, toneMapped: false,
-        vertexShader: `
-          varying vec4 screen;
-          void main() {
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
-            screen = gl_Position;
-          }`,
-        fragmentShader: `
-          #include <common>
-          ${T.ShaderChunk.tonemapping_pars_fragment.replace('uniform float toneMappingExposure;', 'const float toneMappingExposure = 1.0;')}
-          uniform sampler2D corridor;
-          uniform float sceneExposure;
-          varying vec4 screen;
-          void main() {
-            vec2 uv = screen.xy / screen.w * .5 + .5;
-            vec3 color = texture2D(corridor, clamp(uv, 0., 1.)).rgb;
-            color = sceneExposure > 0.0 ? color / sceneExposure : NeutralToneMapping(color);
-            gl_FragColor = vec4(color, 1.0);
-            #include <colorspace_fragment>
-          }`,
+  const loads = new Map(), retries = new Map();
+  function load(mode) {
+    if (loads.has(mode) || performance.now() < (retries.get(mode) ?? 0)) return;
+    const promise = mode === 'snow'
+      ? Promise.all([import('./snow-adventure.js'), snowConfig()]).then(([module, rules]) => {
+        snow = module.createSnowAdventure({ THREE: T, canvas, config: rules, getQuality,
+          onReturn: exit,
+          request: (verb, details) => net()?.adventureRequest(verb, details),
+          send: input => net()?.adventureInput(input),
+          connected: () => !!net()?.client.connected,
+        });
+      })
+      : Promise.all([import('./service-level-simulation.js'), import('./service-level-world.js'),
+        import('./service-level-environment.js'), import('./service-level-actors.js'), import('./service-level-hud.js'), config(),
+      ]).then(([simulator, topology, scenery, cast, ui, rules]) => {
+        kit = { ...simulator, ...topology, ...scenery, ...cast, ...ui, rules };
       });
-      portal = new T.Mesh(new T.PlaneGeometry(entrance.width, entrance.height), material);
-      portal.name = 'service_level_threshold'; portal.userData.rasterOnly = true;
-      portal.onBeforeRender = renderer => {
-        // The apartment compositor applies exposure after the scene pass on high/ultra.
-        material.uniforms.sceneExposure.value = renderer.getRenderTarget() ? Math.max(0.01, renderer.toneMappingExposure) : 0;
-        material.uniformsNeedUpdate = true;
-      };
-      portal.position.set(entrance.x, entrance.height / 2, entrance.z);
-      portal.rotation.y = entrance.yaw; portal.visible = false;
-      scene.add(portal);
-      requestRender();
-    }).catch(error => {
-      console.warn('Служебный этаж:', error);
-      loading = null; retryAt = performance.now() + 1500;
-    });
+    loads.set(mode, promise.then(requestRender).catch(error => {
+      console.warn('Дверь приключений:', error);
+      loads.delete(mode); retries.set(mode, performance.now() + 1500);
+    }));
   }
 
   function setWorld(seed) {
@@ -94,64 +75,34 @@ export function createServiceLevelEntrance({
     world = kit.createServiceLevelWorld(seed);
     environment = kit.createServiceLevelEnvironment(world);
     level.add(environment.group);
-    previewSignature = '';
   }
 
-  function drawScene(view, renderTarget = null) {
-    const original = renderer.getRenderTarget();
-    const exposure = renderer.toneMappingExposure, toneMapping = renderer.toneMapping;
-    try {
-      renderer.setRenderTarget(renderTarget);
-      renderer.toneMappingExposure = 1; renderer.toneMapping = T.NeutralToneMapping;
-      renderer.render(level, view);
-    } finally {
-      renderer.toneMappingExposure = exposure; renderer.toneMapping = toneMapping;
-      renderer.setRenderTarget(original);
-    }
-  }
-
-  function preview(seed, depth, lateral) {
-    camera.updateMatrixWorld();
-    portal.updateMatrixWorld();
-    projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    if (!frustum.setFromProjectionMatrix(projection).intersectsObject(portal) || depth > 0.08) return hide();
-    const ratio = camera.aspect;
-    const width = Math.round(Math.min(PREVIEW_WIDTH, canvas.width, canvas.height * ratio));
-    const height = Math.max(1, Math.round(width / ratio));
-    if (width < 2) return false;
-    const signature = [seed, width, height, camera.fov, ...camera.matrixWorld.elements].join('/');
-    if (portal.visible && signature === previewSignature) return false;
-    previewSignature = signature;
-    setWorld(seed);
-    if (!previewTarget) {
-      previewTarget = new T.WebGLRenderTarget(width, height, { depthBuffer: true, samples: 0 });
-      portal.material.uniforms.corridor.value = previewTarget.texture;
-    } else if (previewTarget.width !== width || previewTarget.height !== height) previewTarget.setSize(width, height);
-    previewCamera.copy(camera, false);
-    previewCamera.far = eye.far;
-    previewCamera.position.set(lateral, camera.position.y, -depth);
-    previewCamera.quaternion.copy(turn).multiply(camera.quaternion);
-    previewCamera.updateProjectionMatrix();
-    environment.update(lateral, -depth);
-    drawScene(previewCamera, previewTarget);
-    portal.visible = renderedPreview = true;
-    return true;
-  }
-
-  function hide() {
-    if (!portal?.visible) return false;
-    portal.visible = false;
-    return true;
-  }
-
-  function releaseScenery() {
-    hide();
+  function releaseMaze() {
     environment?.dispose(); environment = world = null;
-    if (previewTarget) {
-      previewTarget.dispose(); previewTarget = null;
-      portal.material.uniforms.corridor.value = null;
-    }
-    previewSignature = '';
+  }
+
+  function enterView(label) {
+    portal.hide();
+    document.body.classList.add('service-level-active');
+    canvas.setAttribute('aria-label', label);
+    walk.setSuspended(true);
+    onMode(true);
+  }
+
+  function restoreView(pose) {
+    portal.release();
+    document.body.classList.remove('service-level-active');
+    canvas.setAttribute('aria-label', '3D-квартира · управление камерой');
+    walk.setSuspended(false);
+    onMode(false);
+    if (pose) walk.reconcileNetwork(pose, pose.ack, { snap: true });
+    requestRender();
+  }
+
+  function entranceLook() {
+    const approach = walk.getNetworkPose();
+    const diff = approach.yaw - entrance.yaw;
+    return { yaw: Math.atan2(Math.sin(diff), Math.cos(diff)), pitch: T.MathUtils.clamp(approach.pitch, -AIM_LIMIT, AIM_LIMIT), fov: camera.fov };
   }
 
   function unlockAudio() { actors?.resumeAudio?.(); }
@@ -173,23 +124,19 @@ export function createServiceLevelEntrance({
     const me = state.players.find(p => p.id === selfId);
     if (!me || !kit) return;
     setWorld(state.seed);
-    hide();
+    portal.hide();
     predicted = { ...me }; target = null; seq = 0; sentAt = sendClock = 0;
     yaw = me.yaw; pitch = me.pitch;
     if (active) return;
-    const approach = walk.getNetworkPose();
-    yaw = Math.atan2(Math.sin(approach.yaw - entrance.yaw), Math.cos(approach.yaw - entrance.yaw));
-    pitch = T.MathUtils.clamp(approach.pitch, -AIM_LIMIT, AIM_LIMIT);
-    eye.fov = camera.fov; dirtyResize = true;
+    const approach = entranceLook();
+    yaw = approach.yaw; pitch = approach.pitch;
+    eye.fov = approach.fov; dirtyResize = true;
     active = true; entryRequest = false;
     const joy = document.createElement('div');
     joy.className = 'service-level-joystick'; joy.setAttribute('aria-hidden', 'true');
     joy.append(document.createElement('i'));
     document.body.append(joy);
-    document.body.classList.add('service-level-active');
-    canvas.setAttribute('aria-label', 'Служебный этаж · камера игрока');
-    walk.setSuspended(true);
-    onMode(true);
+    enterView('Служебный этаж · камера игрока');
     controls = { joy };
     actors = kit.createServiceLevelActors({ THREE: T, scene: level, camera: eye });
     hud = kit.createServiceLevelHud({
@@ -212,47 +159,62 @@ export function createServiceLevelEntrance({
     hud?.dispose(); hud = null;
     actors?.dispose(); actors = null;
     controls?.joy.remove(); controls = null;
-    releaseScenery();
+    releaseMaze();
     state = solo = target = predicted = lastPhase = null;
-    renderedPreview = false; previewSignature = '';
-    document.body.classList.remove('service-level-active');
-    canvas.setAttribute('aria-label', '3D-квартира · управление камерой');
-    walk.setSuspended(false);
-    onMode(false);
-    if (restore) walk.reconcileNetwork(restore, restore.ack, { snap: true });
-    requestRender();
+    restoreView(restore);
   }
 
-  function enter() {
-    if (active || entryRequest || !kit) return;
+  function activateSnow(incoming, id, seed) {
+    if (!snow.active) {
+      snow.enter({ incoming, id, seed, look: entranceLook() });
+      releaseMaze();
+      enterView('Снежный перевал · камера райдера');
+      entryRequest = false;
+    } else snow.sync(incoming, id);
+  }
+
+  function finishSnow(restore) {
+    if (!snow?.active) return;
+    snow.leave();
+    entryRequest = snowExitPending = false;
+    restoreView(restore);
+  }
+
+  function enter(route) {
+    if (adventureActive() || entryRequest) return;
     const room = net();
     if (room?.active) {
       if (!room.client.connected) return;
-      entryRequest = true;
-      room.serviceRequest('enter').then(result => {
-        entryRequest = false;
-        if (!result?.ok && !active) { rejected = true; notify('Вход пока закрыт. Попробуйте снова.'); }
+      entryRequest = true; requestedMode = route.mode;
+      room.adventureRequest('enter', route).then(result => {
+        entryRequest = false; requestedMode = null;
+        if (!result?.ok && !adventureActive()) { rejected = true; notify('Вход пока закрыт. Попробуйте снова.'); }
       });
+    } else if (route.mode === 'snow') {
+      activateSnow(null, soloId, route.seed);
     } else {
-      solo = kit.createServiceLevel({ seed: soloSeed, config: kit.rules });
+      solo = kit.createServiceLevel({ seed: route.seed, config: kit.rules });
       solo.join(soloId);
       activate(solo.snapshot(), soloId);
     }
   }
 
   function exit() {
-    if (!active || leaving) return;
+    if (!adventureActive() || leaving || snowExitPending) return;
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
     resetInput();
-    if (solo) {
-      soloSeed = newServiceSeed();
-      finish(entrance.returnPose);
-    } else if (!net()?.client.connected) {
-      net()?.client.leave();
-    } else {
-      leaving = true;
-      net().serviceRequest('leave').then(result => {
-        if (!result?.ok) { leaving = false; hud?.setStatus('Не удалось вернуться. Повторите попытку.'); }
+    if (solo) finish(entrance.returnPose);
+    else if (snow?.solo) finishSnow(entrance.returnPose);
+    else if (!net()?.client.connected) net()?.client.leave();
+    else {
+      if (snow?.active) { snowExitPending = true; snow.setReturning(true); }
+      else leaving = true;
+      net().adventureRequest('leave').then(result => {
+        if (!result?.ok) {
+          leaving = snowExitPending = false;
+          snow?.setReturning(false);
+          notify('Не удалось вернуться. Повторите попытку.');
+        }
       });
     }
   }
@@ -261,42 +223,58 @@ export function createServiceLevelEntrance({
     if (!active || leaving || paused || !['victory', 'defeat'].includes(state?.phase)) return;
     resetInput();
     if (solo) {
-      soloSeed = newServiceSeed();
-      solo = kit.createServiceLevel({ seed: soloSeed, config: kit.rules });
+      localJourney.reseed();
+      solo = kit.createServiceLevel({ seed: localJourney.route.seed, config: kit.rules });
       solo.join(soloId); activate(solo.snapshot(), soloId);
-    } else net()?.serviceRequest('restart');
+    } else net()?.adventureRequest('restart');
   }
 
-  function applyNetwork(snapshot, seed, id, apartmentPose) {
-    roomState = snapshot ?? null; nextSeed = seed;
-    const me = roomState?.players.find(p => p.id === id);
-    if (!me) {
-      if (active && !solo) finish(apartmentPose || entrance.returnPose);
-      return;
-    }
-    if (!active || state?.seed !== seedForRun()) {
-      activate(roomState, id);
-      return;
-    }
-    state = roomState;
-    const estimate = sentAt ? Math.min(0.11, Math.max(0, (performance.now() - sentAt) / 2000)) : 0;
-    target = { ...me, ...kit.moveServicePlayer(world, me, readInput(), estimate, kit.rules) };
+  function setNetworkRoute(value) {
+    if (value && (!networkRoute || value.revision >= networkRoute.revision)) networkRoute = value;
   }
 
-  function seedForRun() { return roomState?.seed ?? nextSeed ?? soloSeed; }
+  function applyNetwork(packet, id, apartmentPose) {
+    setNetworkRoute(packet.doorJourney);
+    const mode = apartmentPose?.destination;
+    if (mode !== 'snow' && snow?.active && !snow.solo) finishSnow(apartmentPose || entrance.returnPose);
+    if (mode !== 'service' && active && !solo) finish(apartmentPose || entrance.returnPose);
+    if (mode === 'snow' && packet.snowLevel && snow) {
+      activateSnow(packet.snowLevel, id, packet.snowLevel.seed);
+    } else if (mode === 'service' && packet.serviceLevel && kit) {
+      const incoming = packet.serviceLevel;
+      if (!active || state?.seed !== incoming.seed) activate(incoming, id);
+      else {
+        const me = incoming.players.find(p => p.id === id);
+        if (!me) return;
+        state = incoming;
+        const estimate = sentAt ? Math.min(0.11, Math.max(0, (performance.now() - sentAt) / 2000)) : 0;
+        target = { ...me, ...kit.moveServicePlayer(world, me, readInput(), estimate, kit.rules) };
+      }
+    }
+  }
 
   function updateApartment() {
-    if (!entrance || !canEnter()) return hide();
+    if (!entrance || !canEnter()) return portal?.hide();
     const position = walk.getNetworkPose();
     const depth = entrance.depth(position), lateral = entrance.lateral(position);
     const distance = Math.hypot(depth, lateral);
-    if (distance < LOAD_DISTANCE && !document.hidden && !kit) load();
-    if (distance >= LOAD_DISTANCE && environment) { releaseScenery(); return true; }
+    const route = currentRoute();
     if (depth < -0.2) rejected = false;
-    if (!doors.list.find(d => d.id === entrance.id)?.open || courier() || !kit) return hide();
-    if (!rejected && entrance.crossed(position)) { enter(); return false; }
-    if (depth > 0.1 || Math.hypot(depth, lateral) > PREVIEW_DISTANCE) return hide();
-    return preview(seedForRun(), entrance.depth(camera.position), entrance.lateral(camera.position));
+    if (distance >= LOAD_DISTANCE && (environment || snow?.hasWorld)) {
+      releaseMaze(); snow?.releasePreview(); return portal.release();
+    }
+    if (!route || route.mode === 'courier' || document.hidden) return portal.hide();
+    if (distance < LOAD_DISTANCE) load(route.mode);
+    const ready = route.mode === 'snow' ? !!snow : !!kit;
+    if (!ready || !doors.list.find(d => d.id === entrance.id)?.open || courier()) return portal.hide();
+    if (!rejected && entrance.crossed(position)) { enter(route); return false; }
+    if (depth > 0.1 || distance > PREVIEW_DISTANCE) return portal.hide();
+    return portal.preview(`${route.mode}:${route.seed}`, (x, z) => {
+      if (route.mode === 'snow') { releaseMaze(); return snow.preview(route.seed, x, z); }
+      snow?.releasePreview();
+      setWorld(route.seed); environment.update(x, z);
+      return { scene: level, far: eye.far };
+    });
   }
 
   const signed = (plus, minus) => Number(keys.has(plus)) - Number(keys.has(minus));
@@ -309,7 +287,11 @@ export function createServiceLevelEntrance({
   }
 
   function update(dt) {
-    if (!active || document.hidden || renderer.getContext().isContextLost()) return;
+    if (!adventureActive() || document.hidden || renderer.getContext().isContextLost()) return;
+    if (snow?.active) {
+      snow.update(dt, (scene, camera) => drawAdventureScene(T, renderer, scene, camera));
+      return;
+    }
     paused = !solo && !net()?.client.connected;
     hud.setStatus(paused ? 'Связь с комнатой прервалась' : leaving ? 'Возвращаемся в квартиру…' : '');
     yaw += signed('ArrowLeft', 'ArrowRight') * 1.65 * dt;
@@ -323,7 +305,7 @@ export function createServiceLevelEntrance({
     } else if (!paused && !leaving) {
       sendClock += step;
       if (sendClock >= SEND_INTERVAL || reload) {
-        if (net()?.serviceInput({ ...input, seq: ++seq })) sentAt = performance.now();
+        if (net()?.adventureInput({ ...input, seq: ++seq })) sentAt = performance.now();
         sendClock %= SEND_INTERVAL; reload = false;
       }
     }
@@ -360,7 +342,7 @@ export function createServiceLevelEntrance({
       Math.hypot(player.x - me.x, player.z - me.z) <= kit.rules.player.reviveRadius &&
       world.hasLineOfSight(me.x, me.z, player.x, player.z));
     hud.update(state, { playerId: selfId, canRevive, canRestart: !paused && !leaving });
-    drawScene(eye);
+    drawAdventureScene(T, renderer, level, eye);
   }
 
   function topLevelInput(event) {
@@ -440,7 +422,7 @@ export function createServiceLevelEntrance({
   addEventListener('keyup', topLevelInput, true);
   addEventListener('blur', resetInput);
   canvas.addEventListener('contextmenu', event => { if (active) event.preventDefault(); });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); else previewSignature = ''; });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && active) resetInput(); });
   document.addEventListener('pointerlockchange', () => {
     if (!active) return;
     fire = false; tap = 0; mouseLook = null;
@@ -458,9 +440,18 @@ export function createServiceLevelEntrance({
     .service-level-joystick i { width: 39px; height: 39px; border: 1px solid #ece1bfad; border-radius: 50%; background: #cfc0955e }
   `;
   document.head.append(style);
-  return { updateApartment, update, applyNetwork, resetNetwork() { roomState = nextSeed = null; if (active && !solo) finish(entrance.returnPose); },
-    get active() { return active; }, get transitioning() { return entryRequest; }, get previewVisible() { return !!portal?.visible && renderedPreview; },
-    get snapshot() { return state; },
-    get view() { return active ? { x: eye.position.x, y: eye.position.y, z: eye.position.z, yaw, pitch } : null; },
+  return { updateApartment, update, applyNetwork, setNetworkRoute,
+    resetNetwork() {
+      networkRoute = null; entryRequest = false; requestedMode = null;
+      if (active && !solo) finish(entrance.returnPose);
+      if (snow?.active && !snow.solo) finishSnow(entrance.returnPose);
+    },
+    get active() { return adventureActive(); },
+    get transitioning() { return entryRequest; },
+    get previewVisible() { return !!portal?.visible; },
+    get doorJourney() { return currentRoute(); },
+    get destination() { return active ? 'service' : snow?.active ? 'snow' : requestedMode; },
+    get snapshot() { return snow?.active ? snow.snapshot : state; },
+    get view() { return snow?.active ? snow.view : active ? { x: eye.position.x, y: eye.position.y, z: eye.position.z, yaw, pitch } : null; },
   };
 }

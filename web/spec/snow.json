@@ -1,0 +1,90 @@
+{
+  "simulation": {
+    "tickHz": 60,
+    "maxFrameSeconds": 0.18,
+    "inputTimeout": 0.45,
+    "maxPlayers": 10,
+    "maxEvents": 28,
+    "eventSeconds": 2
+  },
+  "station": {
+    "eyeHeight": 1.68,
+    "options": {
+      "ski": { "x": -0.93, "z": -4.15 },
+      "board": { "x": 0.93, "z": -4.15 }
+    },
+    "reach": 1.55,
+    "walkRadius": 8,
+    "walkSpeed": 2.9,
+    "spawnSpacing": 0.44,
+    "launchSpeed": 2.7
+  },
+  "terrain": {
+    "baseGrade": 0.28,
+    "plateau": 5,
+    "minWidth": 23,
+    "maxWidth": 52,
+    "recoveryWidth": 72
+  },
+  "motion": {
+    "gravity": 9.81,
+    "maxSpeed": 38,
+    "edgeResponse": 6.8,
+    "lowSpeedTurn": 0.9,
+    "tractionResponse": 7.5,
+    "edgeGain": 0.6,
+    "carveEnergy": 0.86,
+    "maxBackSpeed": 2.8,
+    "pushFadeSpeed": 9,
+    "drag": 0.006,
+    "tuckDrag": 0.0024,
+    "naturalAirSpeed": 9.5,
+    "naturalAirGap": 0.0018,
+    "airDrag": 0.0017,
+    "airResponse": 9,
+    "bodyRadius": 0.3,
+    "jumpBuffer": 0.10,
+    "minJumpSpeed": 1.45,
+    "crashDelay": 1.45,
+    "dangerousLandingSpeed": 6.5,
+    "maxImpact": 10,
+    "maxFlipError": 0.78,
+    "maxHeadingError": 1.27,
+    "bigAirTime": 1.2,
+    "smallFlightTime": 0.13,
+    "spinScore": 100,
+    "flipScore": 160,
+    "bigAirScore": 45
+  },
+  "snow": {
+    "groomed": { "glide": 0.045, "grip": 0.98, "impact": 1 },
+    "powder": { "glide": 0.105, "grip": 0.69, "impact": 1.25 },
+    "ice": { "glide": 0.018, "grip": 0.38, "impact": 0.81 }
+  },
+  "gear": {
+    "ski": {
+      "grip": 1.08,
+      "sidecut": 12,
+      "maxTurn": 1.35,
+      "push": 4.3,
+      "brake": 7.7,
+      "glide": 0.91,
+      "jump": 4.6,
+      "spin": 7.4,
+      "flip": 7.3,
+      "switchLanding": false
+    },
+    "board": {
+      "grip": 0.9,
+      "sidecut": 9.5,
+      "maxTurn": 1.6,
+      "push": 3.5,
+      "brake": 8.4,
+      "glide": 1.04,
+      "jump": 5.0,
+      "spin": 8.3,
+      "flip": 7.6,
+      "switchLanding": true
+    }
+  }
+}
