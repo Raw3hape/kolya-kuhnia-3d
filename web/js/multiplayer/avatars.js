@@ -11,16 +11,17 @@ export const AVATAR_ROSTER = Object.freeze([
   { id: 'sailor', label: 'Морской свитер', shirt: '#e4e3d8', accent: '#263e59', pants: '#293641', skin: '#d5a47e', hair: '#322b28', style: 'stripes', head: 'crop' },
   { id: 'mustard', label: 'Горчичная куртка', shirt: '#c69237', accent: '#73512c', pants: '#343d38', skin: '#e9b997', hair: '#6c4230', style: 'hood', head: 'crop' },
   { id: 'gardener', label: 'Садовник', shirt: '#dbd2b3', accent: '#53744c', pants: '#53744c', skin: '#c78f6c', hair: '#a6532e', style: 'overalls', head: 'cap' },
-  { id: 'artist', label: 'Художница', shirt: '#b8654e', accent: '#e4b86d', pants: '#454945', skin: '#9e674e', hair: '#302626', style: 'jumper', head: 'bun' },
+  { id: 'artist', label: 'Художница', shirt: '#b8654e', accent: '#e4b86d', pants: '#454945', skin: '#9e674e', hair: '#302626', style: 'jumper', head: 'bun', saunaWrapTop: true },
   { id: 'neighbour', label: 'Сосед в жилете', shirt: '#e7e3d8', accent: '#3f6075', pants: '#53504b', skin: '#d8ae90', hair: '#b9b7ae', style: 'vest', head: 'glasses' },
   { id: 'skater', label: 'Скейтер', shirt: '#9380ad', accent: '#292b31', pants: '#41424b', skin: '#bb825e', hair: '#302c2d', style: 'tee', head: 'beanie' },
-  { id: 'traveller', label: 'Туристка', shirt: '#428d87', accent: '#d7bc82', pants: '#394d5d', skin: '#edbc93', hair: '#8d6438', style: 'backpack', head: 'braid' },
+  { id: 'traveller', label: 'Туристка', shirt: '#428d87', accent: '#d7bc82', pants: '#394d5d', skin: '#edbc93', hair: '#8d6438', style: 'backpack', head: 'braid', saunaWrapTop: true },
   { id: 'chef', label: 'Повар', shirt: '#ece6d4', accent: '#b7b9a8', pants: '#383c40', skin: '#bc8d6b', hair: '#514236', style: 'apron', head: 'chef' },
-  { id: 'cyclist', label: 'Велосипедистка', shirt: '#ce7064', accent: '#ecd6ad', pants: '#39434d', skin: '#855c46', hair: '#292827', style: 'zip', head: 'bob' },
+  { id: 'cyclist', label: 'Велосипедистка', shirt: '#ce7064', accent: '#ecd6ad', pants: '#39434d', skin: '#855c46', hair: '#292827', style: 'zip', head: 'bob', saunaWrapTop: true },
   { id: 'maker', label: 'Мастер', shirt: '#4e6b87', accent: '#a95735', pants: '#51473b', skin: '#e1aa83', hair: '#534239', style: 'work', head: 'orangehat' },
 ].map(Object.freeze));
 
 const INK = '#282c30', WHITE = '#eeeadd';
+const LOUNGER_TILT = Math.PI * 0.36;
 
 // Merge coloured primitives while building. Each limb remains a single draw call.
 function builder(material) {
@@ -113,7 +114,15 @@ function torso(material, d) {
   return b.build();
 }
 
-function headMesh(material, d) {
+function saunaTorso(material, d, firstPerson) {
+  const b = builder(material), broad = ['chef', 'neighbour'].includes(d.id) ? 1.06 : d.saunaWrapTop ? 0.93 : 1;
+  const clearance = firstPerson ? 0.058 : 0;
+  b.ball(0.201, d.skin, [0, 1.235, clearance - 0.008], [broad, 1.02, firstPerson ? 0.41 : 0.56]);
+  b.ball(0.172, d.skin, [0, 1.054, clearance * 0.6], [0.95 * broad, 1.11, firstPerson ? 0.52 : 0.61]);
+  return b.build();
+}
+
+function headMesh(material, d, sauna) {
   const b = builder(material);
   b.cylinder(0.061, 0.07, 0.1, d.skin, [0, 1.435, 0]);
   b.ball(0.155, d.skin, [0, 1.605, -0.008], [0.88, 1.1, 0.87]);
@@ -126,10 +135,10 @@ function headMesh(material, d) {
   }
   b.box([0.045, 0.009, 0.009], '#87594e', [0, 1.55, -0.134]);
   b.ball(0.151, d.hair, [0, 1.696, 0.012], [0.91, 0.58, 0.87]);
-  if (d.head === 'cap') {
+  if (d.head === 'cap' && !sauna) {
     b.ball(0.157, d.accent, [0, 1.711, 0.006], [0.96, 0.55, 0.94]);
     b.box([0.23, 0.021, 0.16], d.accent, [0, 1.719, -0.105]);
-  } else if (d.head === 'beanie' || d.head === 'orangehat') {
+  } else if ((d.head === 'beanie' || d.head === 'orangehat') && !sauna) {
     const tint = d.head === 'orangehat' ? d.accent : '#2a2b30';
     b.ball(0.158, tint, [0, 1.714, 0.006], [0.96, 0.72, 0.96]);
     b.cylinder(0.145, 0.145, 0.05, tint, [0, 1.701, 0.006]);
@@ -139,8 +148,10 @@ function headMesh(material, d) {
   } else if (d.head === 'braid') {
     for (let i = 0; i < 5; i++) b.ball(0.04 - i * 0.003, d.hair, [0.09, 1.62 - i * 0.065, 0.126]);
   } else if (d.head === 'chef') {
-    b.cylinder(0.115, 0.125, 0.12, WHITE, [0, 1.777, 0]);
-    for (const [x, z] of [[-0.065, 0], [0.065, 0], [0, -0.06], [0, 0.06]]) b.ball(0.075, WHITE, [x, 1.85, z], [1, 0.8, 1]);
+    if (!sauna) {
+      b.cylinder(0.115, 0.125, 0.12, WHITE, [0, 1.777, 0]);
+      for (const [x, z] of [[-0.065, 0], [0.065, 0], [0, -0.06], [0, 0.06]]) b.ball(0.075, WHITE, [x, 1.85, z], [1, 0.8, 1]);
+    }
     b.ball(0.115, d.hair, [0, 1.528, 0], [0.93, 0.43, 1.08]);
   } else if (d.head === 'bob') {
     for (const x of [-0.125, 0.125]) b.box([0.055, 0.21, 0.19], d.hair, [x, 1.605, 0.025]);
@@ -191,20 +202,27 @@ function nameplate() {
 function joint(name, position = [0, 0, 0]) {
   const group = new THREE.Group(); group.name = name; group.position.set(...position); return group;
 }
-function armChain(material, d, side) {
+function armChain(material, d, side, sauna) {
   const label = side < 0 ? 'left' : 'right', shoulder = joint(`${label}_shoulder`, [side * R.shoulderX, R.shoulderY - R.hipY, 0]);
   const elbow = joint(`${label}_elbow`, [0, -R.upperArm, 0]), wrist = joint(`${label}_wrist`, [0, -R.forearm, 0]);
   const upper = builder(material), lower = builder(material), hand = builder(material);
-  const tee = d.style === 'tee', sleeve = tee ? 0.17 : R.upperArm;
-  upper.box([0.10, sleeve, 0.135], d.shirt, [0, -sleeve / 2, 0]);
-  if (tee) upper.box([0.087, R.upperArm - sleeve, 0.105], d.skin, [0, -(R.upperArm + sleeve) / 2, 0]);
-  upper.ball(0.052, tee ? d.skin : d.shirt, [0, -R.upperArm, 0], [0.95, 1, 1]);
-  if (!tee) {
-    lower.box([0.09, 0.095, 0.11], d.shirt, [0, -0.0475, 0]);
-    lower.box([0.096, 0.025, 0.116], d.accent, [0, -0.095, 0]);
+  if (sauna) {
+    upper.ball(0.064, d.skin, [0, -0.024, 0], [1, 1.22, 1]);
+    upper.ball(0.053, d.skin, [0, -R.upperArm * 0.55, 0], [0.92, 2.5, 1]);
+    lower.ball(0.046, d.skin, [0, -R.forearm * 0.44, 0], [0.85, 2.68, 1]);
+    lower.ball(0.035, d.skin, [0, -R.forearm * 0.85, 0], [0.96, 1.65, 0.8]);
+  } else {
+    const tee = d.style === 'tee', sleeve = tee ? 0.17 : R.upperArm;
+    upper.box([0.10, sleeve, 0.135], d.shirt, [0, -sleeve / 2, 0]);
+    if (tee) upper.box([0.087, R.upperArm - sleeve, 0.105], d.skin, [0, -(R.upperArm + sleeve) / 2, 0]);
+    upper.ball(0.052, tee ? d.skin : d.shirt, [0, -R.upperArm, 0], [0.95, 1, 1]);
+    if (!tee) {
+      lower.box([0.09, 0.095, 0.11], d.shirt, [0, -0.0475, 0]);
+      lower.box([0.096, 0.025, 0.116], d.accent, [0, -0.095, 0]);
+    }
+    const skinLength = tee ? R.forearm : R.forearm - 0.105;
+    lower.box([0.075, skinLength, 0.09], d.skin, [0, -(R.forearm - skinLength / 2), 0]);
   }
-  const skinLength = tee ? R.forearm : R.forearm - 0.105;
-  lower.box([0.075, skinLength, 0.09], d.skin, [0, -(R.forearm - skinLength / 2), 0]);
   hand.box([0.073, 0.075, 0.045], d.skin, [0, -0.024, 0]);
   for (let i = 0; i < 4; i++) hand.box([0.014, 0.039, 0.035], d.skin, [-0.024 + i * 0.016, -0.075, -0.006]);
   hand.box([0.027, 0.045, 0.035], d.skin, [-side * 0.042, -0.025, -0.018], [0.3, 0, -side * 0.4]);
@@ -212,18 +230,28 @@ function armChain(material, d, side) {
   shoulder.add(a, elbow); elbow.add(b, wrist); wrist.add(c);
   return { shoulder, elbow, wrist };
 }
-function legChain(material, d, side) {
+function legChain(material, d, side, sauna) {
   const label = side < 0 ? 'left' : 'right', hip = joint(`${label}_hip`, [side * R.hipX, R.hipY, 0]);
   const knee = joint(`${label}_knee`, [0, -R.upperLeg, 0]), ankle = joint(`${label}_ankle`, [0, -R.lowerLeg, 0]);
   const width = d.id === 'skater' ? 0.17 : 0.14, upper = builder(material), lower = builder(material), boot = builder(material);
-  upper.box([width, R.upperLeg, 0.17], d.pants, [0, -R.upperLeg / 2, 0]);
-  upper.ball(width * 0.48, d.pants, [0, -R.upperLeg, 0], [1, 0.8, 1.02]);
-  lower.box([width * 0.93, R.lowerLeg, 0.15], d.pants, [0, -R.lowerLeg / 2, 0]);
-  lower.box([width * 0.97, 0.027, 0.16], d.accent, [0, -R.lowerLeg + 0.015, 0]);
-  const shoe = ['sailor', 'skater', 'cyclist'].includes(d.id) ? WHITE : '#3c3832';
-  boot.box([width + 0.014, 0.095, 0.255], shoe, [0, -0.06, -0.043]);
-  boot.box([width + 0.017, 0.018, 0.26], '#b6b2a6', [0, -0.111, -0.043]);
-  for (let i = 0; i < 3; i++) boot.box([width * 0.55, 0.006, 0.012], shoe === WHITE ? d.accent : '#c7bdab', [0, -0.009, -0.016 - i * 0.025]);
+  if (sauna) {
+    // The towel supplies the entire waist and hip silhouette. Bare geometry
+    // starts below mid-thigh, including in the seated and swimming poses.
+    upper.ball(width * 0.46, d.skin, [0, -R.upperLeg * 0.77, 0], [1, 1.66, 1]);
+    lower.ball(width * 0.44, d.skin, [0, -R.lowerLeg * 0.42, 0.009], [0.91, 2.70, 0.90]);
+    lower.ball(width * 0.32, d.skin, [0, -R.lowerLeg * 0.83, 0], [0.85, 1.42, 0.9]);
+    boot.ball(width * 0.46, d.skin, [0, -0.064, -0.043], [0.91, 0.79, 1.73]);
+    boot.ball(width * 0.36, d.skin, [-side * 0.012, -0.085, -0.124], [1.03, 0.57, 0.67]);
+  } else {
+    upper.box([width, R.upperLeg, 0.17], d.pants, [0, -R.upperLeg / 2, 0]);
+    upper.ball(width * 0.48, d.pants, [0, -R.upperLeg, 0], [1, 0.8, 1.02]);
+    lower.box([width * 0.93, R.lowerLeg, 0.15], d.pants, [0, -R.lowerLeg / 2, 0]);
+    lower.box([width * 0.97, 0.027, 0.16], d.accent, [0, -R.lowerLeg + 0.015, 0]);
+    const shoe = ['sailor', 'skater', 'cyclist'].includes(d.id) ? WHITE : '#3c3832';
+    boot.box([width + 0.014, 0.095, 0.255], shoe, [0, -0.06, -0.043]);
+    boot.box([width + 0.017, 0.018, 0.26], '#b6b2a6', [0, -0.111, -0.043]);
+    for (let i = 0; i < 3; i++) boot.box([width * 0.55, 0.006, 0.012], shoe === WHITE ? d.accent : '#c7bdab', [0, -0.009, -0.016 - i * 0.025]);
+  }
   hip.add(upper.build(), knee); knee.add(lower.build(), ankle); ankle.add(boot.build());
   return { hip, knee, ankle };
 }
@@ -292,21 +320,67 @@ function createGear(kind, material, flashMaterial, screenMaterial) {
   return { root, kind, muzzle, flash, magazine, bolt, barrels, page, grip };
 }
 
-export function createAvatar({ slot = 0, name = '', host = false, layer = 0, appearance = null, showNameplate = true } = {}) {
+function compactSaunaSkin(root, material) {
+  const parts = [];
+  root.updateMatrixWorld(true);
+  root.traverse(object => { if (object.isMesh && object.material === material) parts.push(object); });
+  const vertices = parts.reduce((sum, part) => sum + part.geometry.getAttribute('position').count, 0);
+  const positions = new Float32Array(vertices * 3), normals = new Float32Array(vertices * 3), colors = new Float32Array(vertices * 3);
+  const skinIndex = new Uint16Array(vertices * 4), skinWeight = new Float32Array(vertices * 4), bones = [];
+  let offset = 0;
+  for (const part of parts) {
+    const bone = new THREE.Bone(), index = bones.push(bone) - 1;
+    part.parent.add(bone);
+    const geometry = part.geometry;
+    geometry.applyMatrix4(part.matrixWorld);
+    positions.set(geometry.getAttribute('position').array, offset * 3);
+    normals.set(geometry.getAttribute('normal').array, offset * 3);
+    colors.set(geometry.getAttribute('color').array, offset * 3);
+    const end = offset + geometry.getAttribute('position').count;
+    for (; offset < end; offset++) { skinIndex[offset * 4] = index; skinWeight[offset * 4] = 1; }
+    part.removeFromParent(); geometry.dispose();
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndex, 4));
+  geometry.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
+  const mesh = new THREE.SkinnedMesh(geometry, material);
+  mesh.name = 'sauna_skin';
+  mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.85, 0), 1.28);
+  mesh.receiveShadow = true;
+  root.add(mesh);
+  root.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton(bones);
+  mesh.bind(skeleton);
+  return skeleton;
+}
+
+export function createAvatar({ slot = 0, name = '', host = false, layer = 0, appearance = null, showNameplate = true, sauna = false, showFace = true } = {}) {
   const index = Number.isInteger(slot) && slot >= 0 && slot < AVATAR_ROSTER.length ? slot : 0, d = appearance || AVATAR_ROSTER[index];
   const root = joint(`player_${d.id}`), rig = joint('avatar_rig'), body = joint('avatar_body', [0, R.hipY, 0]);
   const material = appearance ? new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }) : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.91, flatShading: true });
   material.userData.bakedFill = !!appearance;
-  const flashMaterial = new THREE.MeshBasicMaterial({ color: '#ffda84', transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
-  const screenMaterial = new THREE.MeshBasicMaterial({ color: '#85b8bc', toneMapped: false });
-  const torsoMesh = torso(material, d); torsoMesh.position.y = -R.hipY; body.add(torsoMesh);
-  const head = joint('avatar_head', [0, R.neckY - R.hipY, 0]), face = headMesh(material, d); face.position.y = -R.neckY; head.add(face); body.add(head);
-  const leftArm = armChain(material, d, -1), rightArm = armChain(material, d, 1);
-  const leftLeg = legChain(material, d, -1), rightLeg = legChain(material, d, 1);
+  const flashMaterial = sauna ? null : new THREE.MeshBasicMaterial({ color: '#ffda84', transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
+  const screenMaterial = sauna ? null : new THREE.MeshBasicMaterial({ color: '#85b8bc', toneMapped: false });
+  const torsoMesh = sauna ? saunaTorso(material, d, !showFace) : torso(material, d);
+  torsoMesh.position.y = -R.hipY; body.add(torsoMesh);
+  const head = joint('avatar_head', [0, R.neckY - R.hipY, 0]);
+  if (showFace) {
+    const face = headMesh(material, d); face.position.y = -R.neckY; head.add(face);
+  }
+  body.add(head);
+  const leftArm = armChain(material, d, -1, sauna), rightArm = armChain(material, d, 1, sauna);
+  const leftLeg = legChain(material, d, -1, sauna), rightLeg = legChain(material, d, 1, sauna);
   body.add(leftArm.shoulder, rightArm.shoulder); rig.add(body, leftLeg.hip, rightLeg.hip); root.add(rig);
-  const gearSocket = joint('avatar_gear'); rightArm.wrist.add(gearSocket);
-  const spare = builder(material); spare.box([0.036, 0.12, 0.055], '#333b40', [0, -0.06, 0]);
-  const spareMagazine = spare.build(); spareMagazine.name = 'reload_magazine_in_hand'; spareMagazine.visible = false; leftArm.wrist.add(spareMagazine);
+  const skeleton = sauna ? compactSaunaSkin(root, material) : null;
+  let gearSocket, spareMagazine;
+  if (!sauna) {
+    gearSocket = joint('avatar_gear'); rightArm.wrist.add(gearSocket);
+    const spare = builder(material); spare.box([0.036, 0.12, 0.055], '#333b40', [0, -0.06, 0]);
+    spareMagazine = spare.build(); spareMagazine.name = 'reload_magazine_in_hand'; spareMagazine.visible = false; leftArm.wrist.add(spareMagazine);
+  }
   const plate = showNameplate ? nameplate() : null; if (plate) { root.add(plate.sprite); plate.write(name, host); }
   const gearCache = new Map(), down = new THREE.Vector3(0, -1, 0), direction = new THREE.Vector3();
   const lowerWorld = new THREE.Quaternion(), handWorld = new THREE.Quaternion(), euler = new THREE.Euler(), target = new THREE.Vector3();
@@ -324,6 +398,7 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0, app
   function update(input = {}) {
     if (disposed) return;
     const state = { ...input };
+    if (state.lounging) state.reclined = true;
     if (state.seated && Number.isFinite(state.seatY)) lastSeatY = state.seatY;
     if (!Number.isFinite(state.seatY)) state.seatY = lastSeatY;
     const interaction = state.interaction || state.action;
@@ -332,15 +407,19 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0, app
       target.y -= state.seated ? lastSeatY - R.hipY : 0; state.interactionTarget = target.toArray();
     }
     pose = solveAvatarPose(state, index);
-    rig.rotation.x = state.reclined ? Math.PI / 2 : 0;
+    rig.rotation.x = state.lounging ? LOUNGER_TILT : state.reclined ? Math.PI / 2 : 0;
     // In the reclined pose seatY is the cover's surface. The hip pivot is half a torso above it.
-    rig.position.set(0, state.reclined ? state.seatY + 0.12 : pose.body.y, state.reclined ? -R.hipY : 0);
+    if (state.reclined) {
+      rig.position.set(0, state.seatY + 0.12 - R.hipY * Math.cos(rig.rotation.x), -R.hipY * Math.sin(rig.rotation.x));
+    } else rig.position.set(0, pose.body.y, 0);
     body.rotation.set(state.reclined ? 0 : pose.body.pitch, 0, pose.body.roll);
     head.rotation.set(pose.head.pitch, pose.head.yaw, -pose.body.roll * 0.3);
     for (const [chain, value] of [[leftLeg, pose.legs.left], [rightLeg, pose.legs.right]]) {
-      chain.hip.rotation.x = value.hip; chain.knee.rotation.x = value.knee; chain.ankle.rotation.x = value.ankle;
+      chain.hip.rotation.x = value.hip + (state.lounging ? Math.PI / 2 - LOUNGER_TILT : 0);
+      chain.knee.rotation.x = value.knee; chain.ankle.rotation.x = value.ankle;
     }
     applyArm(leftArm, pose.arms.left, pose.hands.left); applyArm(rightArm, pose.arms.right, pose.hands.right);
+    if (sauna) return pose;
     const kind = pose.gear.kind;
     if (currentGear?.kind !== kind) {
       currentGear?.root.removeFromParent(); currentGear = null;
@@ -360,6 +439,7 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0, app
     }
     spareMagazine.visible = !!currentGear?.magazine && pose.gear.magazine >= 0.15;
     if (plate) plate.sprite.position.set(0, state.reclined ? rig.position.y + 0.32 : 2.08 + pose.body.y, state.reclined ? R.neckY - R.hipY : 0);
+    return pose;
   }
   update();
   return {
@@ -381,7 +461,8 @@ export function createAvatar({ slot = 0, name = '', host = false, layer = 0, app
       currentGear?.root.removeFromParent();
       root.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
       for (const gear of gearCache.values()) gear.root.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); gearCache.clear();
-      material.dispose(); flashMaterial.dispose(); screenMaterial.dispose();
+      skeleton?.dispose();
+      material.dispose(); flashMaterial?.dispose(); screenMaterial?.dispose();
       if (plate) { plate.sprite.material.map.dispose(); plate.sprite.material.dispose(); }
     },
   };

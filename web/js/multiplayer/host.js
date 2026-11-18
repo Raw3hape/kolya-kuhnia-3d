@@ -1,7 +1,7 @@
 import { WEAPON_RULES } from './rules.js';
 
 // The host owns this worker. Closing/leaving the room terminates it immediately.
-export async function createHostAuthority({ room, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, resolveSurfaces, resolveExternalTrace, resolveExternalShot, send }) {
+export async function createHostAuthority({ room, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, saunaSpec, resolveSurfaces, resolveExternalTrace, resolveExternalShot, send }) {
   const worker = new Worker(new URL('./host-worker.js', import.meta.url), { type: 'module', name: 'kitchen-room' });
   const budgets = new Map();
   const validVector = v => Array.isArray(v) && v.length === 3 && v.every(n => Number.isFinite(n) && Math.abs(n) < 1500);
@@ -43,7 +43,7 @@ export async function createHostAuthority({ room, plan, huntSpec, site, partySpe
         for (const peer of peers) send(peer, data.packet);
       }
     };
-    worker.postMessage({ command: 'init', options: { roomId: room, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec,
+    worker.postMessage({ command: 'init', options: { roomId: room, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, saunaSpec,
       seed: crypto.getRandomValues(new Uint32Array(1))[0] } });
   });
   return {

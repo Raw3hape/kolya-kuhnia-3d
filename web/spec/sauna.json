@@ -1,0 +1,59 @@
+{
+  "name": "Тихий перевал",
+  "bounds": [-14.8, -25.3, 14.8, 3.2],
+  "spawn": [0, 0],
+  "architecture": {
+    "ceiling": 5.7,
+    "pitch": 0.081,
+    "glazing": 10,
+    "roofBay": 0.69,
+    "vista": { "distance": 29, "aspect": 2.4, "width": 84, "y": -5.4 }
+  },
+  "zones": [
+    {"id":"arrival","label":"Тихий перевал","subtitle":"BADSTUE · ТИХИЙ ПЕРЕВАЛ","rect":[-6.8,-5.3,6.8,3.2],"sign":[0,2.56,2.85,3.14159],"style":"slate"},
+    {"id":"heat","label":"Кедровая сауна","subtitle":"01  VARM BADSTUE","rect":[-14.65,-21.2,-7.15,-10],"roof":3.36,"sign":[-7,2.55,-12.15,1.5708],"style":"cedar"},
+    {"id":"steam","label":"Парная","subtitle":"02  DAMPBAD","rect":[-14.65,-8.6,-7.15,-2.45],"roof":3.04,"sign":[-6.98,2.42,-6.2,1.5708],"style":"basalt"},
+    {"id":"pool","label":"Панорамный бассейн","subtitle":"03  UTSIKTSBASSENG","rect":[-5.45,-22.1,5.45,-5.4],"style":"pool"},
+    {"id":"plunge","label":"Холодная купель","subtitle":"04  KALDKULP","rect":[8.6,-10.6,12.25,-7],"style":"pool"},
+    {"id":"quiet","label":"Тихий зал","subtitle":"05  HVILEROM","rect":[7.15,-25.3,14.8,-12.25],"sign":[14.39,2.43,-16.65,-1.5708],"style":"quiet"},
+    {"id":"lounge","label":"Гостиная","subtitle":"06  PEISESTUE","rect":[7.1,-6.25,14.8,3.2],"sign":[14.39,2.47,-2.0,-1.5708],"style":"lounge"}
+  ],
+  "pools": [
+    {"id":"panorama","label":"Панорамный бассейн","rect":[-5.45,-22.1,5.45,-5.4],"surface":-0.07,"depth":1.29,"steps":3.2,"rim":0.18,"color":"#316d78","rails":true},
+    {"id":"cold","label":"Холодная купель","rect":[8.6,-10.6,12.25,-7],"surface":-0.075,"depth":0.94,"steps":1.55,"rim":0.18,"color":"#378a9a","rails":true}
+  ],
+  "walls": [
+    {"rect":[-14.65,-21.3,-7.13,-21.06],"height":3.36,"style":"cedar"},
+    {"rect":[-14.65,-10.12,-7.13,-9.88],"height":3.36,"style":"cedar"},
+    {"rect":[-7.25,-21.12,-7.10,-13.04],"height":3.36,"style":"glass-cedar"},
+    {"rect":[-7.25,-11.03,-7.10,-9.96],"height":3.36,"style":"cedar"},
+    {"rect":[-14.65,-8.71,-7.13,-8.47],"height":3.04,"style":"basalt"},
+    {"rect":[-14.65,-2.56,-7.13,-2.32],"height":3.04,"style":"basalt"},
+    {"rect":[-7.25,-8.55,-7.1,-6.51],"height":3.04,"style":"glass-basalt"},
+    {"rect":[-7.25,-4.48,-7.1,-2.45],"height":3.04,"style":"basalt"}
+  ],
+  "furniture": [
+    {"id":"cedar","zone":"heat","kind":"bench","style":"cedar","label":"Полок в кедровой сауне","at":[-13.49,-15.64],"size":[8.10,1.00],"seatY":0.57,"yaw":-1.57079632679,"places":6},
+    {"id":"cedar-end","zone":"heat","kind":"bench","style":"cedar","label":"Угловой полок","at":[-10.03,-20.24],"size":[3.38,0.96],"seatY":0.57,"yaw":3.14159265359,"places":3},
+    {"id":"steam","zone":"steam","kind":"bench","style":"basalt","label":"Каменный полок","at":[-11.53,-7.49],"size":[4.81,0.97],"seatY":0.51,"yaw":3.14159265359,"places":4},
+    {"id":"steam-side","zone":"steam","kind":"bench","style":"basalt","label":"Боковой полок","at":[-13.56,-4.34],"size":[3.41,0.94],"seatY":0.51,"yaw":-1.57079632679,"places":3},
+    {"id":"linen","zone":"quiet","kind":"lounger","style":"linen","label":"Шезлонг «Лён»","at":[8.75,-16.2],"size":[1.13,2.85],"seatY":0.43,"yaw":-0.12,"places":1},
+    {"id":"moss","zone":"quiet","kind":"lounger","style":"moss","label":"Шезлонг «Мох»","at":[11.13,-16.7],"size":[1.13,2.85],"seatY":0.43,"yaw":0.06,"places":1},
+    {"id":"sand","zone":"quiet","kind":"lounger","style":"sand","label":"Шезлонг «Песок»","at":[13.33,-15.85],"size":[1.13,2.85],"seatY":0.43,"yaw":0.10,"places":1},
+    {"id":"summit","zone":"quiet","kind":"window","style":"linen","label":"Панорамная скамья","at":[10.64,-24.16],"size":[5.85,0.87],"seatY":0.46,"yaw":0,"places":5},
+    {"id":"fire","zone":"lounge","kind":"sofa","style":"moss","label":"Диван у камина","at":[11.09,1.37],"size":[5.2,1.13],"seatY":0.44,"yaw":0,"places":4},
+    {"id":"tea","zone":"lounge","kind":"sofa","style":"sand","label":"Диван у чайного стола","at":[13.36,-2.7],"size":[4.05,1.05],"seatY":0.44,"yaw":1.57079632679,"places":3},
+    {"id":"arrival","zone":"arrival","kind":"bench","style":"cedar","label":"Скамья у входа","at":[-4.42,1.51],"size":[3.1,0.80],"seatY":0.46,"yaw":0,"places":3},
+    {"id":"ire","zone":"pool","kind":"stool","style":"cedar","label":"Место у бассейна","at":[-8.45,-23.86],"size":[1.45,0.8],"seatY":0.46,"yaw":0,"places":1},
+    {"id":"ice","zone":"plunge","kind":"stool","style":"linen","label":"Место у холодной купели","at":[13.82,-8.45],"size":[1.2,0.79],"seatY":0.50,"yaw":1.57079632679,"places":1},
+    {"id":"sauna-stove","zone":"heat","kind":"heater","style":"brass","at":[-8.13,-18.65],"size":[1.0,1.0],"yaw":0},
+    {"id":"steam-stove","zone":"steam","kind":"heater","style":"basalt","at":[-9.55,-3.33],"size":[1.1,1.12],"yaw":0},
+    {"id":"tea-table","zone":"lounge","kind":"table","style":"basalt","at":[10.7,-2.22],"size":[2.13,1.3],"yaw":0,"lamps":3},
+    {"id":"hearth","zone":"lounge","kind":"hearth","style":"basalt","at":[10.8,-5.72],"size":[3.24,0.75],"yaw":0},
+    {"id":"lounge-green","zone":"lounge","kind":"plant","style":"basalt","at":[13.67,1.8],"size":[1.1,1.1],"yaw":0},
+    {"id":"quiet-green","zone":"quiet","kind":"plant","style":"basalt","at":[13.56,-21.03],"size":[1.2,1.2],"yaw":0},
+    {"id":"view-green","zone":"quiet","kind":"plant","style":"basalt","at":[7.0,-23.35],"size":[0.80,0.8],"yaw":0},
+    {"id":"lobby-green","zone":"arrival","kind":"plant","style":"basalt","at":[3.83,1.86],"size":[1.03,1.03],"yaw":0},
+    {"id":"water-table","zone":"quiet","kind":"table","style":"cedar","at":[12.26,-17.70],"size":[0.57,0.57],"yaw":0}
+  ]
+}

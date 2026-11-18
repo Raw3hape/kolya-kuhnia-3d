@@ -97,5 +97,5 @@ export function createAdventurePortal({ THREE: T, scene, camera, canvas, rendere
     return changed;
   }
 
-  return { preview, hide, release, get visible() { return aperture.visible; } };
+  return { preview, hide, release, invalidate() { signature = ''; }, get visible() { return aperture.visible; } };
 }

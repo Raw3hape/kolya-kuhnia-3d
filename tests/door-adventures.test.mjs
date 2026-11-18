@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createRoomAuthority } from '../web/js/multiplayer/authority.js';
 import { NETWORK_RULES } from '../web/js/multiplayer/rules.js';
+import { compileSaunaLayout } from '../web/js/sauna-simulation.js';
 
 const read = name => JSON.parse(readFileSync(new URL(`../web/spec/${name}.json`, import.meta.url)));
 const snowSpec = read('snow');
 
-function apartment({ courier = false } = {}) {
+function apartment({ courier = false, sauna = false } = {}) {
   const plan = read('plan.generated');
   const entry = plan.openings.find(opening => opening.type === 'entry');
   const x = (entry.x0 + entry.x1) / 2;
@@ -15,7 +16,7 @@ function apartment({ courier = false } = {}) {
   socialSpec.rules.firstDelivery = courier ? 0.05 : 10_000;
   let now = 0, serial = 0;
   const room = createRoomAuthority({
-    plan, snowSpec, socialSpec, serviceSpec: read('service-level'), site: read('site'), huntSpec: read('hunt'),
+    plan, snowSpec, socialSpec, saunaSpec: sauna ? read('sauna') : undefined, serviceSpec: read('service-level'), site: read('site'), huntSpec: read('hunt'),
     partySpec: read('party'), roomId: 'adventures-test', seed: courier ? 0 : 6, now: () => now,
     send(link, packet) {
       if (packet.type === 'snapshot') snapshots.set(link, packet);
@@ -30,8 +31,8 @@ function apartment({ courier = false } = {}) {
     }] } });
   room.connect('guest', { type: 'join', version: NETWORK_RULES.version, name: 'Guest' });
 
-  function action(link, value) {
-    room.receive(link, { type: 'action', action: { ...value, requestId: 'adventure-test-' + ++serial } });
+  function action(link, value, requestId = 'adventure-test-' + ++serial) {
+    room.receive(link, { type: 'action', action: { ...value, requestId } });
     return replies.get(link)?.ok;
   }
 
@@ -176,4 +177,98 @@ test('a courier draw waits for the door, reserves the opening and preserves rece
   assert.equal(f.player('local').held, 'pizza');
   assert.equal(f.route().mode, 'snow');
   assert.equal(f.route().revision, route.revision + 1);
+});
+
+test('sauna is a shared fourth encounter with exclusive seats, release and destination isolation', t => {
+  const f = apartment({ sauna: true });
+  t.after(() => f.room.dispose());
+  f.hall('local');
+  const drawn = new Set();
+  let route;
+  for (let i = 0; i < 4; i++) {
+    route = f.route();
+    drawn.add(route.mode);
+    if (route.mode === 'sauna') break;
+    assert(f.door('local', true));
+    assert(f.door('local', false));
+  }
+  assert.equal(route.mode, 'sauna', 'a full bag always contains the sauna');
+  assert.equal(drawn.size, route.revision + 1, 'no repeated encounter before the bag is exhausted');
+  assert.equal(f.adventure('local', 'enter', route), false);
+  assert(f.door('local', true));
+  f.cross('local');
+  assert.equal(f.adventure('local', 'enter', { ...route, seed: (route.seed + 1) >>> 0 }), false);
+  assert.equal(f.adventure('local', 'enter', { ...route, revision: route.revision + 1 }), false);
+  assert(f.adventure('local', 'enter', route));
+  f.hall('guest'); f.cross('guest');
+  assert(f.adventure('guest', 'enter', route));
+  const level = () => f.room.snapshot().saunaLevel;
+  const actor = link => level().players.find(player => player.id === f.id(link));
+  assert.equal(level().seed, route.seed);
+  assert.equal(f.player('local').destination, 'sauna');
+  assert.equal(f.player('guest').destination, 'sauna');
+  assert.equal(actor('local').towelSlot, f.player('local').avatar);
+  assert.equal(actor('guest').towelSlot, f.player('guest').avatar);
+  assert.notEqual(actor('local').towelSlot, actor('guest').towelSlot);
+  assert.equal(f.adventure('guest', 'equip', { equipment: 'board' }), false);
+  assert.equal(f.adventure('guest', 'restart'), false);
+
+  const layout = compileSaunaLayout(read('sauna'));
+  const seat = layout.seats.find(seat => seat.zone === 'arrival');
+  let saunaSeq = 0;
+  function approach(link) {
+    for (let i = 0; i < 90; i++) {
+      const p = actor(link), dx = seat.stand[0] - p.x, dz = seat.stand[1] - p.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance < 0.08) return p;
+      assert(f.adventure(link, 'input', { input: {
+        seq: ++saunaSeq, moveZ: Math.min(1, distance / 0.12), yaw: Math.atan2(-dx, -dz), pitch: 0,
+      } }));
+      f.step();
+    }
+    assert.fail('Sauna approach did not reach the chosen seat');
+  }
+  function claim(p) {
+    return { kind: 'adventure', verb: 'sit', seatId: seat.id, view: {
+      yaw: Math.atan2(p.x - seat.x, p.z - seat.z),
+      pitch: Math.atan2(seat.y + layout.rules.seatAimLift - p.eyeY, Math.hypot(p.x - seat.x, p.z - seat.z)),
+    } };
+  }
+
+  assert.equal(f.action('local', claim(actor('local'))), false, 'an authoritative claim must be made within reach');
+  const localClaim = claim(approach('local'));
+  assert(f.action('local', localClaim, 'claim-once'));
+  assert.equal(f.action('local', localClaim, 'claim-once'), false, 'replayed room nonce is ignored');
+  const guestClaim = claim(approach('guest'));
+  assert.equal(f.action('guest', guestClaim), false);
+  f.step(2);
+  assert.deepEqual(f.snapshots.get('local').saunaLevel, f.snapshots.get('guest').saunaLevel);
+  assert.equal(level().seats[seat.id], f.id('local'));
+
+  assert(f.adventure('local', 'leave'));
+  assert.equal(f.player('local').destination, undefined);
+  assert.deepEqual(level().seats, {});
+  assert(f.action('guest', guestClaim));
+  assert.equal(level().seats[seat.id], f.id('guest'));
+
+  f.hall('local');
+  assert(f.door('local', false));
+  let alternative = f.route();
+  for (let i = 0; i < 4 && ['courier', 'sauna'].includes(alternative.mode); i++) {
+    assert(f.door('local', true)); assert(f.door('local', false));
+    alternative = f.route();
+  }
+  assert(['service', 'snow'].includes(alternative.mode));
+  assert(f.door('local', true));
+  f.cross('local');
+  assert.equal(f.adventure('local', 'enter', route), false, 'closing the door makes earlier entry intents stale');
+  assert(f.adventure('local', 'enter', alternative));
+  assert.equal(level().seed, route.seed);
+  assert.equal(level().seats[seat.id], f.id('guest'));
+  assert.equal(f.player('local').destination, alternative.mode);
+  assert.equal(f.player('guest').destination, 'sauna');
+
+  f.room.disconnect('guest');
+  assert.equal(level(), null);
+  assert.equal(f.player('local').destination, alternative.mode);
 });

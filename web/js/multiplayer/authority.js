@@ -1,7 +1,8 @@
 import { DEFAULT_MAZE_WEAPON } from '../weapon-catalog.js';
 import { seededRandom } from '../network-objects.js';
-import { createDoorJourney, DOOR_ENCOUNTERS } from '../door-journey.js';
+import { createDoorJourney, DOOR_ENCOUNTERS, DESTINATION_SNAPSHOTS } from '../door-journey.js';
 import { createSnowSimulation } from '../snow-simulation.js';
+import { createSaunaSimulation } from '../sauna-simulation.js';
 import { serviceEntrance } from '../service-level-entrance.js';
 import { createServiceLevel } from '../service-level-simulation.js';
 // Transport-independent room authority. Only the creator runs this module.
@@ -71,7 +72,7 @@ export function rayBox(origin, direction, bounds, range = Infinity) {
   return { distance: near, point: origin.map((v, i) => q(v + direction[i] * near)), normal };
 }
 
-export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
+export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, saunaSpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
   const players = new Map(), links = new Map(), objects = new Map(), broken = new Set();
   const completedExternal = new Set(), killedExternal = new Set();
   const effectSizes = new Map(), pendingExternal = new Map();
@@ -82,7 +83,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   let interactionMeta = { media: {}, newspaperPages: [], hoodPosition: null }, interactions = {};
   let showerPoint = null;
   const socialSupport = id => { const object = objects.get(id); return object && !broken.has(object.unitId) ? object.bounds : null; };
-  const social = socialSpec ? createSocialSimulation({ spec: socialSpec, plan, doorDriven: !!(serviceSpec && snowSpec),
+  const social = socialSpec ? createSocialSimulation({ spec: socialSpec, plan, doorDriven: !!(serviceSpec && (snowSpec || saunaSpec)),
     isEntryOpen: () => !!doors[plan.openings.find(o => o.type === 'entry')?.id],
     blocked: (p, point) => pathBlocked(p, { x: point[0], z: point[2] }),
     validatePlacement(point, kind) {
@@ -117,13 +118,17 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   } });
   const started = now();
 
-  const entrance = serviceSpec && serviceEntrance(plan);
-  const journey = entrance && createDoorJourney(seed, snowSpec ? DOOR_ENCOUNTERS.filter(mode => mode !== 'courier' || social) : ['service']);
+  const simulations = {
+    service: serviceSpec && (seed => createServiceLevel({ config: serviceSpec, seed })),
+    snow: snowSpec && (seed => createSnowSimulation({ config: snowSpec, seed })),
+    sauna: saunaSpec && (seed => createSaunaSimulation({ config: saunaSpec, seed })),
+  };
+  const entrance = (serviceSpec || snowSpec || saunaSpec) && serviceEntrance(plan);
+  const journey = entrance && createDoorJourney(seed, DOOR_ENCOUNTERS.filter(mode =>
+    mode === 'courier' ? social && (snowSpec || saunaSpec) : simulations[mode]));
   const destinations = new Map();
   const createRun = (mode, seed) => {
-    const simulation = mode === 'snow'
-      ? createSnowSimulation({ config: snowSpec, seed })
-      : createServiceLevel({ config: serviceSpec, seed });
+    const simulation = simulations[mode](seed);
     const run = { seed, simulation };
     destinations.set(mode, run);
     return run;
@@ -157,8 +162,9 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
           p.seat || rc?.isDriving(p.id) || social?.reservesLanding() || !doors[entrance.id] ||
           !entrance.crossed(p, 0.16)) return false;
       const run = destinations.get(route.mode) ?? createRun(route.mode, route.seed);
-      const weapon = p.weapon === 'none' ? DEFAULT_MAZE_WEAPON : p.weapon;
-      if (!run.simulation.join(p.id, weapon)) return false;
+      const initial = route.mode === 'sauna' ? { avatar: p.avatar, towelSlot: p.avatar }
+        : route.mode === 'service' ? (p.weapon === 'none' ? DEFAULT_MAZE_WEAPON : p.weapon) : undefined;
+      if (!run.simulation.join(p.id, initial)) return false;
       release(p); p.destination = route.mode; p.y = p.vy = 0; p.action = null;
       return true;
     }
@@ -169,6 +175,9 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     if (p.destination === 'snow') {
       if (action.verb === 'equip') return simulation.select(p.id, action.equipment);
       if (action.verb === 'reset') return simulation.reset(p.id, { walk: action.walk === true });
+    } else if (p.destination === 'sauna') {
+      if (action.verb === 'sit' && typeof action.seatId === 'string') return simulation.sit(p.id, action.seatId, action.view);
+      if (action.verb === 'stand') return simulation.stand(p.id);
     } else if (action.verb === 'restart') {
       const previous = simulation.snapshot();
       if (!['victory', 'defeat'].includes(previous.phase)) return false;
@@ -727,9 +736,9 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
         seatY: p.seat ? seatMeta.find(seat => seat.id === p.seat)?.position[1] ?? 0 : null,
         reclined: !!p.seat && seatMeta.find(seat => seat.id === p.seat)?.posture === 'recline', ack: p.ack,
         ammo: Object.fromEntries(Object.entries(p.ammo).map(([id, a]) => [id, { mag: a.mag, reserve: a.reserve, reloading: !!a.reloadAt }])) })),
-      ...(entrance ? { doorJourney: doorJourney(),
-        serviceLevel: destinations.get('service')?.simulation.snapshot() ?? null,
-        snowLevel: destinations.get('snow')?.simulation.snapshot() ?? null } : {}),
+      ...(entrance ? { doorJourney: doorJourney(), ...Object.fromEntries(
+        Object.entries(DESTINATION_SNAPSHOTS).map(([mode, key]) => [key, destinations.get(mode)?.simulation.snapshot() ?? null])),
+      } : {}),
       doors: { ...doors }, items: { ...items }, seats: { ...seats }, interactions: copy(interactions), broken: [...broken], effects: [...effects], hunt: hunt.snapshot(), ambient, party: party.snapshot(), ...(social ? { social: social.snapshot() } : {}), ...(rc ? { rc: rc.snapshot() } : {}) };
   }
   // Called only by the creator's private simulation bridge after its scene target

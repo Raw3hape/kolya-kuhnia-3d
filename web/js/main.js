@@ -641,10 +641,11 @@ function adventureSpec(name) {
 }
 const loadServiceSpec = adventureSpec('service-level');
 const loadSnowSpec = adventureSpec('snow');
+const loadSaunaSpec = adventureSpec('sauna');
 serviceLevel = createServiceLevelEntrance({ THREE, scene, camera, canvas, renderer, walk, doors, plan,
   canEnter: () => startup.status === 'ready' && walk.walking && !pipe.photo && !seats?.active && !rc?.controlling &&
     !document.body.classList.contains('kmp-modal-open') && (!multiplayer?.active || (multiplayer.client.connected && !multiplayer.applying)),
-  courier: () => social.reservesLanding, setDoorVisit: open => social.setDoorVisit(open), net: () => multiplayer, config: loadServiceSpec, snowConfig: loadSnowSpec, getQuality: () => pipe.quality,
+  courier: () => social.reservesLanding, setDoorVisit: open => social.setDoorVisit(open), net: () => multiplayer, config: loadServiceSpec, snowConfig: loadSnowSpec, saunaConfig: loadSaunaSpec, getQuality: () => pipe.quality,
   getWeapon: () => viewmodel.weapon, getWeaponSound: () => viewmodel.sound,
   notify: message => ui.toast(message), requestRender,
   onMode(active) { life.setSuspended(active); social.refreshAudio(); },
@@ -712,7 +713,7 @@ Object.defineProperty(window.__kitchen, 'social', { get: () => social });
 Object.defineProperty(window.__kitchen, 'rc', { get: () => rc });
 window.__kitchen.mirrors = mirrors;   // BREAK
 multiplayer = createMultiplayerSession({ THREE, scene, plan, site, getState: () => state,
-  whenReady: startup.whenPlayable, loadServiceSpec, loadSnowSpec,
+  whenReady: startup.whenPlayable, loadServiceSpec, loadSnowSpec, loadSaunaSpec,
   applyState: patch => setState(patch, { push: false, network: true }), requestRender, ui,
   getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, party, social, rc, serviceLevel, partyPropsReady, furnEditor, furniture: furn, decor }) });
 window.__kitchen.multiplayer = multiplayer;

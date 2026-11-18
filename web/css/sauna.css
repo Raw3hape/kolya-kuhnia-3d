@@ -1,0 +1,110 @@
+.sauna-hud {
+  --sauna-bg: rgba(20, 30, 30, .9);
+  --sauna-line: rgba(235, 227, 200, .28);
+  --sauna-ink: #f5eedb;
+  --sauna-muted: #c6c7b4;
+  --sauna-x: clamp(12px, 2.3vw, 32px);
+  --sauna-y: clamp(12px, 2.6vh, 26px);
+  position: fixed;
+  inset: 0;
+  z-index: 86;
+  color: var(--sauna-ink);
+  pointer-events: none;
+  user-select: none;
+  font: 500 13px/1.36 system-ui, sans-serif;
+}
+.sauna-hud [hidden] { display: none !important; }
+.sauna-location, .sauna-people, .sauna-status, .sauna-help, .sauna-hud button {
+  border: 1px solid var(--sauna-line);
+  background: var(--sauna-bg);
+  border-radius: 7px;
+}
+.sauna-location {
+  position: absolute;
+  left: max(var(--sauna-x), env(safe-area-inset-left));
+  top: max(var(--sauna-y), env(safe-area-inset-top));
+  max-width: min(45vw, 245px);
+  padding: 10px 14px;
+  display: grid;
+  gap: 4px;
+}
+.sauna-location strong { font-family: Georgia, serif; font-size: clamp(16px, 2.05vw, 24px); line-height: 1.05; font-weight: 400; }
+.sauna-location span { color: var(--sauna-muted); font-size: 12px; }
+.sauna-nav {
+  position: absolute;
+  top: max(var(--sauna-y), env(safe-area-inset-top));
+  right: max(var(--sauna-x), env(safe-area-inset-right));
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  max-width: 51vw;
+  gap: 6px;
+}
+.sauna-people { display: grid; place-items: center; min-width: 37px; align-self: stretch; color: var(--sauna-muted); }
+.sauna-hud button {
+  min-height: 44px;
+  padding: 8px 13px;
+  color: inherit;
+  font: 650 13px/1.2 system-ui, sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.sauna-hud button:hover { background: #35443c; }
+.sauna-hud button:disabled { opacity: .65; cursor: default; }
+.sauna-hud button:focus-visible { outline: 2px solid #f2deac; outline-offset: 3px; }
+.sauna-audio svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.sauna-audio[aria-pressed="true"] .sauna-audio-off { display: none; }
+.sauna-reticle {
+  position: absolute;
+  left: 50%; top: 50%;
+  border: 1px solid #fffb;
+  border-radius: 50%;
+  width: 5px; height: 5px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 1px 1px #110b;
+}
+.sauna-pointed .sauna-reticle { width: 8px; height: 8px; background: #f3e7c1; }
+.sauna-help, .sauna-action, .sauna-status {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(88vw, 410px);
+  width: max-content;
+  text-align: center;
+}
+.sauna-help {
+  bottom: max(var(--sauna-y), env(safe-area-inset-bottom));
+  display: flex;
+  gap: 10px; align-items: center;
+  padding: 7px 10px;
+  color: var(--sauna-muted);
+}
+.sauna-action { top: calc(50% + 30px); }
+.sauna-status { top: 22%; margin: 0; padding: 9px 13px; }
+.sauna-hud kbd {
+  border: 1px solid var(--sauna-line);
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-right: 3px;
+  color: #f2deac;
+  font: 650 11px/1.2 ui-monospace, monospace;
+}
+.sauna-touch .sauna-action { top: auto; bottom: max(25px, env(safe-area-inset-bottom)); }
+.sauna-touch .sauna-action kbd { display: none; }
+.sauna-joystick {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  width: 94px; height: 94px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #efe8d585;
+  border-radius: 50%;
+  background: #14222454;
+}
+.sauna-joystick i { width: 31px; height: 31px; border: 1px solid #efe8d585; border-radius: 50%; background: #eee4c738; }
+@media (max-width: 375px) {
+  .sauna-nav { gap: 4px; }
+  .sauna-hud button { padding-inline: 10px; }
+  .sauna-people { min-width: 28px; }
+}

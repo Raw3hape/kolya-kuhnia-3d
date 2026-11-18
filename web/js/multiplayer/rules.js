@@ -1,6 +1,6 @@
 // Shared gameplay limits. Imported by both the browser and the room authority.
 export const NETWORK_RULES = Object.freeze({
-  version: 12, maxPlayers: 10, tickHz: 60, snapshotHz: 20,
+  version: 13, maxPlayers: 10, tickHz: 60, snapshotHz: 20,
   inputHz: 20, interpolationMs: 100, staleMs: 3000,
   heartbeatMs: 1500, timeoutMs: 6500, resumeMs: 60000,
   maxMessageBytes: 192000, maxObjects: 4096, maxEffects: 192,

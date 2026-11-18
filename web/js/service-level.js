@@ -2,7 +2,7 @@
 import { serviceEntrance, newServiceSeed } from './service-level-entrance.js';
 import { DEFAULT_MAZE_WEAPON, WEAPON_KEYS } from './weapon-catalog.js';
 import { NETWORK_RULES } from './multiplayer/rules.js';
-import { createDoorJourney, DOOR_ENCOUNTERS } from './door-journey.js';
+import { createDoorJourney, DOOR_ENCOUNTERS, DESTINATION_SNAPSHOTS } from './door-journey.js';
 import { createAdventurePortal, drawAdventureScene } from './adventure-portal.js';
 
 const LOAD_DISTANCE = 5;
@@ -14,7 +14,7 @@ const KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyE', 'ArrowUp',
 
 export function createServiceLevelEntrance({
   THREE: T, scene, camera, canvas, renderer, walk, doors, plan, canEnter, courier, setDoorVisit, net,
-  config, snowConfig, getQuality, getWeapon, getWeaponSound, onMode, requestRender, notify,
+  config, snowConfig, saunaConfig, getQuality, getWeapon, getWeaponSound, onMode, requestRender, notify,
 }) {
   const entrance = serviceEntrance(plan);
   const soloId = 'solo';
@@ -31,9 +31,14 @@ export function createServiceLevelEntrance({
   let controls, yaw = 0, pitch = 0, seq = 0, sendClock = 0, sentAt = 0;
   let selected = DEFAULT_MAZE_WEAPON, trigger = 0, aiming = false;
   let fire = false, tap = 0, reload = false, interact = false, paused = false, leaving = false;
-  let lastPhase = null, snow = null, requestedMode = null, snowExitPending = false;
+  let lastPhase = null, currentAdventure = null, requestedMode = null, adventureExitPending = false;
   const portal = entrance && createAdventurePortal({ THREE: T, scene, camera, canvas, renderer, entrance });
-  const adventureActive = () => active || !!snow?.active;
+  const adventureActive = () => active || !!currentAdventure;
+  const adventures = new Map();
+  const otherModes = {
+    snow: { load: () => import('./snow-adventure.js'), config: snowConfig, factory: 'createSnowAdventure', label: 'Снежный перевал · камера райдера' },
+    sauna: { load: () => import('./sauna-adventure.js'), config: saunaConfig, factory: 'createSaunaAdventure', label: 'Панорамная баня · камера гостя' },
+  };
   let touch = matchMedia('(pointer: coarse)').matches;
   const touches = new Map(), keys = new Set();
   let joyX = 0, joyZ = 0, mouseLook = null;
@@ -50,14 +55,16 @@ export function createServiceLevelEntrance({
   const loads = new Map(), retries = new Map();
   function load(mode) {
     if (loads.has(mode) || performance.now() < (retries.get(mode) ?? 0)) return;
-    const promise = mode === 'snow'
-      ? Promise.all([import('./snow-adventure.js'), snowConfig()]).then(([module, rules]) => {
-        snow = module.createSnowAdventure({ THREE: T, canvas, config: rules, getQuality,
-          onReturn: exit,
+    const entry = otherModes[mode];
+    const promise = entry
+      ? Promise.all([entry.load(), entry.config()]).then(([module, rules]) => {
+        const adventure = module[entry.factory]({ THREE: T, canvas, config: rules, getQuality,
+          onReturn: exit, onViewChanged() { portal.invalidate(); requestRender(); },
           request: (verb, details) => net()?.adventureRequest(verb, details),
           send: input => net()?.adventureInput(input),
           connected: () => !!net()?.client.connected,
         });
+        adventures.set(mode, adventure);
       })
       : Promise.all([import('./service-level-simulation.js'), import('./service-level-world.js'),
         import('./service-level-environment.js'), import('./service-level-actors.js'), import('./service-level-hud.js'),
@@ -189,19 +196,28 @@ export function createServiceLevelEntrance({
     restoreView(restore);
   }
 
-  function activateSnow(incoming, id, seed) {
-    if (!snow.active) {
-      snow.enter({ incoming, id, seed, look: entranceLook() });
-      releaseMaze();
-      enterView('Снежный перевал · камера райдера');
-      entryRequest = false;
-    } else snow.sync(incoming, id);
+  function releaseOtherPreviews(keepMode) {
+    for (const [mode, adventure] of adventures) if (mode !== keepMode) adventure.releasePreview();
   }
 
-  function finishSnow(restore) {
-    if (!snow?.active) return;
-    snow.leave();
-    entryRequest = snowExitPending = false;
+  function activateAdventure(mode, incoming, id, seed) {
+    const adapter = adventures.get(mode);
+    if (!adapter) return;
+    if (adapter.active) { adapter.sync(incoming, id); return; }
+    adapter.enter({ incoming, id, seed, look: entranceLook() });
+    if (!adapter.active) return;
+    currentAdventure = { mode, adapter };
+    releaseMaze(); releaseOtherPreviews(mode);
+    enterView(otherModes[mode].label);
+    entryRequest = false;
+  }
+
+  function finishAdventure(restore) {
+    if (!currentAdventure) return;
+    if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+    currentAdventure.adapter.leave();
+    currentAdventure = null;
+    entryRequest = adventureExitPending = false;
     restoreView(restore);
   }
 
@@ -215,8 +231,8 @@ export function createServiceLevelEntrance({
         entryRequest = false; requestedMode = null;
         if (!result?.ok && !adventureActive()) { rejected = true; notify('Вход пока закрыт. Попробуйте снова.'); }
       });
-    } else if (route.mode === 'snow') {
-      activateSnow(null, soloId, route.seed);
+    } else if (adventures.has(route.mode)) {
+      activateAdventure(route.mode, null, soloId, route.seed);
     } else {
       solo = kit.createServiceLevel({ seed: route.seed, config: kit.rules });
       const equipped = getWeapon();
@@ -226,19 +242,19 @@ export function createServiceLevelEntrance({
   }
 
   function exit() {
-    if (!adventureActive() || leaving || snowExitPending) return;
+    if (!adventureActive() || leaving || adventureExitPending) return;
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
     resetInput();
     if (solo) finish(entrance.returnPose);
-    else if (snow?.solo) finishSnow(entrance.returnPose);
+    else if (currentAdventure?.adapter.solo) finishAdventure(entrance.returnPose);
     else if (!net()?.client.connected) net()?.client.leave();
     else {
-      if (snow?.active) { snowExitPending = true; snow.setReturning(true); }
+      if (currentAdventure) { adventureExitPending = true; currentAdventure.adapter.setReturning(true); }
       else leaving = true;
       net().adventureRequest('leave').then(result => {
         if (!result?.ok) {
-          leaving = snowExitPending = false;
-          snow?.setReturning(false);
+          leaving = adventureExitPending = false;
+          currentAdventure?.adapter.setReturning(false);
           notify('Не удалось вернуться. Повторите попытку.');
         }
       });
@@ -262,12 +278,15 @@ export function createServiceLevelEntrance({
   function applyNetwork(packet, id, apartmentPose) {
     setNetworkRoute(packet.doorJourney);
     const mode = apartmentPose?.destination;
-    if (mode !== 'snow' && snow?.active && !snow.solo) finishSnow(apartmentPose || entrance.returnPose);
+    if (currentAdventure && mode !== currentAdventure.mode && !currentAdventure.adapter.solo) {
+      finishAdventure(apartmentPose || entrance.returnPose);
+    }
     if (mode !== 'service' && active && !solo) finish(apartmentPose || entrance.returnPose);
-    if (mode === 'snow' && packet.snowLevel && snow) {
-      activateSnow(packet.snowLevel, id, packet.snowLevel.seed);
-    } else if (mode === 'service' && packet.serviceLevel && kit) {
-      const incoming = packet.serviceLevel;
+    const destination = packet[DESTINATION_SNAPSHOTS[mode]];
+    if (adventures.has(mode) && destination) {
+      activateAdventure(mode, destination, id, destination.seed);
+    } else if (mode === 'service' && destination && kit) {
+      const incoming = destination;
       if (!active || state?.seed !== incoming.seed) activate(incoming, id);
       else {
         const me = incoming.players.find(p => p.id === id);
@@ -286,18 +305,21 @@ export function createServiceLevelEntrance({
     const distance = Math.hypot(depth, lateral);
     const route = currentRoute();
     if (depth < -0.2) rejected = false;
-    if (distance >= LOAD_DISTANCE && (environment || snow?.hasWorld)) {
-      releaseMaze(); snow?.releasePreview(); return portal.release();
+    if (distance >= LOAD_DISTANCE && (environment || [...adventures.values()].some(adventure => adventure.hasWorld))) {
+      releaseMaze(); releaseOtherPreviews(); return portal.release();
     }
-    if (!route || route.mode === 'courier' || document.hidden) return portal.hide();
+    if (!route || route.mode === 'courier' || document.hidden) {
+      releaseMaze(); releaseOtherPreviews(); return portal.release();
+    }
     if (distance < LOAD_DISTANCE) load(route.mode);
-    const ready = route.mode === 'snow' ? !!snow : !!kit;
+    const adapter = adventures.get(route.mode);
+    const ready = route.mode === 'service' ? !!kit : !!adapter;
     if (!ready || !doors.list.find(d => d.id === entrance.id)?.open || courier()) return portal.hide();
     if (!rejected && entrance.crossed(position)) { enter(route); return false; }
     if (depth > 0.1 || distance > PREVIEW_DISTANCE) return portal.hide();
     return portal.preview(`${route.mode}:${route.seed}`, (x, z) => {
-      if (route.mode === 'snow') { releaseMaze(); return snow.preview(route.seed, x, z); }
-      snow?.releasePreview();
+      releaseOtherPreviews(route.mode);
+      if (adapter) { releaseMaze(); return adapter.preview(route.seed, x, z); }
       setWorld(route.seed); environment.update(x, z);
       return { scene: level, far: eye.far };
     });
@@ -314,8 +336,8 @@ export function createServiceLevelEntrance({
 
   function update(dt) {
     if (!adventureActive() || document.hidden || renderer.getContext().isContextLost()) return;
-    if (snow?.active) {
-      snow.update(dt, (scene, camera) => drawAdventureScene(T, renderer, scene, camera));
+    if (currentAdventure) {
+      currentAdventure.adapter.update(dt, (scene, camera) => drawAdventureScene(T, renderer, scene, camera));
       return;
     }
     paused = !solo && !net()?.client.connected;
@@ -507,14 +529,14 @@ export function createServiceLevelEntrance({
     resetNetwork() {
       networkRoute = null; entryRequest = false; requestedMode = null;
       if (active && !solo) finish(entrance.returnPose);
-      if (snow?.active && !snow.solo) finishSnow(entrance.returnPose);
+      if (currentAdventure && !currentAdventure.adapter.solo) finishAdventure(entrance.returnPose);
     },
     get active() { return adventureActive(); },
     get transitioning() { return entryRequest; },
     get previewVisible() { return !!portal?.visible; },
     get doorJourney() { return currentRoute(); },
-    get destination() { return active ? 'service' : snow?.active ? 'snow' : requestedMode; },
-    get snapshot() { return snow?.active ? snow.snapshot : state; },
-    get view() { return snow?.active ? snow.view : active ? { x: eye.position.x, y: eye.position.y, z: eye.position.z, yaw, pitch } : null; },
+    get destination() { return active ? 'service' : (currentAdventure?.mode ?? requestedMode); },
+    get snapshot() { return currentAdventure ? currentAdventure.adapter.snapshot : state; },
+    get view() { return currentAdventure ? currentAdventure.adapter.view : active ? { x: eye.position.x, y: eye.position.y, z: eye.position.z, yaw, pitch } : null; },
   };
 }

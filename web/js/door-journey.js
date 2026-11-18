@@ -2,7 +2,8 @@
 // snapshots and opening the leaf do not consume randomness.
 import { seededRandom } from './network-objects.js';
 
-export const DOOR_ENCOUNTERS = Object.freeze(['service', 'snow', 'courier']);
+export const DESTINATION_SNAPSHOTS = Object.freeze({ service: 'serviceLevel', snow: 'snowLevel', sauna: 'saunaLevel' });
+export const DOOR_ENCOUNTERS = Object.freeze(['service', 'snow', 'courier', 'sauna']);
 
 export function createDoorJourney(seed, modes) {
   const random = seededRandom(`entrance:${seed}`);

@@ -9,7 +9,7 @@ import { sampleAvatarAction, selectAvatarPresentation } from './action-contract.
 
 const angle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
-export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui, getParty = () => getModules().party, whenReady = Promise.resolve(), loadServiceSpec, loadSnowSpec }) {
+export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui, getParty = () => getModules().party, whenReady = Promise.resolve(), loadServiceSpec, loadSnowSpec, loadSaunaSpec }) {
   const avatars = new Map(), samples = [], inputs = [], seenEvents = new Set();
   let active = false, applying = false, revision = -1, epoch = -1, lastSnapshot = null, disposed = false;
   let appliedHunt = null, started = false, sendClock = 0, ambientClock = 0, geometryTimer = null, changeSerial = 0;
@@ -25,13 +25,13 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
 
   const client = createMultiplayerClient({
     createAuthority: async ({ room, send }) => {
-      const [huntSpec, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec] = await Promise.all([
+      const [huntSpec, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, saunaSpec] = await Promise.all([
         ...['hunt', 'party', 'social', 'rc'].map(name => fetch(`spec/${name}.json`).then(r => {
           if (!r.ok) throw new Error(`${name}_config`); return r.json();
         })),
-        loadServiceSpec?.(), loadSnowSpec?.(),
+        loadServiceSpec?.(), loadSnowSpec?.(), loadSaunaSpec?.(),
       ]);
-      return createHostAuthority({ room, plan, site, huntSpec, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, send,
+      return createHostAuthority({ room, plan, site, huntSpec, partySpec, socialSpec, rcSpec, serviceSpec, snowSpec, saunaSpec, send,
         resolveSurfaces: (...args) => getModules().viewmodel.resolveNetworkSurfaces(...args),
         resolveExternalTrace: shot => getModules().life?.traceExternalShot?.(shot),
         resolveExternalShot: shot => getModules().life?.resolveExternalShot?.(shot) });

@@ -56,7 +56,7 @@ export function solveLeg(hipHeight, footZ, lift = 0) {
 }
 
 export function solveAvatarPose(state = {}, slot = 0) {
-  const reclined = !!state.reclined;
+  const reclined = !!state.reclined, swimming = !!state.swimming;
   const time = finite(state.time), speed = reclined ? 0 : clamp(finite(state.speed), 0, 4.5), motion = smooth(speed / 0.5), running = smooth((speed - 1.8) / 1.2);
   const phase = time * 8 + slot * 0.43, step = Math.sin(phase), swing = 0.12 + running * 0.15;
   const action = state.action && typeof state.action === 'object' ? state.action : null;
@@ -71,9 +71,9 @@ export function solveAvatarPose(state = {}, slot = 0) {
   const seatY = clamp(finite(state.seatY, 0.45), 0.2, 1.2);
   const grounded = state.grounded !== false;
   const landing = activeAction && kind === 'land' ? actionWave : 0;
-  const walkBob = motion * (-0.035 - running * 0.025 + Math.cos(phase * 2) * 0.007);
+  const walkBob = swimming ? Math.sin(time * 3.8) * 0.023 : motion * (-0.035 - running * 0.025 + Math.cos(phase * 2) * 0.007);
   const offsetY = lerp(grounded ? walkBob - landing * 0.09 : 0, seatY - R.hipY, seated);
-  const bodyPitch = lerp(-motion * (0.035 + running * 0.09) + landing * 0.08, -0.035, seated);
+  const bodyPitch = swimming ? 0.095 : lerp(-motion * (0.035 + running * 0.09) + landing * 0.08, -0.035, seated);
   const bodyRoll = (1 - seated) * (grounded ? step * motion * 0.018 : 0);
   const stride = swing * motion * (1 - seated);
   const leg = sign => {
@@ -90,6 +90,13 @@ export function solveAvatarPose(state = {}, slot = 0) {
   const rightLeg = reclined ? { hip: 0.06, knee: -0.08, ankle: -0.2 } : leg(1);
   let right = [R.shoulderX, 0.91, -0.025 - step * motion * 0.11], left = [-R.shoulderX, 0.91, -0.025 + step * motion * 0.11];
   if (reclined) { right = [0.25, 0.91, 0.07]; left = [-0.24, 0.93, 0.08]; }
+  if (swimming) {
+    const sweep = (1 + Math.sin(time * (2.8 + motion * 2.6))) * 0.5;
+    const reach = 0.19 + sweep * (0.10 + motion * 0.05);
+    const front = -0.11 - (1 - sweep) * (0.14 + motion * 0.08);
+    right = [reach, 1.08 + sweep * 0.09, front];
+    left = [-reach, 1.08 + sweep * 0.09, front];
+  }
   let handEuler = [0, 0, 0], leftEuler = [0, 0, 0], headPitch = clamp(finite(state.aimPitch) * 0.72, -0.65, 0.65);
   const held = EXTERNAL_AVATAR_PROPS.includes(state.carried) ? state.carried : HELD_PROPS.includes(state.held) ? state.held : null;
   let gear = held || (state.weapon && Object.hasOwn(W, state.weapon) ? state.weapon : 'none');
