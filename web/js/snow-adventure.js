@@ -97,6 +97,12 @@ export function createSnowAdventure({ THREE: T, canvas, config, getQuality, onRe
     controller = new AbortController();
     const options = { capture: true, signal: controller.signal };
     function key(event) {
+      if (event.code === 'Escape') {
+        resetInput();
+        if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+        event.stopImmediatePropagation();
+        return;
+      }
       if (!KEYS.has(event.code) || event.ctrlKey || event.metaKey || event.altKey ||
           event.target?.closest?.('input,textarea,select,[contenteditable]') ||
           (event.code === 'Space' && event.target?.closest?.('button'))) return;

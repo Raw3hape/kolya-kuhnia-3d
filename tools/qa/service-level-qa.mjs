@@ -81,6 +81,7 @@ async function walkTo(page, x, z) {
 
 async function returnToHall(page) {
   await page.keyboard.press('Escape');
+  await frame(page, () => document.pointerLockElement === null);
   await page.getByRole('button', { name: 'На кухню', exact: true }).first().click();
   await frame(page, () => !__kitchen.serviceLevel.active && __kitchen.walk.walking);
 }

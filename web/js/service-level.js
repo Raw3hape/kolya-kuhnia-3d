@@ -348,8 +348,9 @@ export function createServiceLevelEntrance({
   function topLevelInput(event) {
     if (!active || event.metaKey || event.altKey || event.ctrlKey) return;
     if (event.code === 'Escape') {
-      // Native Esc releases pointer lock first. Use the visible return control to leave.
-      resetInput(); event.stopImmediatePropagation(); return;
+      resetInput();
+      if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+      event.stopImmediatePropagation(); return;
     }
     const inHud = event.target?.closest?.('button,input,textarea');
     if (inHud && !KEYS.has(event.code)) return;
