@@ -9,7 +9,7 @@ import { sampleAvatarAction, selectAvatarPresentation } from './action-contract.
 
 const angle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
-export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui, getParty = () => getModules().party, whenReady = Promise.resolve() }) {
+export function createMultiplayerSession({ THREE, scene, plan, site, getState, applyState, getModules, requestRender, ui, getParty = () => getModules().party, whenReady = Promise.resolve(), loadServiceSpec }) {
   const avatars = new Map(), samples = [], inputs = [], seenEvents = new Set();
   let active = false, applying = false, revision = -1, epoch = -1, lastSnapshot = null, disposed = false;
   let appliedHunt = null, started = false, sendClock = 0, ambientClock = 0, geometryTimer = null, changeSerial = 0;
@@ -25,10 +25,13 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
 
   const client = createMultiplayerClient({
     createAuthority: async ({ room, send }) => {
-      const [huntSpec, partySpec, socialSpec, rcSpec] = await Promise.all(['hunt', 'party', 'social', 'rc'].map(name => fetch(`spec/${name}.json`).then(r => {
-        if (!r.ok) throw new Error(`${name}_config`); return r.json();
-      })));
-      return createHostAuthority({ room, plan, site, huntSpec, partySpec, socialSpec, rcSpec, send,
+      const [huntSpec, partySpec, socialSpec, rcSpec, serviceSpec] = await Promise.all([
+        ...['hunt', 'party', 'social', 'rc'].map(name => fetch(`spec/${name}.json`).then(r => {
+          if (!r.ok) throw new Error(`${name}_config`); return r.json();
+        })),
+        loadServiceSpec?.(),
+      ]);
+      return createHostAuthority({ room, plan, site, huntSpec, partySpec, socialSpec, rcSpec, serviceSpec, send,
         resolveSurfaces: (...args) => getModules().viewmodel.resolveNetworkSurfaces(...args),
         resolveExternalTrace: shot => getModules().life?.traceExternalShot?.(shot),
         resolveExternalShot: shot => getModules().life?.resolveExternalShot?.(shot) });
@@ -90,7 +93,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.walk.setNetwork({ onInput(command) {
       if (client.connected) { const vm = getModules().viewmodel; inputs.push({ ...command, weapon: vm.weapon, aiming: vm.aiming }); }
       if (inputs.length > R.maxInputBatch) inputs.splice(0, inputs.length - R.maxInputBatch);
-    }, players: () => (lastSnapshot?.players || []).filter(p => p.id !== client.id),
+    }, players: () => (lastSnapshot?.players || []).filter(p => p.id !== client.id && !p.inService),
     canExit: () => client.role === 'host', canTeleport: () => false,
     canMove: () => client.connected && !applying && !document.body.classList.contains('kmp-modal-open') && !getModules().rc?.isDriving });
     m.doors.setNetwork({ request });
@@ -149,21 +152,21 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     m.rc?.applyNetwork?.(snapshot.rc, { players: snapshot.players, time: snapshot.time, selfId: client.id });
     handoff.update();
     const me = snapshot.players.find(p => p.id === client.id);
-    m.seats?.applyNetwork?.(snapshot.seats || {}, me, { instant: !started });
+    m.serviceLevel?.applyNetwork(snapshot.serviceLevel, snapshot.serviceSeed, client.id, me);
+    if (!m.serviceLevel?.active) m.seats?.applyNetwork?.(snapshot.seats || {}, me, { instant: !started });
     if (m.viewmodel !== damageModule || snapshot.effects !== damageEffects || snapshot.broken !== damageBroken) {
       m.viewmodel.reconcileNetworkDamage(snapshot.effects || [], snapshot.broken || []);
       damageModule = m.viewmodel; damageEffects = snapshot.effects; damageBroken = snapshot.broken;
     }
     if (m.hunt) { if (appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; } m.hunt.applyNetworkSnapshot(snapshot.hunt, me?.score ?? 0); }
     // The delta decoder retains unchanged fields by reference. The host samples
-    // ambient life at 10 Hz, so do not reapply it on every 20 Hz player frame:
-    // landing state also rebuilds movement obstacles and updates skeletal poses.
+    // ambient life at 10 Hz, so do not reapply it on every 20 Hz player frame.
     if (client.role !== 'host' && snapshot.ambient && m.life &&
       (snapshot.ambient !== appliedAmbient || m.life !== ambientModule)) {
       m.life.applyNetworkSnapshot?.(snapshot.ambient);
       appliedAmbient = snapshot.ambient; ambientModule = m.life;
     }
-    if (me) {
+    if (me && !me.inService && !m.serviceLevel?.active) {
       if (m.seats?.active || me.seat) started = false;
       else if (!started && !applying) {
         if (!m.walk.active) m.walk.enter({ x: me.x, z: me.z }, me.yaw, { network: true });
@@ -174,11 +177,11 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
       m.viewmodel.applyNetworkAmmo(me.ammo);
     }
     samples.push({ at: performance.now(), snapshot }); if (samples.length > 6) samples.shift();
-    const present = new Map(snapshot.players.map(p => [p.id, p.avatar]));
+    const present = new Map(snapshot.players.filter(p => !p.inService).map(p => [p.id, p.avatar]));
     // A returning identity may receive another free appearance if its old slot
     // was reused. Rebuild even when an intermediate departure frame was skipped.
     for (const [id, avatar] of avatars) if (!present.has(id) || present.get(id) !== avatar.slot) { scene.remove(avatar.root); avatar.dispose(); avatars.delete(id); }
-    for (const p of snapshot.players) if (p.id !== client.id && !avatars.has(p.id)) {
+    for (const p of snapshot.players) if (p.id !== client.id && !p.inService && !avatars.has(p.id)) {
       const avatar = createAvatar({ slot: p.avatar, name: p.name, host: p.id === snapshot.hostId });
       avatar.root.userData.networkAvatar = true; avatar.root.userData.rasterOnly = true;
       avatar.root.position.set(p.x, p.y, p.z); scene.add(avatar.root); avatars.set(p.id, avatar);
@@ -224,6 +227,13 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
   function update(dt) {
     if (!active) return false;
     const m = getModules();
+    if (m.serviceLevel?.active) {
+      if (client.role === 'host') {
+        ambientClock += dt;
+        if (ambientClock > 0.1) { ambientClock = 0; const ambient = m.life?.snapshot?.(); if (ambient) client.send({ kind: 'ambient', ambient }); }
+      }
+      return false;
+    }
     if (sessionRole === 'host' && !m.walk.active) wasWalking = false;
     syncWeapon(m.viewmodel.weapon);
     if (m.hunt && appliedHunt !== m.hunt) { m.hunt.setNetwork(true); appliedHunt = m.hunt; if (lastSnapshot?.hunt) m.hunt.applyNetworkSnapshot(lastSnapshot.hunt, client.self?.score ?? 0); }
@@ -273,6 +283,7 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     if (!active) return;
     active = false; lifecycle++; clearTimeout(geometryTimer); changeSerial++; pendingApartments = 0; applying = false; manifestPending = false;
     const m = getModules();
+    m.serviceLevel?.resetNetwork();
     m.walk.setNetwork(null); m.doors.setNetwork(null); m.tv.setNetwork(null); m.paper.setNetwork(null);
     m.hood?.setNetwork?.(null); getParty()?.setNetwork?.(null);
     m.social?.setNetwork?.(null); m.rc?.setNetwork?.(null);
@@ -286,10 +297,15 @@ export function createMultiplayerSession({ THREE, scene, plan, site, getState, a
     requestRender();
   }
 
-  const handoff = createHandoffUI({ getSelf: () => active && client.connected ? client.self : null, getPlayers: () => lastSnapshot?.players || [], request });
+  const handoff = createHandoffUI({ getSelf: () => active && client.connected && !client.self?.inService ? client.self : null, getPlayers: () => (lastSnapshot?.players || []).filter(p => !p.inService), request });
   const invite = new URL(location.href).searchParams.get('room');
   if (invite) whenReady.then(() => { if (!disposed) lobby.open({ room: invite }); }).catch(() => {});
   return { client, lobby, update, apartmentChanged, roomState,
+    serviceInput: input => client.send({ kind: 'service-level', verb: 'input', input }),
+    serviceRequest(verb) {
+      if (verb === 'enter' && inputs.length) client.send({ kind: 'inputs', inputs: inputs.splice(0) });
+      return request({ kind: 'service-level', verb });
+    },
     get active() { return active; }, get canEdit() { return !active || (client.role === 'host' && client.connected); },
     get applying() { return applying; },
     dispose() { disposed = true; clearTimeout(roomRequestTimer); deactivate(); client.dispose(); lobby.dispose(); handoff.dispose(); style.remove(); window.removeEventListener('kitchen:room-request', openRoom); } };

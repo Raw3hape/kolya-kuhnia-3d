@@ -1,7 +1,6 @@
 // «Живой дом»: квартира живёт сама и немного абсурдно. Ядро и настройки; сами эффекты — отдельные модули,
 // они грузятся после первого вида (dynamic import), их модели — ещё позже, при первом использовании:
 //   neighbours.js — соседи за стенами (штробят, долбят, пилят, ругаются) и звонок в дверь раз в три минуты;
-//   landing.js    — за входной дверью площадка с мигающей лампой и монстры, которые не пускают дальше;
 //   water.js      — кран на кухне, раковина и душ в ванной сами включаются и выключаются;
 //   mice.js       — мыши бегают вдоль стен, нюхают и прячутся; в них можно стрелять (очки охоты, hunt.js addTargets).
 //
@@ -9,7 +8,7 @@
 //              getWalk, getDoors, getHunt, getObstacles })
 //   getObstacles() -> [{ x0, x1, z0, z1 } …] мебель в плане (как у прогулки): мыши прячутся под неё
 //   -> { update(dt) -> bool  (true — нужен кадр; в покое и вне кадра — false), colliders() -> препятствия прогулки
-//        (монстры на площадке), dispose(), debug { mods, prefs, ring(), water(id), mouse(), audio } }
+//        (живые объекты), dispose(), debug { mods, prefs, ring(), water(id), mouse(), audio } }
 // registerLifeUI(addSection, getLife) — раздел «Живой дом» в настройках (шестерёнка).
 //
 // Правила (общие для модулей, держит ядро):
@@ -43,9 +42,9 @@ addHelp(
 export function registerLifeUI(addSection, getLife) {
   addSection({
     id: 'life', tab: 'settings', title: 'Живой дом', order: 30, open: true,
-    summary: () => [prefs.life ? 'мыши, вода, гости' : null, prefs.sound === 'off' ? null : 'соседи'].filter(Boolean).join(' · ') || 'выключен',
+    summary: () => [prefs.life ? 'мыши, вода' : null, prefs.sound === 'off' ? null : 'соседи'].filter(Boolean).join(' · ') || 'выключен',
     controls: [
-      { type: 'toggle', key: 'lifeOn', label: 'Мыши, вода сама, гости за дверью', get: () => prefs.life, set: v => setPref('life', !!v) },
+      { type: 'toggle', key: 'lifeOn', label: 'Мыши и вода', get: () => prefs.life, set: v => setPref('life', !!v) },
       { type: 'seg', key: 'lifeSound', label: 'Соседи и звонки', get: () => prefs.sound, set: v => setPref('sound', v),
         options: [{ id: 'walk', name: 'В прогулке' }, { id: 'always', name: 'Всегда' }, { id: 'off', name: 'Нет' }] },
       { type: 'readout', key: 'lifeHint', style: 'hint',
@@ -61,13 +60,13 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
   getWalk, getDoors, getHunt, getObstacles }) {
   const mods = {};
   let started = false, disposed = false, capturing = false, live = false, frameNo = 0;
-  let network = null, networkSnapshot = null, entryVisitor = false;
+  let network = null, networkSnapshot = null, suspended = false;
   const externalPending = new Map();
 
   // ---------- звук ----------
   let gestured = false, ctx = null, master = null, buses = null, noiseBuf = null, quietSince = 0;
   const walkOn = () => !!getWalk?.()?.active;
-  const soundOk = () => gestured && !prefs.mute && !pipe?.photo && !capturing && (walkOn() || prefs.sound === 'always');
+  const soundOk = () => gestured && !suspended && !prefs.mute && !pipe?.photo && !capturing && (walkOn() || prefs.sound === 'always');
   const neighOk = () => soundOk() && prefs.sound !== 'off';
   function ensureAudio() {
     if (ctx || !gestured || disposed) return ctx;
@@ -242,13 +241,11 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
   // Модули готовятся под заставкой после первого кадра; ready покрывает всю инициализацию.
   const ready = afterRoom(async () => {
     if (disposed) return;
-    const list = [['neighbours', import('./neighbours.js')], ['landing', import('./landing.js')],
-      ['water', import('./water.js')], ['mice', import('./mice.js')]];
+    const list = [['neighbours', import('./neighbours.js')], ['water', import('./water.js')], ['mice', import('./mice.js')]];
     for (const [id, p] of list) {
       try {
         const m = await p; if (disposed) return; mods[id] = m.create(core);
         mods[id].setNetwork?.(network);
-        if (id === 'landing') mods[id].setVisitor?.(entryVisitor);
         if (networkSnapshot?.modules?.[id]) mods[id].applyNetworkSnapshot?.(networkSnapshot.modules[id]);
       } catch (e) { console.warn('life:', id, e); throw e; }
     }
@@ -340,7 +337,7 @@ export function createLife({ THREE, scene, camera, renderer, pipe, plan, kit, sh
     ready,
     get muted() { return !!prefs.mute; },
     update, colliders, dispose, setNetwork, snapshot, networkSnapshot: snapshot, applyNetworkSnapshot, traceExternalShot, resolveExternalShot,
-    setEntryVisitor(on) { entryVisitor = !!on; mods.landing?.setVisitor?.(entryVisitor); },
+    setSuspended(on) { suspended = !!on; syncAudio(); },
     setShowerControlled(on) { mods.water?.setShowerControlled(on); },
     get debug() { return { mods, prefs, core, ring: () => mods.neighbours?.ring(), water: id => mods.water?.start(id), mouse: () => mods.mice?.spawn(true) }; },
   };

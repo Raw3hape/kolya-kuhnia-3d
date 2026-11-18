@@ -6,7 +6,7 @@
 //   -> { active, walking, moving, running, enter(pos?, yaw?, { orbit }?), exit({ restore }?), toggle(), update(dt?),
 //        boxesOf(object3d), setPersonHeight(cm), personHeight, eyeHeight, refreshObstacles(), setAreaGate(fn), orbitPose,
 //        setZoom(k), kick(up, side, keep), nudge(dx, dz) }
-//   nudge(dx, dz) — сдвинуть игрока на столько метров со столкновениями (мягкий толчок: монстры за входной дверью, landing.js);
+//   nudge(dx, dz) — сдвинуть игрока на столько метров со столкновениями (мягкий толчок);
 //     только в прогулке, кадр применит update().
 //   orbitPose — куда вернёт облёт выход из прогулки ({ pos, target, fov, order } | null); enter(…, { orbit }) задаёт его
 //     явно (seats.js: встал с дивана в прогулку — выход вернёт облёт, каким он был до посадки, а не точку сиденья).
@@ -79,6 +79,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   };
 
   // состояние
+  let suspended = false;
   let mode = 'off';                 // off | entering | walk | exiting
   const p = { x: 0, z: 0 };
   const vel = { x: 0, z: 0 };
@@ -116,9 +117,9 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   const cross = div('kw-cross kw-float', document.body); cross.hidden = true;
 
   const syncFloat = () => {
-    joyEl.hidden = !(mode === 'walk' || mode === 'entering') || !(touchSeen || coarse());
+    joyEl.hidden = suspended || !(mode === 'walk' || mode === 'entering') || !(touchSeen || coarse());
     jumpEl.hidden = joyEl.hidden;
-    cross.hidden = mode !== 'walk';
+    cross.hidden = suspended || mode !== 'walk';
     document.body.classList.toggle('kw-walking', mode !== 'off');
   };
 
@@ -225,7 +226,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   }
 
   function update(dt) {
-    if (mode === 'off') return false;
+    if (suspended || mode === 'off') return false;
     const now = performance.now();
     if (dt == null) dt = (now - lastT) / 1000;
     lastT = now;
@@ -343,7 +344,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   function jump() { if (mode === 'walk' && jy === 0 && !anim && movementGuard() && (!network || network.canMove?.() !== false)) { vy = WALK.jump; jumpRequested = true; requestRender?.(); } }
 
   addEventListener('keydown', e => {
-    if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (suspended || typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'KeyF') { if (!e.repeat) toggle(); e.preventDefault(); return; }
     if (mode === 'off') return;
     if (e.code === 'Escape') {
@@ -362,7 +363,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   const lookRelease = () => { if (look) { try { canvas.releasePointerCapture(look.id); } catch { /* уже отпущен */ } } look = null; };
   canvas.addEventListener('pointerdown', e => {
     if (e.pointerType === 'touch') { touchSeen = true; syncFloat(); }
-    if (mode !== 'walk' || locked || look) return;
+    if (suspended || mode !== 'walk' || locked || look) return;
     if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;   // ПКМ — прицел, взгляд тоже ведёт
     look = { id: e.pointerId, x: e.clientX, y: e.clientY, k: (e.pointerType === 'touch' ? 0.0065 : 0.0042) };
     try { canvas.setPointerCapture(e.pointerId); } catch { /* не критично */ }
@@ -382,7 +383,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   // колесо: шаг вперёд/назад; щипок на трекпаде (ctrl+колесо) — угол обзора
   canvas.addEventListener('wheel', e => {
-    if (mode !== 'walk') return;
+    if (suspended || mode !== 'walk') return;
     e.preventDefault();
     const d = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
     if (e.ctrlKey) { const n = naturalFov(camera.aspect); fovAdj = clamp(n + fovAdj + d * 0.08, WALK.fovMin, WALK.fovMax) - n; }
@@ -392,7 +393,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   // двойной клик — захват мыши (в песочнице может быть запрещён: тогда просто остаётся перетаскивание)
   canvas.addEventListener('dblclick', e => {
-    if (mode !== 'walk' || locked || coarse()) return;
+    if (suspended || mode !== 'walk' || locked || coarse()) return;
     try { const r = canvas.requestPointerLock?.(); r?.catch?.(() => {}); } catch { /* запрещено */ }
   });
   document.addEventListener('pointerlockchange', () => {
@@ -404,7 +405,7 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
   });
   document.addEventListener('pointerlockerror', () => { locked = false; syncFloat(); });
   document.addEventListener('mousemove', e => {
-    if (!locked || mode !== 'walk') return;
+    if (suspended || !locked || mode !== 'walk') return;
     const k = 0.0022 * (fov / WALK.fovV);
     tYaw -= e.movementX * k;
     tPitch = clamp(tPitch - e.movementY * k, -PITCH, PITCH);
@@ -540,7 +541,11 @@ export function initWalk({ THREE, camera, controls, canvas, plan, getObstacles, 
 
   return {
     get active() { return mode !== 'off'; },
-    get walking() { return mode === 'walk'; },
+    get walking() { return !suspended && mode === 'walk'; },
+    setSuspended(on) {
+      suspended = !!on; keys.clear(); joyRelease(); lookRelease();
+      vel.x = vel.z = step = 0; lastT = performance.now(); syncFloat();
+    },
     get moving() { return mode === 'walk' && moving; },
     get running() { return mode === 'walk' && running; },
     refreshObstacles: () => refreshObstacles(true),

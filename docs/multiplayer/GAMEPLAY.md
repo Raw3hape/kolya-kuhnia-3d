@@ -65,21 +65,19 @@ networking cancels preparation and releases owned acceleration structures.
 `life.setNetwork({authority})` keeps random schedules on the host. Guests mirror
 `life.applyNetworkSnapshot(snapshot)`; the host publishes `life.snapshot()`
 (`networkSnapshot()` alias) at the session's ambient rate. The snapshot includes
-mouse pose/animation/death, tap flow timing, landing monster animation and bulb
-flicker, and a bounded list of neighbour/bell events. Local sound preferences
+mouse pose/animation/death, tap flow timing and a bounded list of neighbour/bell events. Local sound preferences
 remain local. Loading modules and GLBs apply the latest pending snapshot.
 
 External combat is deliberately two-phase:
 
-1. Host `life.traceExternalShot(request)` captures nearest mouse/monster targets
+1. Host `life.traceExternalShot(request)` captures nearest mouse targets
    without mutation. Private trace data lets the authority clip surfaces and
    wildlife behind these targets.
 2. After approval, `life.resolveExternalShot(approvedEvent)` invokes only the
    captured targets named by `ray.externalHit`. Private `completeExternal`
    derives scoring from `EXTERNAL_TARGET_RULES`; repeated kills cannot award twice.
 
-Mouse IDs contain spawn generation. Landing monsters keep stable cast IDs;
-they remain invulnerable, as in the original game. Their hit reactions are shared.
+Mouse IDs contain spawn generation. The [service level](../service-level.md) is a separate simulation owned by the same Worker.
 
 ## Beer and smoke items
 

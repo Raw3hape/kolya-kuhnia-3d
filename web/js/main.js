@@ -36,7 +36,7 @@ import { sunFor, buildContext } from './site.js';
 import { buildBath } from './bath.js';
 import { createHood } from './hood.js';       // KITCHEN: вытяжка над варкой
 import { createTicker } from './ticker.js';   // KITCHEN: крипто-биржа на мониторе комнаты 3
-import { createLife, registerLifeUI } from './life.js';   // LIFE: соседи, звонок, монстры за дверью, вода, мыши
+import { createLife, registerLifeUI } from './life.js';   // LIFE: соседи, звонок, вода, мыши
 import { createMirrors } from './mirrors.js';   // BREAK: честные зеркала (плоское отражение), бьются от выстрела
 import { createMultiplayerSession } from './multiplayer/session.js';
 import { createParty } from './party.js';
@@ -44,6 +44,7 @@ import { createPartyProps } from './party-props.js';
 import { createSocial } from './social.js';
 import { createRC } from './rc.js';
 import { createCarryCoordinator } from './carry-coordinator.js';
+import { createServiceLevelEntrance } from './service-level.js';
 
 const [plan, kit, viewSpec, site, bathSpec, socialSpec] = await Promise.all([
   fetch('spec/plan.generated.json').then(r => r.json()),
@@ -458,8 +459,17 @@ function frame(now) {
   if (startup.status === 'error') return;
   const dt = Math.min(0.1, (now - (lastFrame || now)) / 1000); lastFrame = now;
   if (multiplayer?.update(dt)) needs = true;
+  if (serviceLevel?.active) {
+    if (multiplayer?.client.role === 'host') life.update(dt);
+    serviceLevel.update(dt);
+    return;
+  }
+  if (serviceLevel?.transitioning) return;
   if (walk?.update()) needs = true;
   if (doors?.update(dt)) needs = true;
+  if (serviceLevel?.updateApartment()) needs = true;
+  if (serviceLevel?.active) { serviceLevel.update(dt); return; }
+  if (serviceLevel?.transitioning) return;
   if (seats?.update(dt)) needs = true;
   if (viewmodel?.update(dt, { active: !!walk?.active, moving: !!walk?.moving, running: !!walk?.running })) needs = true;
   if (hunt?.update(dt)) needs = true;
@@ -561,6 +571,7 @@ export async function exportGLB() {
 
 // ---------- запуск ----------
 
+let serviceLevel = null;
 let ui = null, walk = null, minimap = null, furnEditor = null, nav = null, doors = null, viewmodel = null, seats = null, tv = null, hunt = null, paper = null, hood = null, party = null, partyProps = null, partyPropsReady = null, social = null, rc = null;
 const carry = createCarryCoordinator();
 const hasWorldInteraction = () => [doors, seats, hood, party, social, rc].some(module => !!module?.target);
@@ -612,12 +623,28 @@ partyPropsReady = afterRoom(async () => {
   partyProps.updateAnchors(furnitureAnchors(furn, state, plan, kit), state);
 });
 // --- /KITCHEN ---
-// --- LIFE: «Живой дом» — соседи за стенами и звонок, монстры за входной дверью, вода сама, мыши (life.js + модули) ---
+// --- LIFE: соседи, звонок, вода, мыши ---
 registerLifeUI(addSection, () => life);
 let life = createLife({ THREE, scene, camera, renderer, pipe, plan, kit, shell, doorsGroup, requestRender,
   getWalk: () => walk, getDoors: () => doors, getHunt: () => hunt,
   getObstacles: () => [...walk.boxesOf(kitchen?.group), ...(furn?.colliders || []), ...bath.colliders, ...(decor?.colliders || [])] });
 // --- /LIFE ---
+let serviceSpec;
+function loadServiceSpec() {
+  serviceSpec ??= fetch('spec/service-level.json').then(response => {
+    if (!response.ok) throw new Error('service_level_config');
+    return response.json();
+  }).catch(error => { serviceSpec = null; throw error; });
+  return serviceSpec;
+}
+serviceLevel = createServiceLevelEntrance({ THREE, scene, camera, canvas, renderer, walk, doors, plan,
+  canEnter: () => startup.status === 'ready' && walk.walking && !pipe.photo && !seats?.active && !rc?.controlling &&
+    !document.body.classList.contains('kmp-modal-open') && (!multiplayer?.active || (multiplayer.client.connected && !multiplayer.applying)),
+  courier: () => social.reservesLanding, net: () => multiplayer, config: loadServiceSpec,
+  notify: message => ui.toast(message), requestRender,
+  onMode(active) { life.setSuspended(active); social.refreshAudio(); },
+});
+
 // --- BREAK: зеркала с плоским отражением (mirrors.js; бьются через impacts.js → breakables.js) ---
 const mirrors = createMirrors({ THREE, scene, camera, renderer, pipe, requestRender, getDecor: () => decor });
 // --- /BREAK ---
@@ -680,8 +707,9 @@ Object.defineProperty(window.__kitchen, 'social', { get: () => social });
 Object.defineProperty(window.__kitchen, 'rc', { get: () => rc });
 window.__kitchen.mirrors = mirrors;   // BREAK
 multiplayer = createMultiplayerSession({ THREE, scene, plan, site, getState: () => state,
-  whenReady: startup.whenPlayable,
+  whenReady: startup.whenPlayable, loadServiceSpec,
   applyState: patch => setState(patch, { push: false, network: true }), requestRender, ui,
-  getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, party, social, rc, partyPropsReady, furnEditor, furniture: furn, decor }) });
+  getModules: () => ({ walk, doors, viewmodel, hunt, tv, paper, seats, life, hood, party, social, rc, serviceLevel, partyPropsReady, furnEditor, furniture: furn, decor }) });
 window.__kitchen.multiplayer = multiplayer;
+window.__kitchen.serviceLevel = serviceLevel;
 window.__kitchen.startup = startup;

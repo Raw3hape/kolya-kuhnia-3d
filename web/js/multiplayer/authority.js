@@ -1,3 +1,5 @@
+import { serviceEntrance } from '../service-level-entrance.js';
+import { createServiceLevel } from '../service-level-simulation.js';
 // Transport-independent room authority. Only the creator runs this module.
 // No renderer, DOM, account, remote database or client-supplied scores.
 import { NETWORK_RULES as R, WEAPON_RULES, EXTERNAL_TARGET_RULES, refillMagazine } from './rules.js';
@@ -65,7 +67,7 @@ export function rayBox(origin, direction, bounds, range = Infinity) {
   return { distance: near, point: origin.map((v, i) => q(v + direction[i] * near)), normal };
 }
 
-export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, socialSpec, rcSpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
+export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, socialSpec, rcSpec, serviceSpec, send, sendMany, now = () => performance.now(), seed = 1 }) {
   const players = new Map(), links = new Map(), objects = new Map(), broken = new Set();
   const completedExternal = new Set(), killedExternal = new Set();
   const effectSizes = new Map(), pendingExternal = new Map();
@@ -111,8 +113,50 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   } });
   const started = now();
 
+  const entrance = serviceSpec && serviceEntrance(plan);
+  let service = null, serviceSerial = 0;
+  const nextServiceSeed = () => (seed + Math.imul(serviceSerial + 1, 0x9e3779b9)) >>> 0;
+  function nextService() {
+    const run = createServiceLevel({ config: serviceSpec, seed: nextServiceSeed() });
+    serviceSerial++; return run;
+  }
+
+  function leaveService(p, { restore = true } = {}) {
+    if (!p.inService) return false;
+    service.leave(p.id); p.inService = false;
+    if (!active().some(other => other.inService)) service = null;
+    if (restore) {
+      const place = findFree(plan, entrance.returnPose, col, obstacles(p));
+      if (place) Object.assign(p, entrance.returnPose, place, { lookYaw: entrance.yaw, vy: 0 });
+    }
+    return true;
+  }
+
+  function serviceAction(p, action) {
+    if (!entrance) return false;
+    if (action.verb === 'enter') {
+      if (p.inService) return true;
+      if (p.seat || rc?.isDriving(p.id) || social?.reservesLanding() || !doors[entrance.id] ||
+          !entrance.crossed(p, 0.16)) return false;
+      service ??= nextService();
+      if (!service.join(p.id)) return false;
+      release(p); p.inService = true; p.y = p.vy = 0; p.action = null;
+      return true;
+    }
+    if (!p.inService) return action.verb === 'leave';
+    if (action.verb === 'leave') return leaveService(p);
+    if (action.verb === 'input' && plain(action.input)) return service.input(p.id, action.input);
+    if (action.verb === 'restart' && ['victory', 'defeat'].includes(service.snapshot().phase)) {
+      service = nextService();
+      for (const player of active()) if (player.inService) service.join(player.id);
+      return true;
+    }
+    return false;
+  }
+
   const active = () => [...players.values()].filter(p => p.link !== null);
-  const others = self => active().filter(p => p !== self).map(p => ({ x: p.x, z: p.z, radius: WALK.radius }));
+  const inApartment = () => active().filter(p => !p.inService);
+  const others = self => inApartment().filter(p => p !== self).map(p => ({ x: p.x, z: p.z, radius: WALK.radius }));
   const doorObstacles = () => doorMeta.map(d => ({ ...(doors[d.id] ? d.opened : d.closed), door: d.id }));
   const obstacles = p => [...(social?.reservesLanding() ? [] : ambientExtra), ...extra.filter(o => !o.door), ...doorObstacles(), ...others(p)];
   function pathBlocked(from, to) {
@@ -258,6 +302,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       if (p.link !== null) { links.delete(p.link); post(p.link, { type: 'error', error: 'session_replaced' }); }
       const used = new Set(active().filter(q => q !== p).map(q => q.avatar));
       if (used.has(p.avatar)) p.avatar = [...Array(R.maxPlayers).keys()].find(n => !used.has(n));
+      leaveService(p, { restore: false });
       releaseSeat(p);
       p.link = null;
       if (!spawn(p)) return post(link, { type: 'error', error: 'spawn_blocked' });
@@ -285,7 +330,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   function disconnect(link) {
     const p = players.get(links.get(link)); links.delete(link);
     if (!p || p.link !== link) return;
-    p.link = null; p.lastSeen = now(); release(p);
+    p.link = null; p.lastSeen = now(); leaveService(p, { restore: false }); release(p);
     event({ kind: 'left', actorId: p.id }); emitSnapshot();
   }
 
@@ -314,7 +359,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
     if (p.id !== hostId || !plain(action.apartment) || JSON.stringify(action.apartment).length > 32000) return false;
     apartment = copy(action.apartment); revision++; epoch++;
     releaseAll(); setGeometry(action); effects = []; effectsBytes = 2; effectSizes.clear(); pendingExternal.clear(); broken.clear();
-    for (const other of active()) {
+    for (const other of inApartment()) {
       const q = findFree(plan, other, col, obstacles(other)); if (q) { other.x = q.x; other.z = q.z; }
     }
     event({ kind: 'apartment', actorId: p.id, revision }); emitSnapshot(); return true;
@@ -325,7 +370,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   // changes on clients; two simultaneous handoffs can never duplicate a prop.
   function handoff(p, action) {
     const target = players.get(action.targetId);
-    if (!target || target === p || target.link === null || p.held !== action.id || target.held ||
+    if (!target || target === p || target.link === null || target.inService || p.held !== action.id || target.held ||
       social?.heldBy(target.id) || party.held(target.id) || rc?.held(target.id) ||
       distance([p.x, p.eyeY ?? p.y + 1.2, p.z], [target.x, target.eyeY ?? target.y + 1.2, target.z]) > R.itemReach || pathBlocked(p, target)) return false;
     // Walking proxies have no height. Use actual 3D item bounds so a low
@@ -465,8 +510,16 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
       if (p.requestIds.size > 256) p.requestIds.delete(p.requestIds.values().next().value);
     }
     if (++p.actions > 120) return result(link, action, false, 'rate_limited');
+    const kind = action.kind || action.type;
+    if (kind === 'service-level') {
+      const ok = serviceAction(p, action);
+      result(link, action, ok, ok ? null : 'action_rejected');
+      if (ok && action.verb !== 'input') emitSnapshot();
+      return;
+    }
+    if (p.inService && !['ambient', 'geometry'].includes(kind)) return result(link, action, false, 'action_rejected');
     let ok = false;
-    switch (action.kind || action.type) {
+    switch (kind) {
       case 'inputs': ok = applyInputs(p, action.inputs); break;
       case 'input': ok = applyInputs(p, [action]); break;
       case 'look': if ((p.seat || rc?.isDriving(p.id)) && [action.yaw, action.pitch, action.aiming].every(finite)) {
@@ -515,7 +568,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
           const angle = Math.atan2(from.bz - from.az, from.bx - from.ax);
           const turn = Math.atan2(Math.sin(Math.atan2(to.bz - to.az, to.bx - to.ax) - angle), Math.cos(Math.atan2(to.bz - to.az, to.bx - to.ax) - angle));
           const length = Math.hypot(from.bx - from.ax, from.bz - from.az);
-          const blocked = active().some(q => {
+          const blocked = inApartment().some(q => {
             for (let i = 0; i <= 12; i++) {
               const k = i / 12, ax = from.ax + (to.ax - from.ax) * k, az = from.az + (to.az - from.az) * k;
               const vx = Math.cos(angle + turn * k) * length, vz = Math.sin(angle + turn * k) * length;
@@ -623,7 +676,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
 
   function snapshot() {
     return { type: 'snapshot', seq: ++seq, time, epoch, hostId, apartment, revision,
-      players: active().map(p => ({ id: p.id, name: p.name, avatar: p.avatar, x: q(p.x), y: q(p.y), z: q(p.z),
+      players: active().map(p => ({ id: p.id, name: p.name, avatar: p.avatar, ...(p.inService ? { inService: true } : {}), x: q(p.x), y: q(p.y), z: q(p.z),
         yaw: q(p.yaw), lookYaw: q(p.lookYaw ?? p.yaw), pitch: q(p.pitch), vy: q(p.vy), verticalSpeed: q(p.vy), grounded: p.y <= 0.001 && p.vy <= 0,
         aiming: q(p.aiming || 0), action: p.action ? copy(p.action) : null,
         reloading: !!p.ammo[p.weapon]?.reloadAt,
@@ -633,6 +686,7 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
         seatY: p.seat ? seatMeta.find(seat => seat.id === p.seat)?.position[1] ?? 0 : null,
         reclined: !!p.seat && seatMeta.find(seat => seat.id === p.seat)?.posture === 'recline', ack: p.ack,
         ammo: Object.fromEntries(Object.entries(p.ammo).map(([id, a]) => [id, { mag: a.mag, reserve: a.reserve, reloading: !!a.reloadAt }])) })),
+      ...(entrance ? { serviceLevel: service?.snapshot() ?? null, serviceSeed: nextServiceSeed() } : {}),
       doors: { ...doors }, items: { ...items }, seats: { ...seats }, interactions: copy(interactions), broken: [...broken], effects: [...effects], hunt: hunt.snapshot(), ambient, party: party.snapshot(), ...(social ? { social: social.snapshot() } : {}), ...(rc ? { rc: rc.snapshot() } : {}) };
   }
   // Called only by the creator's private simulation bridge after its scene target
@@ -663,10 +717,12 @@ export function createRoomAuthority({ roomId, plan, huntSpec, site, partySpec, s
   function step(dt) {
     if (disposed || !hostId) return;
     dt = clamp(dt, 0, 0.05); time += dt; snapshotClock += dt;
-    hunt.step(dt); party.step(dt, active().map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
-    social?.step(dt, active().map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
+    hunt.step(dt); service?.tick(dt);
+    const apartmentPlayers = inApartment();
+    party.step(dt, apartmentPlayers.map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
+    social?.step(dt, apartmentPlayers.map(p => ({ ...p, eyeY: p.eyeY ?? p.y + WALK.height / 100 * WALK.eyeRatio })));
     social?.reconcileSupport(socialSupport);
-    rc?.step(dt, active());
+    rc?.step(dt, apartmentPlayers);
     for (const player of players.values()) if (player.held && !Object.hasOwn(items, player.held) && !party.held(player.id) && !rc?.held(player.id) && !social?.heldBy(player.id)) player.held = null;
     for (const p of players.values()) {
       p.actions = Math.max(0, p.actions - dt * 100); p.budget = Math.min(R.inputBudget, p.budget + dt);

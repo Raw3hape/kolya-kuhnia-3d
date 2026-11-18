@@ -116,10 +116,11 @@
     `WEAPON_RULES.infiniteReserve` и общий `refillMagazine` дают бесконечный запас с обычной перезарядкой.
     Текущий контракт и проверки — [docs/play-session.md](docs/play-session.md).
   - `life.js` — «Живой дом» (ядро: настройки, звук WebAudio, `seen`, загрузка GLB) и модули после первого вида:
-    `neighbours.js` (соседи за стенами и звонок, синтез), `landing.js` (площадка за входной дверью: мигающая лампа
-    на слое 3, монстры, толкаются через `walk.nudge`), `water.js` (вода сама: кухня, раковина, душ), `mice.js`
-    (мыши вдоль стен, мишени через `hunt.addTargets` + `award`). Хук двери — `doors.onToggle`. Модели и лицензии —
+    `neighbours.js` (соседи за стенами и звонок), `water.js` (вода сама: кухня, раковина, душ), `mice.js`
+    (мыши вдоль стен, мишени через `hunt.addTargets` + `award`). Модели и лицензии —
     `web/models/life/SOURCE.md`. В консоли: `__kitchen.life.debug` (`ring()`, `water(id)`, `mouse()`).
+  - [Служебный этаж](docs/service-level.md) — проход через входную дверь в пустой подъезд, если его не заняла доставка.
+    `service-level.js` связывает вид порога и ввод. `service-level-simulation.js` идёт в solo и Worker.
   - `decor.js` + `spec/decor/*.json` — обстановка комнат (реальные вещи IKEA и др.), контракт
     `web/models/decor/README.md`, конвейер `tools/decor/`. Зоны и опции — только в конец.
   - `furniture.js` + `spec/furniture.json` — диван, ТВ, тумба, ковёр, столик и редактор расстановки;

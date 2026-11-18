@@ -81,7 +81,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
   injectStyle('social-style', CSS);
   function show(message) { notice = message; noticeUntil = performance.now() + 2200; lastUI = ''; }
   function accept(value, initial = false) {
-    if (!value) return; state = value; getLife()?.setEntryVisitor(!!value.landingReserved);
+    if (!value) return; state = value;
     if (!initial && lastBell !== null && value.bell > lastBell) { audio?.bell(); show('Дзынь! Курьер Żabka ждёт с пиццей'); } lastBell = value.bell;
     audio?.sync(value); requestRender();
   }
@@ -206,7 +206,8 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     accept(sim.presentation(), true);
   });
   return { ready, command,
-    get spec() { return spec; }, get target() { return target ? { id: `social:${target}`, label: target } : null; }, get held() { return held(); },
+    get spec() { return spec; }, get reservesLanding() { return !!state?.landingReserved; },
+    refreshAudio() { if (state) audio?.update(state, showerPoint); }, get target() { return target ? { id: `social:${target}`, label: target } : null; }, get held() { return held(); },
     metadata() { refreshRadio(); return { showerPoint, radioPose }; },
     update(dt) {
       if (!state || disposed) return false;
@@ -219,7 +220,6 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
       }
       if (lastBell !== null && state.bell > lastBell) { audio.bell(); show('Дзынь! Курьер Żabka ждёт с пиццей'); } lastBell = state.bell;
       audio.sync(state); audio.update(state, showerPoint);
-      getLife()?.setEntryVisitor(!!state.landingReserved);
       getLife()?.setShowerControlled(!!state.shower.owner);
       aimClock += dt; if (aimClock >= 0.12) { aimClock = 0; aim(); } renderUI();
       return models.update(state, dt, showerPoint, !pipe.photo && !capturing, { camera, selfId: selfId(), players, placement, showerTop });
@@ -231,7 +231,7 @@ export function createSocial({ THREE: T, scene, camera, canvas, pipe, plan, bath
     },
     applyNetwork(value, roomPlayers = []) { players = roomPlayers; accept(value, lastBell === null); },
     get debug() { return { state, ready: !!state, target, pending, lastCommand, placement, audio: audio?.debug, showerPoint, locations, sliceCount: models?.pizza.children.filter(o => o.isMesh && o.material?.vertexColors && o.visible).length }; },
-    dispose() { disposed = true; generation++; offLive?.(); removeEventListener('keydown', onKey, { capture: true }); canvas.removeEventListener('click', onClick, { capture: true }); canvas.removeEventListener('pointerdown', onReceivePointer, { capture: true }); getLife()?.setEntryVisitor(false); hud.remove(); radioPanel.remove(); audio?.dispose(); models?.dispose(); index.release(); } };
+    dispose() { disposed = true; generation++; offLive?.(); removeEventListener('keydown', onKey, { capture: true }); canvas.removeEventListener('click', onClick, { capture: true }); canvas.removeEventListener('pointerdown', onReceivePointer, { capture: true }); hud.remove(); radioPanel.remove(); audio?.dispose(); models?.dispose(); index.release(); } };
 }
 const CSS = `
 .social-hud{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);max-width:min(520px,90vw);padding:12px 18px;border:1px solid #d6e5d522;border-radius:16px;background:#183c2cf0;color:#f5f1df;z-index:27;box-shadow:0 8px 28px #0003;text-align:center;font:13px/1.5 var(--f-body,Arial);backdrop-filter:blur(12px)}
